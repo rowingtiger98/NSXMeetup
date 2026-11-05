@@ -93,9 +93,9 @@ var FRONTPAGE_IMAGE_MAX_BYTES = 10 * 1048576; // keep in step with EVENTSettings
 
 // -------------------------------------------------------------------------------------
 // Function: 	UploadFrontpageImage
-// Description: This function uploads the chosen front page image. The server resizes
-//              and saves it, then the new file name is put in the form - it is stored
-//              on the event when Save Settings is clicked.
+// Description: This function uploads the chosen front page image as soon as it is
+//              picked. The server resizes and saves it and makes it the event's front
+//              page image, then the preview shows the new image.
 // -------------------------------------------------------------------------------------
 function UploadFrontpageImage() {
     var input = this;
@@ -118,7 +118,8 @@ function UploadFrontpageImage() {
 
     var button = $("#event_setting_frontpage_upload_button");
     button.addClass('disabled').text('Uploading...');
-    ShowFrontpageUploadStatus('', false);
+    input.disabled = true; // the button is a label for the input - this stops a second upload starting
+    ShowFrontpageUploadProgress('Uploading...');
 	$.ajax({
 	    url: 'EVENTSettings.php',
 	    type: 'POST',
@@ -126,20 +127,37 @@ function UploadFrontpageImage() {
 	    data: data,
 	    processData: false,
 	    contentType: false,
+	    xhr: function() {
+            var xhr = $.ajaxSettings.xhr();
+            if (xhr.upload) {
+                xhr.upload.onprogress = function(event) {
+                    if (!event.lengthComputable) {
+                        return;
+                    }
+                    var percent = Math.round(event.loaded / event.total * 100);
+                    ShowFrontpageUploadProgress(percent < 100 ? 'Uploading... ' + percent + '%' : 'Resizing and saving...');
+                };
+            }
+            return xhr;
+	    },
 	    success: function(results) {
             if (results[0] == 'Pass') {
-                $("#event_setting_EVENT_Frontpage_Image").val(results[1]);
-                UpdateFrontpageImagePreview();
-                ShowFrontpageUploadStatus('Image uploaded. Click Save Settings to use it for this event.', false);
+                $("#event_setting_EVENT_Frontpage_Image").val(results[1].filename);
+                $("#event_setting_frontpage_preview_none").hide();
+                $("#event_setting_frontpage_preview").attr('src', results[1].url).show();
+                ShowFrontpageUploadStatus('New front page image saved.', false);
             } else {
-                ShowFrontpageUploadStatus(results[1].join(' '), true);
+                ShowFrontpageUploadStatus([].concat(results[1]).join(' '), true);
             }
 	    },
-	    error: function() {
-            ShowFrontpageUploadStatus('The image could not be uploaded. Please try again.', true);
+	    error: function(xhr, status, error) {
+            console.log('(UploadFrontpageImage) upload failed:', xhr.status, status, error, xhr.responseText);
+            var reason = (xhr.status === 413) ? ' The image is too large for the server to accept.' : '';
+            ShowFrontpageUploadStatus('The image could not be uploaded.' + reason + ' Please try again.', true);
 	    },
 	    complete: function() {
             button.removeClass('disabled').text('Upload New Image');
+            input.disabled = false;
             input.value = '';
 	    }
 	  });
@@ -176,6 +194,13 @@ function HandleFrontpageImagePreviewError() {
     }
     preview.hide();
     $("#event_setting_frontpage_preview_none").text('Image not found in ' + (preview.attr('event_image_dir') || shared_dir) + '/').show();
+}
+
+function ShowFrontpageUploadProgress(message) {
+    $("#event_setting_frontpage_upload_status")
+        .removeClass('event_settings_error event_settings_success')
+        .empty()
+        .append('<span class="upload_spinner"></span>', $('<span>').text(message));
 }
 
 function ShowFrontpageUploadStatus(message, is_error) {

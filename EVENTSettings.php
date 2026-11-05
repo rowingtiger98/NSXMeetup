@@ -25,6 +25,9 @@ const FRONTPAGE_IMAGE_MAX_PIXELS = 24000000;      // 24 megapixels - larger imag
 
 if (isset($_POST['method']) && in_array($_POST['method'], EVENT_SETTINGS_METHODS, true)) {
     $_POST['method']();
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+    // PHP throws away the whole request (method included) when it's over post_max_size
+    EventSettingsRespond('Fail', ['The image is too large for the server to accept (limit '.ini_get('post_max_size').'). Please choose a smaller one.']);
 }
 
 /* ************************************************************************ */
@@ -383,17 +386,21 @@ function SaveEventSettings() {
 /* Function:    UploadFrontpageImage                                        */
 /* Description: Saves an uploaded front page image for the posted event     */
 /*              into its events/<EVENT_Directory>/images/ folder, scaled to */
-/*              FRONTPAGE_IMAGE_MAX_HEIGHT. The event itself is not changed */
-/*              - the new file name goes into the form and is stored when   */
-/*              the admin clicks Save Settings.                             */
-/* Returns:     JSON ['Pass', filename] or ['Fail', [messages]]             */
+/*              FRONTPAGE_IMAGE_MAX_HEIGHT, and makes it the event's front  */
+/*              page image straight away.                                   */
+/* Returns:     JSON ['Pass', ['filename' => ..., 'url' => ...]] or         */
+/*              ['Fail', [messages]]                                        */
 /* ************************************************************************ */
 function UploadFrontpageImage() {
     list($pdo, $event) = EventSettingsLoadEvent();
-    $pdo = null;
 
     if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
         EventSettingsRespond('Fail', ['This form has expired. Reload the page and try again.']);
+    }
+
+    if (!function_exists('imagecreatetruecolor')) {
+        error_log('UploadFrontpageImage: the GD extension is not available, so images cannot be resized');
+        EventSettingsRespond('Fail', ['Image uploads are not available on this server (the PHP GD extension is missing).']);
     }
 
     $upload = CheckFrontpageImageUpload($_FILES['frontpage_image'] ?? null);
@@ -419,7 +426,15 @@ function UploadFrontpageImage() {
         EventSettingsRespond('Fail', ['The image could not be saved. Please try again.']);
     }
 
-    EventSettingsRespond('Pass', $filename);
+    $stmt = $pdo->prepare('UPDATE nsx_meetup_events SET EVENT_Frontpage_Image = ? WHERE EVENT_ID = ?');
+    if (!$stmt->execute([$filename, $event['EVENT_ID']])) {
+        error_log('UploadFrontpageImage: database update failed for event '.$event['EVENT_ID']);
+        EventSettingsRespond('Fail', ['The image was uploaded but could not be set on the event. Please try again.']);
+    }
+    $stmt = null;
+    $pdo = null;
+
+    EventSettingsRespond('Pass', ['filename' => $filename, 'url' => $event_dir.'/'.$filename]);
 }
 
 /* ************************************************************************ */

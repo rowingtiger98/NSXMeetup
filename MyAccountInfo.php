@@ -21,7 +21,7 @@ if ($admin_rights == 'NOT SET') {
 		<meta name="description" content="" />
 		<meta name="keywords" content="" />
 		<link rel="stylesheet" href="assets/css/main.css" />
-		<link rel="stylesheet" href="assets/css/nsxmeetup.css" />
+		<link rel="stylesheet" href="assets/css/nsxmeetup.css?v=<?php echo filemtime(__DIR__.'/assets/css/nsxmeetup.css'); ?>" />
         <link rel="stylesheet" href="assets/css/admintools.css" />
 		<script src='https://www.google.com/recaptcha/api.js'></script>
 	</head>
@@ -64,7 +64,7 @@ if ($admin_rights == 'NOT SET') {
             <script src="assets/js/sponsormanagement.js"></script>
             <script src="assets/js/database_actions.js"></script>
             <script src="assets/js/backbuttonfunctions.js"></script>
-            <script src="assets/js/eventsettings.js"></script>
+            <script src="assets/js/eventsettings.js?v=<?php echo filemtime(__DIR__.'/assets/js/eventsettings.js'); ?>"></script>
             <script src="assets/js/tinymce/tinymce.min.js"></script>            
 
 		<script>
