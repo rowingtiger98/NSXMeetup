@@ -16,3 +16,6 @@ Thumbs.db
 
 # Front page images uploaded through Edit Event Settings - created on the server
 /events/*/images/frontpage_*
+
+# Shared front page images (copied to the server by hand)
+/assets/images/frontpage/

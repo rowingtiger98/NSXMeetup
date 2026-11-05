@@ -236,9 +236,11 @@ function RenderEditEventSettings() {
                     $output_html .= ' event_image_dir="'.$h(EventImagesDirectory($event['EVENT_Directory'])).'" shared_image_dir="'.$h(SHARED_FRONTPAGE_IMAGE_DIR).'" />';
                     $output_html .= '<span id="event_setting_frontpage_preview_none"'.($value !== '' ? ' style="display:none;"' : '').'>No image set</span>';
                     $output_html .= '</div>';
-                    $output_html .= '<input type="text" id="'.$id.'" db_key="'.$column.'" value="'.$h($value).'" maxlength="'.(int)$field['max'].'" />';
                     $output_html .= '<input type="file" id="event_setting_frontpage_upload" accept="image/jpeg,image/png,image/webp" style="display:none;" />';
-                    $output_html .= '<label for="event_setting_frontpage_upload" id="event_setting_frontpage_upload_button" class="button small fit">Upload New Image</label>';
+                    $output_html .= '<div class="row gtr-0 frontpage_image_controls">';
+                    $output_html .= '<div class="col-6 col-12-small"><label for="event_setting_frontpage_upload" id="event_setting_frontpage_upload_button" class="button small fit">Upload New Image</label></div>';
+                    $output_html .= '<div class="col-6 col-12-small"><input type="text" id="'.$id.'" db_key="'.$column.'" value="'.$h($value).'" maxlength="'.(int)$field['max'].'" /></div>';
+                    $output_html .= '</div>';
                     $output_html .= '<div id="event_setting_frontpage_upload_status" class="frontpage_upload_status"></div>';
                     break;
                 default: // text

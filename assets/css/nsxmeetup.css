@@ -869,14 +869,34 @@ span.attr_more_info_field {
 
 .frontpage_image_preview {
     margin-bottom: 0.5rem;
+    text-align: center;
 }
 
     .frontpage_image_preview img {
         display: block;
+        margin: 0 auto;
         max-width: 100%;
         max-height: 225px;
         border-radius: 4px;
     }
+
+/* Upload button and image name: side by side, stacked 5px apart on small screens */
+.frontpage_image_controls > :first-child {
+    padding-right: 5px;
+}
+
+    .frontpage_image_controls .button {
+        height: 2.5rem;  /* same height as the text input beside it */
+        line-height: 2.5rem;
+        margin: 0;
+    }
+
+@media screen and (max-width: 736px) {
+    .frontpage_image_controls > :first-child {
+        padding-right: 0;
+        margin-bottom: 5px;
+    }
+}
 
 .frontpage_upload_status {
     font-size: 0.85em;
