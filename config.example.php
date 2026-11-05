@@ -20,6 +20,9 @@ const APP_SESSION_PATH = '';
 // Where logout sends the user.
 const APP_HOME_URL = 'index.php';
 
+// Seconds a logged-in user can be idle before being logged out (optional - defaults to 1800).
+const APP_IDLE_TIMEOUT = 300;
+
 // Google reCAPTCHA secret key (server-side verification only - the public site
 // key stays in the page markup). https://www.google.com/recaptcha/admin
 const RECAPTCHA_SECRET_KEY = 'change-me';

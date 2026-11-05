@@ -17,7 +17,9 @@ require_once __DIR__ . '/config.php';
 
 const APP_SESSION_NAME   = 'nsxmeetup_session';
 const APP_GC_MAXLIFETIME = 7200;  // 2 hours - matches NSXCA's sec_session.php
-const APP_IDLE_TIMEOUT   = 1800;  // 30 min idle timeout for a logged-in user
+if (!defined('APP_IDLE_TIMEOUT')) {
+    define('APP_IDLE_TIMEOUT', 1800); // idle timeout (seconds) for a logged-in user - override in config.php
+}
 const APP_GC_PROBABILITY = 1;
 const APP_GC_DIVISOR     = 100;   // 1% chance/request - set explicitly rather than left to host default
 
@@ -139,6 +141,19 @@ function app_logout(string $redirectTo = APP_HOME_URL, ?string $message = null):
 
     header('Location: ' . $redirectTo);
     exit();
+}
+
+/**
+ * The <script> tag for the browser-side idle timer (assets/js/idletimer.js). Echo it
+ * just before </body> on any page shown to a logged-in user. The timer logs the user
+ * out after APP_IDLE_TIMEOUT seconds with no mouse/keyboard activity, even on pages
+ * that never reload (e.g. the AJAX-driven admin tools), and pings session_ping.php
+ * while the user is active so the server-side timeout stays in step.
+ */
+function app_idle_timer_script(): string
+{
+    return '<script src="assets/js/idletimer.js" data-timeout="' . (int)APP_IDLE_TIMEOUT
+         . '" data-ping-url="session_ping.php" data-logout-url="logout.php?reason=idle"></script>' . "\n";
 }
 
 /**

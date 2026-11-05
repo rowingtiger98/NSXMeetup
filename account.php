@@ -141,5 +141,6 @@ if ($admin_rights == 'NOT SET') {
 		
 
 			
+			<?php echo app_idle_timer_script(); ?>
 	</body>
 </html>

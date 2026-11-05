@@ -259,5 +259,6 @@ if(isset($_GET['event_id'])) {
                     document.getElementById("Sponsor_Modal_"+index_counter+"").style.display = "none";
                 }                
             </script>   
+			<?php if ($is_logged_in) echo app_idle_timer_script(); ?>
 	</body>
 </html>

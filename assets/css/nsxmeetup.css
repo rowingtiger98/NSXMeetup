@@ -882,3 +882,20 @@ span.attr_more_info_field {
     font-size: 0.85em;
 }
 
+
+/* Idle timer warning (assets/js/idletimer.js) */
+.idle_timer_warning {
+	display: none;
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 100000;
+	padding: 0.75em 1em;
+	background: #b71c1c;
+	color: #fff;
+	text-align: center;
+}
+.idle_timer_warning .button {
+	margin-left: 1em;
+}

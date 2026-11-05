@@ -262,5 +262,6 @@ function showSlides(n) {
   dots[slideIndex-1].className += " active";
 }
 </script>			
+			<?php if ($is_logged_in) echo app_idle_timer_script(); ?>
 	</body>
 </html>
