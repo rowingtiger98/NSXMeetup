@@ -92,9 +92,9 @@ function NEWRenderAttendingInformation($event_data) {
             }
 
             if (!($parts_row["Participant_Wait_Listed"])) {
-                $output_html .= '<tr><td style="vertical-align:middle;" width="65%">'.$parts_row["Participant_Display_Name"].' '.$more_info_link.'<div id="part_extra_info_'.$parts_row['Participant_ID'].'" class="part_extra_info">'.$shared_html.'</div></td><td style="vertical-align:middle;" class="table_column">'.$parts_row["Participant_State"].'</td><td style="text-align:right;"   class="table_column"><img src="../../images/'.$parts_row['Participant_Car_Image'].'" /></td></tr>';
+                $output_html .= '<tr><td style="vertical-align:middle;" width="65%">'.$parts_row["Participant_Display_Name"].' '.$more_info_link.'<div id="part_extra_info_'.$parts_row['Participant_ID'].'" class="part_extra_info">'.$shared_html.'</div></td><td style="vertical-align:middle;" class="table_column">'.$parts_row["Participant_State"].'</td><td style="text-align:right;"   class="table_column"><img src="assets/images/nsx_colors/'.$parts_row['Participant_Car_Image'].'" /></td></tr>';
             }
-            // $output_html .= '<tr><td style="vertical-align:middle;">'.$parts_row["Participant_Display_Name"].'</div></td><td style="vertical-align:middle;">'.$parts_row["Participant_State"].'</td><td style="text-align:right;"><img src="images/'.$parts_row['Driver_Car_Image'].'" /></td></tr>';
+            // $output_html .= '<tr><td style="vertical-align:middle;">'.$parts_row["Participant_Display_Name"].'</div></td><td style="vertical-align:middle;">'.$parts_row["Participant_State"].'</td><td style="text-align:right;"><img src="assets/images/nsx_colors/'.$parts_row['Driver_Car_Image'].'" /></td></tr>';
 
         }		
         }

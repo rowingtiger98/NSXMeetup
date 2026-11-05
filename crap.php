@@ -39,7 +39,7 @@ function ExtractSingleDayOfExperiences($event_id, $experiences_date) {
 /* ************************************************************************ */
 function RenderEachDailyEventSection($section) {
 	$output_html = '<div id="individual_event_child_container_'.$section['EXPERIENCE_Name'].'" class="individual_event_child_container">';
-	$output_html .= '<span class="image fit" style="margin-bottom:0.5em;"><img src="images/'.$section['EXPERIENCE_Banner_Image'].'"></span>';
+	$output_html .= '<span class="image fit" style="margin-bottom:0.5em;"><img src="assets/images/'.$section['EXPERIENCE_Banner_Image'].'"></span>';
 	$output_html .= '<h2 style="color:#ffcc00;">'.$section['EXPERIENCE_Title'].'</h2>';
 	$output_html .= '<p>'.$section['EXPERIENCE_Description'].'</p>';
 	$output_html .= '<table style="color:#FFFFFF;"><tbody>';
@@ -270,7 +270,7 @@ function RenderEachDailyEventSection($section) {
 
         //   }		
       
-        //   // $output_html .= '<tr><td style=\"vertical-align:middle;\">'.$parts_row["Participant_Display_Name"].'<div id="part_extra_info" class="part_extra_info">'.$shared_html.'</div></td><td style=\"vertical-align:middle;\">'.$parts_row["Participant_State"].'</td><td style=\"text-align:right;\"><img src=\"images/'.$parts_row['Driver_Car_Image'].'\" /></td></tr>';
+        //   // $output_html .= '<tr><td style=\"vertical-align:middle;\">'.$parts_row["Participant_Display_Name"].'<div id="part_extra_info" class="part_extra_info">'.$shared_html.'</div></td><td style=\"vertical-align:middle;\">'.$parts_row["Participant_State"].'</td><td style=\"text-align:right;\"><img src=\"assets/images/nsx_colors/'.$parts_row['Driver_Car_Image'].'\" /></td></tr>';
         //   // }
         //   }		
         // }

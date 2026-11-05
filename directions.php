@@ -117,12 +117,12 @@
 							<h3>Event Space</h3>
 							<p>From the attached picture, you can see the size of this event. We are going to arriving via Hwy 54 (South Miami Blvd). We will turn right at the stoplight 
 							at Emperor Blvd and then your first left into the parking lot for Venture at Imperial Center. Our dedicated spot is shown in the lower corner.</p>
-							<span class="image fit"><img src="images/CandCparkingLot-4.png"></span>
+							<span class="image fit"><img src="assets/images/CandCparkingLot-4.png"></span>
                     	</div>
                     	<div class="col-6 col-12-small" style="padding-top:3.25em;">                       
 							<h3>Parking Flow</h3>
 							<p>Once you pull into the lot, simply follow the path in this image and fill in the first spot that you come into.</p>
-							<span class="image fit"><img src="images/CandCparkingLot-3.png"></span>
+							<span class="image fit"><img src="assets/images/CandCparkingLot-3.png"></span>
                     	</div>
 					</div>
 					

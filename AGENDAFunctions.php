@@ -112,7 +112,7 @@ function NEWExtractSingleDayOfExperiences($event_id, $experiences_date) {
 /* ************************************************************************ */
 function NEWRenderEachDailyEventSection($section) {
 	$output_html = '<div id="individual_event_child_container_'.$section['EXPERIENCE_Name'].'" class="individual_event_child_container">';
-	$output_html .= '<span class="image fit" style="margin-bottom:0.5em;"><img src="../../images/'.$section['EXPERIENCE_Banner_Image'].'"></span>';
+	$output_html .= '<span class="image fit" style="margin-bottom:0.5em;"><img src="assets/images/'.$section['EXPERIENCE_Banner_Image'].'"></span>';
 	$output_html .= '<h2 style="color:#ffcc00;">'.$section['EXPERIENCE_Title'].'</h2>';
 	$output_html .= '<p>'.$section['EXPERIENCE_Description'].'</p>';
 	$output_html .= '<table style="color:#FFFFFF;"><tbody>';

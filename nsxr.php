@@ -225,7 +225,7 @@ img {vertical-align: middle;}
 
             <div class="slideshow-container">
                 <?php
-                    if ($handle = opendir('images/nsxr')) {
+                    if ($handle = opendir('assets/images/nsxr')) {
                         $i = 0;
                         
                         while( ($file = readdir($handle)) !== false ) {
@@ -235,12 +235,12 @@ img {vertical-align: middle;}
                         closedir($handle);
                     }
                     $counter = 1;
-                    if ($handle = opendir('images/nsxr')) {
+                    if ($handle = opendir('assets/images/nsxr')) {
                         while (false !== ($entry = readdir($handle))) {
                             if ($entry != "." && $entry != "..") {
                                 print '<div class="mySlides fade">';
                                 print '<div class="numbertext">'.$counter.' / '.$i.'</div>';
-                                print '<img src="images/nsxr/'.$entry.'" style="width:100%">';
+                                print '<img src="assets/images/nsxr/'.$entry.'" style="width:100%">';
                                 print '</div>';
                                 $counter++;
                             }

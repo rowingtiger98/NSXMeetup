@@ -444,7 +444,7 @@ function  CreateConfirmationPage() {
             $output_html .= '  <div class="col-12">';
             $output_html .= '   <span class="driver_name">'.$row['Participant_Name'].' - '.$row['Participant_Role'].'';
             $output_html .= '  </div>';
-            $output_html .= '  <div class="col-2 col-12-small"><span class="image fit"><img src="images/fullsize_'.$row['Participant_Car_Image'].'" alt="" /></span>';
+            $output_html .= '  <div class="col-2 col-12-small"><span class="image fit"><img src="assets/images/nsx_colors/fullsize_'.$row['Participant_Car_Image'].'" alt="" /></span>';
     
             $car_info = json_decode($row['Participant_Car_Info'], true);
             if ($row['Participant_Is_NSX']) {
@@ -523,7 +523,7 @@ function  CreateConfirmationPage() {
 	    	  $output_html .= '  <div class="col-12">';
 	    	  $output_html .= '   <span class="driver_name">'.$row['Participant_Name'].' - '.$row['Participant_Role'].'';
 	    	  $output_html .= '  </div>';
-	    	  $output_html .= '  <div class="col-2 col-12-small"><span class="image fit"><img src="images/fullsize_'.$row['Participant_Car_Image'].'" alt="" /></span>';
+	    	  $output_html .= '  <div class="col-2 col-12-small"><span class="image fit"><img src="assets/images/nsx_colors/fullsize_'.$row['Participant_Car_Image'].'" alt="" /></span>';
 	  
 			  $car_info = json_decode($row['Participant_Car_Info'], true);
 	    	  if ($row['Participant_Is_NSX']) {
@@ -1147,8 +1147,8 @@ function RenderAttendingInformation() {
 		} else {
 			$more_info_link = '';
 		}
-		$output_html .= '<tr><td style="vertical-align:middle;" width="65%">'.$parts_row["Participant_Display_Name"].' '.$more_info_link.'<div id="part_extra_info_'.$parts_row['Participant_ID'].'" class="part_extra_info">'.$shared_html.'</div></td><td style="vertical-align:middle;" class="table_column">'.$parts_row["Participant_State"].'</td><td style="text-align:right;"   class="table_column"><img src="images/'.$parts_row['Participant_Car_Image'].'" /></td></tr>';
-		// $output_html .= '<tr><td style="vertical-align:middle;">'.$parts_row["Participant_Display_Name"].'</div></td><td style="vertical-align:middle;">'.$parts_row["Participant_State"].'</td><td style="text-align:right;"><img src="images/'.$parts_row['Driver_Car_Image'].'" /></td></tr>';
+		$output_html .= '<tr><td style="vertical-align:middle;" width="65%">'.$parts_row["Participant_Display_Name"].' '.$more_info_link.'<div id="part_extra_info_'.$parts_row['Participant_ID'].'" class="part_extra_info">'.$shared_html.'</div></td><td style="vertical-align:middle;" class="table_column">'.$parts_row["Participant_State"].'</td><td style="text-align:right;"   class="table_column"><img src="assets/images/nsx_colors/'.$parts_row['Participant_Car_Image'].'" /></td></tr>';
+		// $output_html .= '<tr><td style="vertical-align:middle;">'.$parts_row["Participant_Display_Name"].'</div></td><td style="vertical-align:middle;">'.$parts_row["Participant_State"].'</td><td style="text-align:right;"><img src="assets/images/nsx_colors/'.$parts_row['Driver_Car_Image'].'" /></td></tr>';
 
 	  }		
 	}
@@ -1179,7 +1179,7 @@ function RenderEventStatsContent() {
 	if($parts_result->num_rows > 0) {
       while($parts_row = $parts_result->fetch_assoc()) {
         if ($parts_row["Participant_Role"] == 'driving' && $parts_row["Participant_Is_NSX"] == 1){
-            $output_html .= '<div class="nsx_image_mini"><span class="image fit"><img src="/images/'.$parts_row['Participant_Car_Image'].'" /></span><span class="nsx_image_mini_hovertext">'.$parts_row["Participant_Display_Name"].'</span></div>';
+            $output_html .= '<div class="nsx_image_mini"><span class="image fit"><img src="assets/images/nsx_colors/'.$parts_row['Participant_Car_Image'].'" /></span><span class="nsx_image_mini_hovertext">'.$parts_row["Participant_Display_Name"].'</span></div>';
         }
 	  }		
 	}
@@ -1709,7 +1709,7 @@ function BuildIndividualSwapShopItemContainer($row) {
 		$output_html .= '	<div class="row gtr-50 gtr-uniform">';
 		
 		foreach ($pictures as $pic) {
-			$output_html .= '<div class="col-4"><span class="image fit"><img src="images/swap/'.$pic.'" alt="" /></span></div>';
+			$output_html .= '<div class="col-4"><span class="image fit"><img src="assets/images/swap/'.$pic.'" alt="" /></span></div>';
 		}
 		
 		$output_html .= '	</div>';
@@ -1953,7 +1953,7 @@ function ExtractSingleDayOfExperiences($event_id, $experiences_date) {
 /* ************************************************************************ */
 function RenderEachDailyEventSection($section) {
 	$output_html = '<div id="individual_event_child_container_'.$section['EXPERIENCE_Name'].'" class="individual_event_child_container">';
-	$output_html .= '<span class="image fit" style="margin-bottom:0.5em;"><img src="images/'.$section['EXPERIENCE_Banner_Image'].'"></span>';
+	$output_html .= '<span class="image fit" style="margin-bottom:0.5em;"><img src="assets/images/'.$section['EXPERIENCE_Banner_Image'].'"></span>';
 	$output_html .= '<h2 style="color:#ffcc00;">'.$section['EXPERIENCE_Title'].'</h2>';
 	$output_html .= '<p>'.$section['EXPERIENCE_Description'].'</p>';
 	$output_html .= '<table style="color:#FFFFFF;"><tbody>';

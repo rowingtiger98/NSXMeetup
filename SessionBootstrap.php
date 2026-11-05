@@ -87,6 +87,20 @@ function app_require_login(string $redirectTo = 'index.php'): void
 }
 
 /**
+ * The page the login form was posted from (its action is "#", so that's this
+ * request's own URL, query string included). Only a path on this site is
+ * allowed - anything else, e.g. "//other-site.com", falls back to index.php.
+ */
+function app_login_return_url(): string
+{
+    $uri = $_SERVER['REQUEST_URI'] ?? '';
+    if ($uri === '' || $uri[0] !== '/' || (isset($uri[1]) && ($uri[1] === '/' || $uri[1] === '\\'))) {
+        return 'index.php';
+    }
+    return $uri;
+}
+
+/**
  * True if the logged-in user has been idle longer than APP_IDLE_TIMEOUT.
  */
 function app_session_idle_expired(): bool

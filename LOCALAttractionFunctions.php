@@ -138,7 +138,7 @@ function BuildIndividualLocalAttaractionContainer($row) {
       $output_html .= ' <div class="col-12 col-12-xsmall" style="border-bottom:1px solid #ffffff;margin:0 0 0.5em 0.5em;"></div>';    
     } else {
       $output_html .= '<div class="col-2 col-12-xsmall">';    
-      $output_html .= ' <span class="image fit"><img src="images/attractions/'.$row['Event_ID'].'/'.$row['Attraction_Image'].'"></span>';
+      $output_html .= ' <span class="image fit"><img src="assets/images/attractions/'.$row['Event_ID'].'/'.$row['Attraction_Image'].'"></span>';
       $output_html .= '</div>';
       $output_html .= '<div class="col-10 col-12-xsmall">'; 
       $output_html .= ' <h4>'.$row['Attraction_Name'].'</h4>';

@@ -129,7 +129,7 @@ if ($is_logged_in) {
                     	<div class="col-4 col-12-small">
 							<div style="padding:1.25em; border: 1px solid white;">
 								<h3>1993 NSX-R</h3>
-								<span class="image fit"><img src="images/nsxrfrontpage.jpg"></span>
+								<span class="image fit"><img src="assets/images/nsxrfrontpage.jpg"></span>
 								<p style="padding: 1.25em 0 0 0 ;">As we all know, there is the NSX which we all know and love. And then there is the NSX-R that most can 
 								only dream about. In October of 2022, <span style="color:#FFCC00;">Vince Howard</span> became the owner of a stunning 1993 Brooklands Green Pearl over black Alcantara NSX-R by winning
 								a record setting NSX auction at <a href="https://bringatrailer.com/listing/1993-honda-nsx-r/" target="_blank" style="color:#ff0000;">Bring-A-Trailer</a>.<br>
@@ -143,7 +143,7 @@ if ($is_logged_in) {
                     	<div class="col-4 col-12-small">
 							<div style="padding:1.25em; border: 1px solid white;">
 								<h3>Ken Sax</h3>
-								<span class="image fit"><img src="images/KenSaxFrontPage.jpg"></span>
+								<span class="image fit"><img src="assets/images/KenSaxFrontPage.jpg"></span>
 								<p style="padding: 1.25em 0 0 0 ;">Without Ken Sax's passion for the NSX, it highly likely that our community would look vastly different.
 								Ken Sax has be a fan of the NSX since before the NSX was even a thing! In 1986, Ken Sax put down a deposit at his local Acura dealer for the then
 								rumored $25,000.00 twin-turbo "NSX" that Acura was developing. Six years after taking ownership of his NSX, in 1997, Ken led and personally 
@@ -177,7 +177,7 @@ if ($is_logged_in) {
                     	<div class="col-4 col-12-small">
 				 			<div style="padding:1.25em; border: 1px solid white;">
 								<h3>1993 NSX-R</h3>
-								<span class="image fit"><img src="images/nsxrfrontpage.jpg"></span>
+								<span class="image fit"><img src="assets/images/nsxrfrontpage.jpg"></span>
 								<p style="padding: 1.25em 0 0 0 ;">As we all know, there is the NSX which we all know and love. And then there is the NSX-R that most can 
 								only dream about. In October of 2022, <span style="color:#FFCC00;">Vince Howard</span> became the owner of a stunning 1993 Brooklands Green Pearl over black Alcantara NSX-R by winning
 								a record setting NSX auction at <a href="https://bringatrailer.com/listing/1993-honda-nsx-r/" target="_blank" style="color:#ff0000;">Bring-A-Trailer</a>.<br>
@@ -210,7 +210,7 @@ if ($is_logged_in) {
 					<span class="button fit" style="margin-bottom: 1.25em;">Special Guest at the 2024 Mideast NSX Meet</span>
                     <div class="row gtr-25 gtr-uniform" style="margin-top:0.25em;">
                     	<div class="col-3 col-12-small">                            
-							<span class="image fit"style="padding:1em;"><img src="images/KenSaxFrontPage.jpg"></span><br>
+							<span class="image fit"style="padding:1em;"><img src="assets/images/KenSaxFrontPage.jpg"></span><br>
 						</div>
                     	<div class="col-9 col-12-small">
 						<h3>Ken Sax</h3>
@@ -249,7 +249,7 @@ if ($is_logged_in) {
                             </ul>                            		
                         </div>							
                     	<div class="col-3 col-12-small">                            
-							<span class="image fit"><img src="images/solonsx.png"></span><br>
+							<span class="image fit"><img src="assets/images/solonsx.png"></span><br>
 
 						</div>
 

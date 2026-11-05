@@ -58,7 +58,7 @@
 						$temp_html .= '<div class="row gtr-0">';
 						$temp_html .= '<div class="col-12 col-12-medium col-12-small title_sponsor_header">Mideast NSX Meet Senna Level Sponsor</div>';
 						$temp_html .= '<div class="col-4 col-12-medium col-12-small">';
-						$temp_html .= '<a href="'.$row['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img src="images/sponsors/'.$row['SPONSOR_Thumbnail_Logo'].'" alt="" /></a>';
+						$temp_html .= '<a href="'.$row['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img src="assets/images/sponsors/'.$row['SPONSOR_Thumbnail_Logo'].'" alt="" /></a>';
 						$temp_html .= '</div>';
 						$temp_html .= '<div class="col-8 col-12-medium col-12-small title_sponsor_body">';
 						$temp_html .= '<h3>'.strtoupper($row['SPONSOR_Name']).'</h3>'.$row['SPONSOR_Description'];
@@ -73,7 +73,7 @@
 						$temp_html .= '<div class="row gtr-0">';
 						$temp_html .= '<div class="col-12 col-12-medium col-12-small title_sponsor_header">Mideast NSX Meet Senna Level Sponsor</div>';
 						$temp_html .= '<div class="col-12 col-12-medium col-12-small">';
-						$temp_html .= '<a href="'.$row['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img src="images/sponsors/'.$row['SPONSOR_Thumbnail_Logo'].'" alt="" /></a>';
+						$temp_html .= '<a href="'.$row['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img src="assets/images/sponsors/'.$row['SPONSOR_Thumbnail_Logo'].'" alt="" /></a>';
 						$temp_html .= '</div>';
 						$temp_html .= '<div class="col-12 col-12-medium col-12-small cotitle_sponsor_body">';
 						$temp_html .= '<h3>'.$title_sponsor_class.' '.strtoupper($row['SPONSOR_Name']).'</h3>'.$row['SPONSOR_Description'];
@@ -107,7 +107,7 @@
             
 			if ($section != 'title') {
 				$temp_html .= '<article class="box post '.$row['SPONSOR_Level'].'">';
-				$temp_html .= '<a href="'.$row['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img src="images/sponsors/'.$row['SPONSOR_Thumbnail_Logo'].'" alt="" /></a>';
+				$temp_html .= '<a href="'.$row['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img src="assets/images/sponsors/'.$row['SPONSOR_Thumbnail_Logo'].'" alt="" /></a>';
 				$temp_html .= '<ul class="actions special" style="margin-top:10px;">';
 				$temp_html .= '<li><a href="#" id="modal_open_button_'.$index_counter.'" class="button small sponsor_button" index_counter="'.$index_counter.'">Learn More</a></li>';
 				$temp_html .= '</ul>';
@@ -182,7 +182,7 @@ function BuildSponsorModal($row, $index_counter) {
 	/* -------------------------------------------- */
 	$output_html .= '<div class="row">';
 	$output_html .= '<div class="col-6 col-6-medium col-12-small">';
-	$output_html .= '<a href="'.$row['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img style="border-radius: 0;" src="images/sponsors/'.$row['SPONSOR_Large_Logo'].'" alt="" /></a></span>';
+	$output_html .= '<a href="'.$row['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img style="border-radius: 0;" src="assets/images/sponsors/'.$row['SPONSOR_Large_Logo'].'" alt="" /></a></span>';
 	$output_html .= '</div>';	
 	$output_html .= '<div class="col-6 col-6-medium col-12-small modal_text">';
 	$output_html .= $row['SPONSOR_Description'];

@@ -78,7 +78,7 @@ function BuildSponsorHTMLSection($sponsors, $title_sponsors) {
                         $temp_html .= '<div class="row gtr-0">';
                         $temp_html .= '<div class="col-12 col-12-medium col-12-small title_sponsor_header">Senna Level Sponsor</div>';
                         $temp_html .= '<div class="col-4 col-12-medium col-12-small">';
-                        $temp_html .= '<a href="'.$value['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img src="/images/sponsors/'.$value['SPONSOR_Thumbnail_Logo'].'" alt="" /></a>';
+                        $temp_html .= '<a href="'.$value['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img src="assets/images/sponsors/'.$value['SPONSOR_Thumbnail_Logo'].'" alt="" /></a>';
                         $temp_html .= '</div>';
                         $temp_html .= '<div class="col-8 col-12-medium col-12-small title_sponsor_body">';
                         $temp_html .= '<h3>'.strtoupper($value['SPONSOR_Name']).'</h3>'.$value['SPONSOR_Description'];
@@ -93,7 +93,7 @@ function BuildSponsorHTMLSection($sponsors, $title_sponsors) {
                         $temp_html .= '<div class="row gtr-0">';
                         $temp_html .= '<div class="col-12 col-12-medium col-12-small title_sponsor_header">Mideast NSX Meet Senna Level Sponsor</div>';
                         $temp_html .= '<div class="col-12 col-12-medium col-12-small">';
-                        $temp_html .= '<a href="'.$value['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img src="/images/sponsors/'.$value['SPONSOR_Thumbnail_Logo'].'" alt="" /></a>';
+                        $temp_html .= '<a href="'.$value['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img src="assets/images/sponsors/'.$value['SPONSOR_Thumbnail_Logo'].'" alt="" /></a>';
                         $temp_html .= '</div>';
                         $temp_html .= '<div class="col-12 col-12-medium col-12-small cotitle_sponsor_body">';
                         $temp_html .= '<h3>'.$title_sponsor_class.' '.strtoupper($value['SPONSOR_Name']).'</h3>'.$value['SPONSOR_Description'];
@@ -125,7 +125,7 @@ function BuildSponsorHTMLSection($sponsors, $title_sponsors) {
             
             if ($section != 'title') {
                 $temp_html .= '<article class="box post '.$value['SPONSOR_Level'].'">';
-                $temp_html .= '<a href="'.$value['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img src="/images/sponsors/'.$value['SPONSOR_Thumbnail_Logo'].'" alt="" /></a>';
+                $temp_html .= '<a href="'.$value['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img src="assets/images/sponsors/'.$value['SPONSOR_Thumbnail_Logo'].'" alt="" /></a>';
                 $temp_html .= '<ul class="actions special" style="margin-top:10px;">';
                 $temp_html .= '<li><a href="#" id="modal_open_button_'.$index_counter.'" class="button small sponsor_button" index_counter="'.$index_counter.'">Learn More</a></li>';
                 $temp_html .= '</ul>';
@@ -189,7 +189,7 @@ function BuildSponsorModal($value, $index_counter) {
 	/* -------------------------------------------- */
 	$output_html .= '<div class="row">';
 	$output_html .= '<div class="col-6 col-6-medium col-12-small">';
-	$output_html .= '<a href="'.$value['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img style="border-radius: 0;" src="/images/sponsors/'.$value['SPONSOR_Large_Logo'].'" alt="" /></a></span>';
+	$output_html .= '<a href="'.$value['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img style="border-radius: 0;" src="assets/images/sponsors/'.$value['SPONSOR_Large_Logo'].'" alt="" /></a></span>';
 	$output_html .= '</div>';	
 	$output_html .= '<div class="col-6 col-6-medium col-12-small modal_text">';
 	$output_html .= $value['SPONSOR_Description'];

@@ -85,7 +85,7 @@ if(isset($_GET['event_id'])) {
 					<span class="welcome-title" >Christopher Cutler (NSXTRA)</span>				
 					<div class="row gtr-uniform">
 						<div class="col-3 col-12-small" style="padding-top:3.25em;">
-							<span class="image fit"><img src="images/chriscutfrontpage.jpg"></span>
+							<span class="image fit"><img src="assets/images/chriscutfrontpage.jpg"></span>
 						</div>
 						<div class="col-9 col-12-small" style="padding-top:1.6em;">
 							<p style="padding: 1.25em 0 0 0 ;">On April 1st, 2024, the NSX community lost a truly inspirational member, but more so, a friend all that knew home. Borrowing from Sheraz Bhutta's well said words, "Christopher 
@@ -120,7 +120,7 @@ if(isset($_GET['event_id'])) {
 					<p>Photos are coming soon!</p>
                     <!-- <div class="row gtr-25 gtr-uniform" style="margin-top:0.25em;">
                     	<div class="col-3 col-12-small">                            
-							<span class="image fit"><img src="images/SKEWhitelogo.png"></span><br>
+							<span class="image fit"><img src="assets/images/SKEWhitelogo.png"></span><br>
                             <ul class="icons">
                                 <li><a href="http://instagram.com/ske.photos" class="icon brands fa-instagram" target="_blank"><span class="label">Instagram</span></a></li>
                                 <li><a href="https://www.facebook.com/ske.photos.fb" class="icon brands fa-facebook" target="_blank"><span class="label">Facebook</span></a></li>
@@ -144,7 +144,7 @@ if(isset($_GET['event_id'])) {
 						</div>
 			
                     	<div class="col-3 col-12-small">                            
-							<span class="image fit"><img src="images/solonsx.png"></span><br>
+							<span class="image fit"><img src="assets/images/solonsx.png"></span><br>
 
 						</div>
                     	<div class="col-9 col-12-small">
@@ -170,7 +170,7 @@ if(isset($_GET['event_id'])) {
 				<div id="welcome_letter" class="inner">
                     <div class="row gtr-uniform">
                     	<div class="col-12 col-12-small">
-							<span class="image fit"><img src="images/NSXCA-Logo-white.png"></span>
+							<span class="image fit"><img src="assets/images/NSXCA-Logo-white.png"></span>
 						</div>
 						<div class="col-12 col-12-small">
 							<a href="https://nsxca.org/product/nsxca-membership/" target="_blank" class="button fit" style="margin-bottom:1em;">JOIN THE NSX Club of America Today</a>

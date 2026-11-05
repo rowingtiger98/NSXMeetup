@@ -52,7 +52,7 @@ if(isset($_SESSION['login_user'])){
                 </nav>
                 <div id="logo">
                     <a href="index.php">
-                        <span class="image fit"><img src="images/NSXMeetup-Logo-white.png" alt="" /></span>
+                        <span class="image fit"><img src="assets/images/NSXMeetup-Logo-white.png" alt="" /></span>
                     </a>
                 </div>
                 <nav>

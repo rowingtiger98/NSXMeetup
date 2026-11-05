@@ -170,7 +170,7 @@ Do you want to keep an eye on the ‘River NSX’ Saga?  Make sure to follow Hel
 
             <div class="slideshow-container">
                 <?php
-                    if ($handle = opendir('images/rivernsx')) {
+                    if ($handle = opendir('assets/images/rivernsx')) {
                         $i = 0;
                         
                         while( ($file = readdir($handle)) !== false ) {
@@ -180,12 +180,12 @@ Do you want to keep an eye on the ‘River NSX’ Saga?  Make sure to follow Hel
                         closedir($handle);
                     }
                     $counter = 1;
-                    if ($handle = opendir('images/rivernsx')) {
+                    if ($handle = opendir('assets/images/rivernsx')) {
                         while (false !== ($entry = readdir($handle))) {
                             if ($entry != "." && $entry != "..") {
                                 print '<div class="mySlides fade">';
                                 print '<div class="numbertext">'.$counter.' / '.$i.'</div>';
-                                print '<img src="images/rivernsx/'.$entry.'" style="width:100%">';
+                                print '<img src="assets/images/rivernsx/'.$entry.'" style="width:100%">';
                                 print '</div>';
                                 $counter++;
                             }

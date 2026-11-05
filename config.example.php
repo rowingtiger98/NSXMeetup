@@ -18,7 +18,7 @@ const DB_PASS = 'change-me';
 const APP_SESSION_PATH = '';
 
 // Where logout sends the user.
-const APP_HOME_URL = 'https://nsxmeetup.com/';
+const APP_HOME_URL = 'index.php';
 
 // Google reCAPTCHA secret key (server-side verification only - the public site
 // key stays in the page markup). https://www.google.com/recaptcha/admin

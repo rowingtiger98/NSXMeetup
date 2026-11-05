@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
 
         if ($row && is_string($row['NSX_Password']) && password_verify($password, $row['NSX_Password'])) {
             app_login_success($username); // Initializing Session (regenerates session ID)
-            header('Location: index.php'); // Redirecting To Other Page
+            header('Location: ' . app_login_return_url()); // Back to the page the login form was on
             exit();
         }
 

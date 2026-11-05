@@ -41,7 +41,7 @@
                                     <p style="color: #ffcc00;">131 Columbus Avenue<br>Cary, NC 27518<br>1 (919) 377-0440</p>
                                 </div>
                                 <div class="col-8 col-12-small">
-                                    <span class="image fit"><img src="images/hiltondarden.jpeg"></span>
+                                    <span class="image fit"><img src="assets/images/hiltondarden.jpeg"></span>
                                     <br>
                                     <a href="https://www.hilton.com/en/attend-my-event/rdurcgi-nsx-ddfc5f48-7960-4333-9d03-6174d2bd6680/" class="button primary small fit" target="_blank">Book at the Hilton Garden Inn</a>
                                 </div>
@@ -53,7 +53,7 @@
                                     <p style="color: #ffcc00;">500 Caitboo Avenue<br>Cary, NC 27518<br>1 (919) 239-4777</p>
                                 </div>
                                 <div class="col-8 col-12-small">
-                                    <span class="image fit"><img src="images/doubletree.jpeg"></span>
+                                    <span class="image fit"><img src="assets/images/doubletree.jpeg"></span>
                                     <br>
                                     <a href="https://www.hilton.com/en/attend-my-event/rduaydt-917-b44862d4-9860-414c-b903-f9c625dbcbf0/" class="button primary small fit" target="_blank">Book at the DoubleTree Hotel</a>
                                 </div>

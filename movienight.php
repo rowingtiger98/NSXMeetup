@@ -24,7 +24,7 @@
 					<h1 class="major">Movie Night at the Mideast NSX Meet</h1>
                     <div class="row gtr-uniform">
                     	<div class="col-3 col-12-small" style="padding-top:3.25em;">
-							<span class="image fit"><img src="images/fentonqrcodefrontpage.jpg"></span><br>
+							<span class="image fit"><img src="assets/images/fentonqrcodefrontpage.jpg"></span><br>
                             <a href="https://www.paragontheaters.com/location/52356/Fenton---Axis15-Extreme-_-NOW-OPEN-Showtimes/2023-05-19" target="_blank" class="button primary small fit">Click Here for Tickets</a>
 						</div>
                     	<div class="col-9 col-12-small" style="padding-top:1.6em;">
@@ -92,7 +92,7 @@
 							</div>
                         
                             <div class="col-8 col-12-small">
-								<span class="image fit"><img src="images/FentonParking.jpg"></span>
+								<span class="image fit"><img src="assets/images/FentonParking.jpg"></span>
                             </div>
                         </div> 							
                     </div>					
