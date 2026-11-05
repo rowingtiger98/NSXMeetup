@@ -73,7 +73,12 @@ function HandleAccountManagementActionClick(event) {
 	else if (action === 'sponsorship_level_management' ){
         var event_id = $(this).attr('event_id');
 		RenderSponsorshipManagementInterface(event_id);
-    }		
+    }
+
+	else if (action === 'edit_event_settings' ){
+        var event_id = $(this).attr('event_id');
+		RenderEditEventSettings(event_id);
+    }
 }
 
 // -------------------------------------------------------------------------------------

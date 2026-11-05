@@ -333,6 +333,14 @@ function  RenderManagementToolsSection () {
     $output_html .= '<div id="details_info" class="">';
     $output_html .= '<div class="features-grid">';
 
+    /* -- Edit Event Settings -- */
+    $output_html .= '<div>';
+    $output_html .= '    <span class="number"><span class="icon solid fa-cog"></span></span>';
+    $output_html .= '    <h3>Edit Event Settings</h3>';
+    $output_html .= '    <p>Change the event\'s name, dates, visibility, contacts, fees and payment options.</p>';
+    $output_html .= '    <a href="#" id="admin_event_handler" action="edit_event_settings" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
+    $output_html .= '</div>';
+
     /* -- Find / Edit Registrations -- */
     $output_html .= '<div>';
     $output_html .= '    <span class="number"><span class="icon solid fa-user"></span></span>';

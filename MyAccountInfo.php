@@ -64,6 +64,7 @@ if ($admin_rights == 'NOT SET') {
             <script src="assets/js/sponsormanagement.js"></script>
             <script src="assets/js/database_actions.js"></script>
             <script src="assets/js/backbuttonfunctions.js"></script>
+            <script src="assets/js/eventsettings.js"></script>
             <script src="assets/js/tinymce/tinymce.min.js"></script>            
 
 		<script>

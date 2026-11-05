@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/eventImages.php';
+
 if(isset($_POST['method'])) {
     $_POST['method']();
 }
@@ -28,7 +30,7 @@ function RenderLandingPageEvents() {
 
             if(strtotime($current_datetime) >= strtotime($end_date)){
                 $past_events .= '<div>';
-                $past_events .= '<span class="image fit"><img src="assets/images/frontpage/'.$row['EVENT_Frontpage_Image'].'"></span>';
+                $past_events .= '<span class="image fit"><img src="'.htmlspecialchars(EventFrontpageImageURL($row['EVENT_Directory'], $row['EVENT_Frontpage_Image'])).'"></span>';
                 if ($row['EVENT_Frontpage_Image'] == 'nsxmeetup_frontpage_default.png') {
                     $past_events .= '<h3>'.$row['EVENT_Name'].'</h3>';
                 } else {
@@ -40,7 +42,7 @@ function RenderLandingPageEvents() {
             }else{
                 $future_events = True;
                 $pending_events .= '<div>';
-                $pending_events .= '<span class="image fit"><img src="assets/images/frontpage/'.$row['EVENT_Frontpage_Image'].'"></span>';
+                $pending_events .= '<span class="image fit"><img src="'.htmlspecialchars(EventFrontpageImageURL($row['EVENT_Directory'], $row['EVENT_Frontpage_Image'])).'"></span>';
                 if ($row['EVENT_Frontpage_Image'] == 'nsxmeetup_frontpage_default.png') {
                     $pending_events .= '<h3>'.$row['EVENT_Name'].'</h3>';
                 }
