@@ -1,0 +1,92 @@
+
+.se-pre-con {
+    position: fixed;
+    left: 0px;
+    top: 0px;
+    width: 100%;
+    height: 100%;
+    z-index: 9999;
+    opacity: 0.6;
+    background-color: #c0c0c0;
+}
+.image_loading_screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.spinner {
+    height: 120px;
+    width: 120px;
+    border: 6px solid white;
+}
+
+ul.photo_navigation_bar {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: transparent;
+    border: 1px solid #FFF;
+  }
+  
+  ul.photo_navigation_bar li {
+    float: left;
+    border-right: 1px solid #bbb;
+    display: block;
+    color: white;
+    text-align: center;
+    padding: 14px 16px;
+    text-decoration: none;
+    cursor: pointer;    
+  }
+
+  ul.photo_navigation_bar li:hover {
+    color: #ffcc00;
+  }
+
+    .photo_navigation_bar.active {
+        background-color: #ff0000;
+        font-weight: 600;
+    } 
+    
+        .photo_navigation_bar.active:hover {
+            background-color: #ff0000;
+            color:white;
+        }   
+  
+  ul.photo_navigation_bar li a {
+    display: block;
+    color: white;
+    text-align: center;
+    padding: 14px 16px;
+    text-decoration: none;
+  }
+  
+  /* Change the link color to #111 (black) on hover */
+  ul.photo_navigation_bar li:hover {
+    background-color: #111;
+  }
+
+  /* Thumbnail Images */
+  .thumbnailpreview {
+    cursor:pointer;
+  }
+   
+  .thumbnailpreview:hover {
+    border: 1px solid #FFF;
+  }
+
+  .thumbnailpreview.active {
+    border: 1px solid #FFCC00;
+  }
+    .thumbnailpreview.active:hover {
+        border: 1px solid #FFCC00;
+    }  

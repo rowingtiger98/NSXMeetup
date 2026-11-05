@@ -1,0 +1,15 @@
+# Real credentials - see config.example.php
+config.php
+
+# Session files written by PHP on the server (APP_SESSION_PATH)
+/sessions/
+
+# PHP error log Bluehost writes into the site folder
+error_log
+
+# OS and editor clutter
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
