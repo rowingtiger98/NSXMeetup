@@ -103,6 +103,34 @@ function app_login_return_url(): string
 }
 
 /**
+ * URL of a file in the site's top folder (where this file lives), e.g.
+ * app_url('MyAccountInfo.php') gives "/luna/MyAccountInfo.php" when the site is
+ * hosted at kirbypark.net/luna/. Use it for links in shared headers, which are
+ * included from pages in subfolders (events/<dir>/) as well as the top folder.
+ * The site's URL path is worked out from the running script, so it follows the
+ * site wherever it's hosted. Falls back to the plain relative path if it can't be.
+ */
+function app_url(string $path): string
+{
+    static $base = null;
+    if ($base === null) {
+        $base = false;
+        $root       = realpath(__DIR__);
+        $script_dir = realpath(dirname($_SERVER['SCRIPT_FILENAME'] ?? ''));
+        $url_dir    = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+        if ($root && $script_dir && strpos($script_dir . DIRECTORY_SEPARATOR, $root . DIRECTORY_SEPARATOR) === 0) {
+            $sub = str_replace('\\', '/', substr($script_dir, strlen($root))); // '' or e.g. '/events/TestEvent'
+            if ($sub === '') {
+                $base = $url_dir;
+            } elseif (substr($url_dir, -strlen($sub)) === $sub) {
+                $base = substr($url_dir, 0, -strlen($sub));
+            }
+        }
+    }
+    return ($base === false) ? $path : $base . '/' . ltrim($path, '/');
+}
+
+/**
  * True if the logged-in user has been idle longer than APP_IDLE_TIMEOUT.
  */
 function app_session_idle_expired(): bool
