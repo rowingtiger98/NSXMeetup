@@ -1,5 +1,6 @@
 <?php
   require_once __DIR__ . '/databaseFunctions.php';
+  require_once __DIR__ . '/eventAdmin.php'; // CreateDefaultRegistrationType()
 
   if(isset($_POST['method'])) {
     $_POST['method']();
@@ -56,6 +57,7 @@ function EnterNewEventToDatabase() {
         $sth->execute();
         $results[] = 'success';
         $new_event_id_number = $dbh->lastInsertId();
+        CreateDefaultRegistrationType($dbh, $new_event_id_number); // same transaction - both are added or neither
         $dbh->commit();				
 
         // ------------------------------------------------------------
@@ -85,7 +87,7 @@ function EnterNewEventToDatabase() {
         }
 
 
-    } catch(PDOExecption $e) {
+    } catch(PDOException $e) {
     
         $dbh->rollback();
         $results[] = 'fail';

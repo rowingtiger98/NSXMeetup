@@ -920,6 +920,94 @@ span.attr_more_info_field {
 }
 
 
+/* Registration types tool (assets/js/regtypes.js) */
+.regtype_item {
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+    padding: 1em;
+    margin-bottom: 1em;
+}
+
+    .regtype_item label {
+        margin-bottom: 0.25em;
+    }
+
+    .regtype_messages ul {
+        margin: 0.75em 0 0 0;
+        padding: 0.5em 0.5em 0.5em 1.5em;
+    }
+
+    .regtype_messages ul.event_settings_error {
+        border: 2px solid #ff0000;
+    }
+
+    .regtype_messages ul.event_settings_success {
+        border: 2px solid #06fc0c;
+    }
+
+    .regtype_item .button {
+        margin-top: 0.75em;
+    }
+
+/* The list table: the Enabled checkbox has no text beside it */
+.regtype_table td {
+    vertical-align: middle;
+}
+
+    .regtype_table .regtype_checkbox_label {
+        width: 1.5rem;
+        height: 1.5rem;
+        padding: 0;
+        margin: 0;
+    }
+
+    .regtype_table .regtype_actions {
+        white-space: nowrap;
+        text-align: right;
+    }
+
+        .regtype_table .regtype_actions .button {
+            margin-top: 0;
+        }
+
+/* Edit modal - builds on .modal / .modal-content above */
+.regtype_modal {
+    z-index: 10000; /* above the page header */
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+    .regtype_modal .modal-content {
+        max-width: 50em;
+        margin: 8% auto;
+    }
+
+    .regtype_modal .modal-close {
+        color: #aaa;
+        line-height: 1;
+    }
+
+        .regtype_modal .modal-close:hover {
+            color: #fff;
+        }
+
+    .regtype_modal .regtype_item {
+        border: none;
+        padding: 0;
+        margin: 0;
+    }
+
+@media screen and (max-width: 736px) {
+    .regtype_modal .modal-content {
+        width: auto;
+        margin: 1em;
+    }
+}
+
+    .regtype_confirm_delete {
+        background-color: #b71c1c !important;
+        color: #fff !important;
+    }
+
 /* Idle timer warning (assets/js/idletimer.js) */
 .idle_timer_warning {
 	display: none;

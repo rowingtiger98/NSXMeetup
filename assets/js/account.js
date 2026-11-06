@@ -84,6 +84,11 @@ function HandleAccountManagementActionClick(event) {
         var event_id = $(this).attr('event_id');
 		RenderEditEventSettings(event_id, 'payments');
     }
+
+	else if (action === 'edit_registration_types' ){
+        var event_id = $(this).attr('event_id');
+		RenderRegistrationTypes(event_id);
+    }
 }
 
 // -------------------------------------------------------------------------------------

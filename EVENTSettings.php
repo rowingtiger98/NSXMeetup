@@ -14,6 +14,7 @@
 require_once __DIR__ . '/SessionBootstrap.php';
 require_once __DIR__ . '/databaseFunctions.php';
 require_once __DIR__ . '/eventImages.php';
+require_once __DIR__ . '/eventAdmin.php';
 
 app_session_start();
 
@@ -27,7 +28,7 @@ if (isset($_POST['method']) && in_array($_POST['method'], EVENT_SETTINGS_METHODS
     $_POST['method']();
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
     // PHP throws away the whole request (method included) when it's over post_max_size
-    EventSettingsRespond('Fail', ['The image is too large for the server to accept (limit '.ini_get('post_max_size').'). Please choose a smaller one.']);
+    EventAdminRespond('Fail', ['The image is too large for the server to accept (limit '.ini_get('post_max_size').'). Please choose a smaller one.']);
 }
 
 /* ************************************************************************ */
@@ -37,6 +38,7 @@ if (isset($_POST['method']) && in_array($_POST['method'], EVENT_SETTINGS_METHODS
 /*              type: text | textarea | html | date | money | percent |     */
 /*                    checkbox | emails | image                             */
 /*              null_ok: store NULL when left blank (column allows NULL)    */
+/*              widths: [label, input] column widths (default [6, 6])       */
 /*              Each admin tool card edits its own set of fields:           */
 /*              'settings' (Edit Event Settings) and 'payments' (Enable /   */
 /*              Edit Event Payment Options).                                */
@@ -83,16 +85,11 @@ function EventSettingsFields($tool) {
     ];
     $tools['payments'] = [
         'Fees & Payments' => [
-            'EVENT_Base_Fee'              => ['label' => 'Base Fee ($)', 'type' => 'money',
-                                              'help' => 'Registration fee per adult. Use 0 for a free event.'],
-            'EVENT_Enable_Child_Discount' => ['label' => 'Enable Child Pricing', 'type' => 'checkbox',
-                                              'help' => 'Offer a separate fee for children.'],
-            'EVENT_Child_Base_Fee'        => ['label' => 'Child Fee ($)', 'type' => 'money', 'null_ok' => true,
-                                              'help' => 'Registration fee per child, used when child pricing is enabled.'],
-            'EVENT_Child_Checkbox_Text'   => ['label' => 'Child Checkbox Text', 'type' => 'text', 'max' => 128, 'null_ok' => true,
-                                              'help' => 'Label for the "this person is a child" checkbox on the registration form.'],
-            'EVENT_Collect_Payments'      => ['label' => 'Collect Payments', 'type' => 'checkbox',
-                                              'help' => 'Collect payment as part of registration.'],
+            'EVENT_Collect_Payments'      => ['label' => 'Collect Payments', 'type' => 'checkbox', 'widths' => [8, 4],
+                                              'help' => 'Leave this off for a free event - registrants won\'t be asked to pay. '
+                                                      .'When it\'s on, go to Add / Edit / Delete Registration Types and enable at least one registration type '
+                                                      .'(every event starts with a disabled "'.DEFAULT_REGTYPE_NAME.'" type at $0.00), set its cost, '
+                                                      .'and add more types if you need them.'],
             'EVENT_Payment_Instructions'  => ['label' => 'Payment Instructions', 'type' => 'html', 'null_ok' => true,
                                               'help' => 'Shown to registrants with their balance due. HTML is allowed.'],
             'EVENT_Processing_Percentage' => ['label' => 'Processing Fee (%)', 'type' => 'percent', 'null_ok' => true,
@@ -119,68 +116,9 @@ function EventSettingsTool() {
     ];
     $tool = $_POST['tool'] ?? 'settings';
     if (!is_string($tool) || !isset($tools[$tool])) {
-        EventSettingsRespond('Fail', ['Unknown event tool.']);
+        EventAdminRespond('Fail', ['Unknown event tool.']);
     }
     return ['id' => $tool] + $tools[$tool];
-}
-
-/* ************************************************************************ */
-/* Function:    EventSettingsRespond                                        */
-/* Description: Sends the JSON response and ends the request.              */
-/* ************************************************************************ */
-function EventSettingsRespond($status, $payload) {
-    header('Content-Type: application/json');
-    echo json_encode([$status, $payload]);
-    exit();
-}
-
-/* ************************************************************************ */
-/* Function:    EventSettingsAuthorize                                      */
-/* Description: Ends the request with a 'Fail' response unless the session  */
-/*              belongs to a logged-in, non-idle user who administers the   */
-/*              event (listed in NSX_User_Events_Administered) or is an     */
-/*              overlord. Uses only the session, never browser-sent ids.    */
-/* Inputs:      $pdo - PHP Data Object, $event_id - the event's id.         */
-/* ************************************************************************ */
-function EventSettingsAuthorize(PDO $pdo, $event_id) {
-    if (empty($_SESSION['login_user']) || app_session_idle_expired()) {
-        EventSettingsRespond('Fail', ['Your session has expired. Please log in again.']);
-    }
-    $_SESSION['last_activity'] = time();
-
-    $stmt = $pdo->prepare('SELECT NSX_User_Role, NSX_User_Events_Administered FROM nsx_meetup_user_accounts WHERE NSX_Username = ?');
-    $stmt->execute([$_SESSION['login_user']]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    $administered = $user ? array_map('trim', explode(',', (string)$user['NSX_User_Events_Administered'])) : [];
-    if (!$user || ($user['NSX_User_Role'] !== 'overlord' && !in_array((string)$event_id, $administered, true))) {
-        EventSettingsRespond('Fail', ['You are not an administrator for this event.']);
-    }
-}
-
-/* ************************************************************************ */
-/* Function:    EventSettingsLoadEvent                                      */
-/* Description: Validates the posted event id, authorizes the user, and     */
-/*              returns the PDO connection and event row.                   */
-/* Returns:     [PDO, array]                                                */
-/* ************************************************************************ */
-function EventSettingsLoadEvent() {
-    $event_id = filter_var($_POST['event_id'] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-    if ($event_id === false) {
-        EventSettingsRespond('Fail', ['No event was selected.']);
-    }
-
-    $pdo = Create_SQL_PHP_DataObject(DB_NAME);
-    EventSettingsAuthorize($pdo, $event_id);
-
-    $stmt = $pdo->prepare('SELECT * FROM nsx_meetup_events WHERE EVENT_ID = ?');
-    $stmt->execute([$event_id]);
-    $event = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$event) {
-        EventSettingsRespond('Fail', ['That event could not be found.']);
-    }
-
-    return [$pdo, $event];
 }
 
 /* ************************************************************************ */
@@ -207,7 +145,7 @@ function EventSettingsDisplayValue($field, $value) {
 /* ************************************************************************ */
 function RenderEditEventSettings() {
     $tool = EventSettingsTool();
-    list($pdo, $event) = EventSettingsLoadEvent();
+    list($pdo, $event) = EventAdminLoadEvent();
     $pdo = null;
 
     $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
@@ -232,10 +170,11 @@ function RenderEditEventSettings() {
             $id = 'event_setting_'.$column;
             $value = EventSettingsDisplayValue($field, $event[$column]);
 
-            $output_html .= '       <div class="col-6 col-12-xsmall">';
+            list($label_width, $input_width) = $field['widths'] ?? [6, 6];
+            $output_html .= '       <div class="col-'.$label_width.' col-12-xsmall">';
             $output_html .= '           <p><span style="'.$label_style.'">'.$h($field['label']).':</span> '.$h($field['help']).'</p>';
             $output_html .= '       </div>';
-            $output_html .= '       <div class="col-6 col-12-xsmall">';
+            $output_html .= '       <div class="col-'.$input_width.' col-12-xsmall">';
             switch ($field['type']) {
                 case 'checkbox':
                     $output_html .= '<input type="checkbox" id="'.$id.'" db_key="'.$column.'"'.($value ? ' checked' : '').'>';
@@ -284,7 +223,7 @@ function RenderEditEventSettings() {
     $output_html .= '<a href="#" id="save_event_settings_button" class="button primary fit">Save '.$h($tool['title']).'</a>';
     $output_html .= '</form>';
 
-    EventSettingsRespond('Pass', $output_html);
+    EventAdminRespond('Pass', $output_html);
 }
 
 /* ************************************************************************ */
@@ -296,10 +235,10 @@ function RenderEditEventSettings() {
 /* ************************************************************************ */
 function SaveEventSettings() {
     $tool = EventSettingsTool();
-    list($pdo, $event) = EventSettingsLoadEvent();
+    list($pdo, $event) = EventAdminLoadEvent();
 
     if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
-        EventSettingsRespond('Fail', ['This form has expired. Reload the page and try again.']);
+        EventAdminRespond('Fail', ['This form has expired. Reload the page and try again.']);
     }
 
     $posted = (isset($_POST['settings']) && is_array($_POST['settings'])) ? $_POST['settings'] : [];
@@ -386,13 +325,10 @@ function SaveEventSettings() {
         if ($values['EVENT_Enable_Stripe_Processing'] && $stripe_key === '') {
             $errors[] = 'Enable Stripe Checkout requires a Stripe Publishable Key.';
         }
-        if ($values['EVENT_Enable_Child_Discount'] && $values['EVENT_Child_Base_Fee'] === null) {
-            $errors[] = 'Enable Child Pricing requires a Child Fee.';
-        }
     }
 
     if ($errors) {
-        EventSettingsRespond('Fail', $errors);
+        EventAdminRespond('Fail', $errors);
     }
 
     /* Column names come from EventSettingsFields(), never from the request. */
@@ -410,10 +346,10 @@ function SaveEventSettings() {
         $stmt->execute();
     } catch (PDOException $e) {
         error_log('SaveEventSettings failed for event '.$event['EVENT_ID'].': '.$e->getMessage());
-        EventSettingsRespond('Fail', ['The settings could not be saved. Please try again.']);
+        EventAdminRespond('Fail', ['The settings could not be saved. Please try again.']);
     }
 
-    EventSettingsRespond('Pass', $tool['saved']);
+    EventAdminRespond('Pass', $tool['saved']);
 }
 
 /* ************************************************************************ */
@@ -427,30 +363,30 @@ function SaveEventSettings() {
 /*              ['Fail', [messages]]                                        */
 /* ************************************************************************ */
 function UploadFrontpageImage() {
-    list($pdo, $event) = EventSettingsLoadEvent();
+    list($pdo, $event) = EventAdminLoadEvent();
 
     if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
-        EventSettingsRespond('Fail', ['This form has expired. Reload the page and try again.']);
+        EventAdminRespond('Fail', ['This form has expired. Reload the page and try again.']);
     }
 
     if (!function_exists('imagecreatetruecolor')) {
         error_log('UploadFrontpageImage: the GD extension is not available, so images cannot be resized');
-        EventSettingsRespond('Fail', ['Image uploads are not available on this server (the PHP GD extension is missing).']);
+        EventAdminRespond('Fail', ['Image uploads are not available on this server (the PHP GD extension is missing).']);
     }
 
     $upload = CheckFrontpageImageUpload($_FILES['frontpage_image'] ?? null);
     if ($upload['error'] !== '') {
-        EventSettingsRespond('Fail', [$upload['error']]);
+        EventAdminRespond('Fail', [$upload['error']]);
     }
 
     $event_dir = EventImagesDirectory($event['EVENT_Directory']);
     if ($event_dir === '' || !is_dir(__DIR__.'/events/'.$event['EVENT_Directory'])) {
-        EventSettingsRespond('Fail', ['This event\'s folder (events/'.$event['EVENT_Directory'].'/) could not be found, so the image has nowhere to go.']);
+        EventAdminRespond('Fail', ['This event\'s folder (events/'.$event['EVENT_Directory'].'/) could not be found, so the image has nowhere to go.']);
     }
     $dir = __DIR__.'/'.$event_dir;
     if (!is_dir($dir) && !mkdir($dir, 0755)) {
         error_log('UploadFrontpageImage: could not create '.$dir);
-        EventSettingsRespond('Fail', ['The image could not be saved. Please try again.']);
+        EventAdminRespond('Fail', ['The image could not be saved. Please try again.']);
     }
 
     // A new name for every upload, so browsers never show a cached older image
@@ -458,13 +394,13 @@ function UploadFrontpageImage() {
     $filename = SaveFrontpageImage($upload['tmp'], $upload['type'], $dir, $basename);
     if ($filename === '') {
         error_log('UploadFrontpageImage: saving failed for event '.$event['EVENT_ID']);
-        EventSettingsRespond('Fail', ['The image could not be saved. Please try again.']);
+        EventAdminRespond('Fail', ['The image could not be saved. Please try again.']);
     }
 
     $stmt = $pdo->prepare('UPDATE nsx_meetup_events SET EVENT_Frontpage_Image = ? WHERE EVENT_ID = ?');
     if (!$stmt->execute([$filename, $event['EVENT_ID']])) {
         error_log('UploadFrontpageImage: database update failed for event '.$event['EVENT_ID']);
-        EventSettingsRespond('Fail', ['The image was uploaded but could not be set on the event. Please try again.']);
+        EventAdminRespond('Fail', ['The image was uploaded but could not be set on the event. Please try again.']);
     }
     $stmt = null;
     $pdo = null;
@@ -478,7 +414,7 @@ function UploadFrontpageImage() {
         }
     }
 
-    EventSettingsRespond('Pass', ['filename' => $filename, 'url' => $event_dir.'/'.$filename]);
+    EventAdminRespond('Pass', ['filename' => $filename, 'url' => $event_dir.'/'.$filename]);
 }
 
 /* ************************************************************************ */

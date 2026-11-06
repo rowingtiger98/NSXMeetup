@@ -345,8 +345,16 @@ function  RenderManagementToolsSection () {
     $output_html .= '<div>';
     $output_html .= '    <span class="number"><span class="icon solid fa-credit-card"></span></span>';
     $output_html .= '    <h3>Enable / Edit Event Payment Options</h3>';
-    $output_html .= '    <p>Set the event\'s fees, child pricing, payment instructions, processing fee and Stripe checkout.</p>';
+    $output_html .= '    <p>Set whether the event collects payments, the payment instructions, processing fee and Stripe checkout.</p>';
     $output_html .= '    <a href="#" id="admin_event_handler" action="edit_event_payments" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
+    $output_html .= '</div>';
+
+    /* -- Add / Edit / Delete Registration Types -- */
+    $output_html .= '<div>';
+    $output_html .= '    <span class="number"><span class="icon solid fa-list"></span></span>';
+    $output_html .= '    <h3>Add / Edit / Delete Registration Types</h3>';
+    $output_html .= '    <p>Set up the types of registration (with their cost and description) that registrants choose from.</p>';
+    $output_html .= '    <a href="#" id="admin_event_handler" action="edit_registration_types" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
     $output_html .= '</div>';
 
     /* -- Find / Edit Registrations -- */
