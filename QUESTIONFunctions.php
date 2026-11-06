@@ -132,6 +132,83 @@ function RenderBaseFeeInformation($event_data) {
     return $output_html;    
 }
 /* ************************************************************************ */
+/* Function:    RenderRegistrationFeeInformation                            */
+/* Description: The Event Registration Fee section for an event that        */
+/*              collects payments: a drop down of the event's enabled       */
+/*              registration types for each registrant. The chosen type's   */
+/*              cost (in cents) goes in the cost attribute of cost_driver1  */
+/*              / cost_driver2 (see ReactToRegistrationTypeSelection in     */
+/*              register.js). When there's only one type it's preselected.  */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderRegistrationFeeInformation($event_data) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+
+    $pdo = Create_SQL_PHP_DataObject(DB_NAME);
+    $stmt = $pdo->prepare('SELECT REGTYPE_ID, REGTYPE_Name, REGTYPE_Cost, REGTYPE_Description FROM nsx_meetup_registration_types WHERE REGTYPE_Event_ID = ? AND REGTYPE_Enabled = 1 ORDER BY REGTYPE_Name');
+    $stmt->execute([$event_data['EVENT_ID']]);
+    $types = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt = null;
+    $pdo = null;
+
+    $preselected = (count($types) === 1) ? $types[0] : null;
+    $starting_cost = $preselected ? (int)round($preselected['REGTYPE_Cost'] * 100) : 0;
+
+    $output_html = '<div id="event_base_fee_container" class="event_registration_sub_container active">';
+    $output_html .= '<div class="event_registration_sub_container_header">';
+    $output_html .= '    <div class="row gtr-uniform">';
+    $output_html .= '        <div id="event_registration_sub_container_header_event_base_fee" class="col-3 col-12-xsmall">';
+    $output_html .= '            Event Registration Fee';
+    $output_html .= '        </div>';
+    $output_html .= '        <div class="col-9 col-12-xsmall">';
+    if ($types) {
+        $output_html .= '           <p style="font-size:0.85em;">Choose the type of registration for each person you are registering for the '.$h($event_data['EVENT_Name']).'.
+                                    If there are other optional items that need to be paid for, such as extra experiences that are not covered by the registration, then they will be added
+                                    to the participants total should they apply.</p>';
+    } else {
+        $output_html .= '           <p style="font-size:0.85em;">Registration options for the '.$h($event_data['EVENT_Name']).' have not been set up yet. Please check back soon, or contact the event organizers below.</p>';
+    }
+    $output_html .= '        </div>';
+    $output_html .= '    </div>';
+    if ($types) {
+        $output_html .= '    <div class="table-wrapper">';
+        $output_html .= '        <table style="margin-top:1.5em;">';
+        $output_html .= '            <thead>';
+        $output_html .= '                <tr>';
+        $output_html .= '                    <th width="40%"></th>';
+        $output_html .= '                    <th id="column_driver1" class="table_driver active" width="30%">Driver</th>';
+        $output_html .= '                    <th id="column_driver2" class="table_driver" width="30%">Passenger</th>';
+        $output_html .= '                </tr>';
+        $output_html .= '            </thead>';
+        $output_html .= '            <tbody>';
+        $output_html .= '<tr>';
+        $output_html .= '<td>Registration type</td>';
+        foreach (['driver1' => ' active', 'driver2' => ''] as $driver => $active) {
+            $output_html .= '<td id="cost_'.$driver.'" class="table_driver'.$active.'" cost="'.$starting_cost.'">';
+            $output_html .= '<select id="regtype_select_'.$driver.'" class="regtype_select" driver="'.$driver.'">';
+            if (!$preselected) {
+                $output_html .= '<option value="" cost="0" description="">- Select a registration type -</option>';
+            }
+            foreach ($types as $type) {
+                $output_html .= '<option value="'.(int)$type['REGTYPE_ID'].'" cost="'.(int)round($type['REGTYPE_Cost'] * 100).'" description="'.$h($type['REGTYPE_Description']).'"'.($preselected ? ' selected' : '').'>';
+                $output_html .= $h($type['REGTYPE_Name']).' - $'.number_format((float)$type['REGTYPE_Cost'], 2).'</option>';
+            }
+            $output_html .= '</select>';
+            $output_html .= '<div id="regtype_description_'.$driver.'" class="regtype_choice_description">'.($preselected ? $h(strip_tags((string)$preselected['REGTYPE_Description'])) : '').'</div>';
+            $output_html .= '</td>';
+        }
+        $output_html .= '</tr>';
+        $output_html .= '           </tbody>';
+        $output_html .= '       </table>';
+        $output_html .= '   </div>';
+    }
+    $output_html .= '</div>';
+    $output_html .= '</div>';
+
+    return $output_html;
+}
+
+/* ************************************************************************ */
 /* Funciton:    RenderEventSpecificQuestions                               	*/
 /* Description: This function renders the event specific questions that     */
 /*              have been created by the event administrators.              */

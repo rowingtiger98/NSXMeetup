@@ -19,3 +19,6 @@ Thumbs.db
 
 # Shared front page images (copied to the server by hand)
 /assets/images/frontpage/
+
+# One-off SQL to run by hand in phpMyAdmin
+/sql/

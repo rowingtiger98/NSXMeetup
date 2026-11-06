@@ -1008,6 +1008,13 @@ span.attr_more_info_field {
         color: #fff !important;
     }
 
+/* Registration type drop downs on the registration form (QUESTIONFunctions.php) */
+.regtype_choice_description {
+    font-size: 0.8em;
+    margin-top: 0.5em;
+    opacity: 0.8;
+}
+
 /* Idle timer warning (assets/js/idletimer.js) */
 .idle_timer_warning {
 	display: none;

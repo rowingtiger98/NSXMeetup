@@ -875,3 +875,48 @@ function AddAdditionalGuestToRegistration() {
 
 }
 
+
+/* -------------------------------------------------------------------------------------------------------- */
+/* Function:	InitRegistrationTypeSelection																*/
+/* Description:	Hooks up the registration type drop downs in the Event Registration Fee section (only shown	*/
+/*				when the event collects payments). The additional guest checkbox adds driver two's fee to	*/
+/*				the cart, so it starts with driver two's cost (set when there's only one type).				*/
+/* -------------------------------------------------------------------------------------------------------- */
+function InitRegistrationTypeSelection() {
+	$('.regtype_select').on('change', ReactToRegistrationTypeSelection);
+	if ($("#regtype_select_driver2").length) {
+		$("#info_field_driver1_additional_guest").attr('cost', $("#cost_driver2").attr('cost'));
+	}
+}
+
+/* -------------------------------------------------------------------------------------------------------- */
+/* Function:	ReactToRegistrationTypeSelection															*/
+/* Description:	Puts the chosen registration type's cost (in cents) in the cost attribute of the matching	*/
+/*				cost_driverX cell and swaps that registrant's base fee in the shopping cart.				*/
+/* -------------------------------------------------------------------------------------------------------- */
+function ReactToRegistrationTypeSelection() {
+	var driver = $(this).attr('driver');
+	var option = $(this).find('option:selected');
+	var cost = parseInt(option.attr('cost'), 10) || 0;
+
+	$("#cost_" + driver).attr('cost', cost);
+	// The description may contain HTML - show it as plain text (DOMParser doesn't run scripts or load images)
+	var description = new DOMParser().parseFromString(option.attr('description') || '', 'text/html').body.textContent;
+	$("#regtype_description_" + driver).text(description);
+
+	if (driver === 'driver1') {
+		shopping_cart_actions('baseRegistration', 0, '', 'driver1', 'remove');
+		if (cost > 0) {
+			shopping_cart_actions('baseRegistration', cost, 'Event entry fee (Main Guest) - ' + option.text(), 'driver1', 'add');
+		}
+		update_driver_totals('driver1');
+	} else {
+		// Used when the additional guest is added; if they already are, swap their fee now
+		$("#info_field_driver1_additional_guest").attr('cost', cost);
+		if ($("#info_field_driver1_additional_guest").is(':checked')) {
+			shopping_cart_actions('guestRegistration', 0, '', 'driver2', 'remove');
+			shopping_cart_actions('guestRegistration', cost, 'Additional Guest Base Registration Fee - ' + option.text(), 'driver2', 'add');
+			update_driver_totals('driver2');
+		}
+	}
+}

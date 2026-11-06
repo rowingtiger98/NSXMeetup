@@ -88,14 +88,14 @@ if(isset($_SESSION['login_user'])){
                             <?php include "driver1_container.php"; ?>
                             <?php include "driver2_container.php"; ?>
 
-                            <?php if ($event_data['EVENT_Base_Fee'] > 0) {
-                                print RenderBaseFeeInformation($event_data);
+                            <?php if ($event_data['EVENT_Collect_Payments']) {
+                                print RenderRegistrationFeeInformation($event_data);
                             }
                             ?>
                             <?php print RenderEventSpecificQuestions($event_data); ?>
                         <div style="margin-top:1.25em;">
                             <?php if($event_data['EVENT_Collect_Payments']) { 
-                                $starting_balance = ($event_data['EVENT_Base_Fee'] > 0)? ($event_data['EVENT_Base_Fee'] * 100) : 0;
+                                $starting_balance = 0; // the registration type drop downs add each registrant's fee (see register.js)
                             ?>
                                 <!-- Handle STRIPE Credit Card Processing if it is available -->
                                 <?php if($event_data['EVENT_Enable_Stripe_Processing']) { ?>
@@ -161,6 +161,9 @@ if(isset($_SESSION['login_user'])){
                     console.log('Adding the Driver One base registration fee to the basket ' + $("#cost_driver1").attr('cost'))
                     shopping_cart_actions("baseRegistration", $("#cost_driver1").attr('cost'), "Event entry fee (Main Guest)", 'driver1', 'add');
                 } 
+
+				// Registration type drop downs (Event Registration Fee section)
+				InitRegistrationTypeSelection();
 
 				// Guest Two Role selection
 				var elms = document.querySelectorAll('[name="driver_two_role_radio"]');
