@@ -1,0 +1,938 @@
+html {
+  scroll-behavior: smooth;
+}
+
+/* NSX Meetup Specific Page Formatting */
+.nsxdriverinforcontainer {
+    margin-top: 0.5em !important;
+}
+    .nsxdriverinforcontainer:first-of-type {
+        margin-top: unset;
+    }
+
+#register_button_container {
+    display: none;
+    margin-top:3em !important;
+}
+
+    #register_button_container.active {
+        display: block;
+    }
+
+#details.opener {
+    padding-top: 0 !important;
+}
+
+/* Welcome Section */
+.welcome-title {
+	color: #fefefe;
+    font-family: "Open Sans Condensed", Arial, Helvetica, sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.15rem;
+    text-transform: uppercase;
+	line-height: 0.2;
+	font-size: 3.0em;
+	margin: 1.5rem 0 1.5rem 0;	
+}
+
+.welcome-subtitle {
+	color: #ff0000;
+    font-family: "Open Sans Condensed", Arial, Helvetica, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.15rem;
+    text-transform: uppercase;
+	font-style: italic;
+	font-size: 1.75em;
+	margin: 1.5rem 0 1.5rem 0;	
+}
+
+			@media screen and (max-width: 1280px) {
+				.welcome-title {
+					font-size: 2.75em;
+					margin: 0 0 1.5rem 0;
+				}
+				.welcome-subtitle {
+					font-size: 1.5em;
+					margin: 0 0 1.5rem 0;
+				}
+			}
+
+			@media screen and (max-width: 980px) {
+				.welcome-title {
+					font-size: 2.0em;
+				    margin: 1.5rem 0 1.5rem 0;
+				}
+				.welcome-subtitle {
+					font-size: 1.25em;
+				}
+			}
+
+			@media screen and (max-width: 736px) {
+				.welcome-title {
+					font-size: 1.5em;
+				    margin: 1.0em 0 1.5em 0;
+				}
+				.welcome-subtitle {
+					font-size: 0.9em;
+				    margin: 0;
+				}
+			}
+
+			@media screen and (max-width: 480px) {
+				.welcome-title {
+					font-size: 1.25em;
+					display: block;
+					text-align: center;
+				    margin: 0.75em 0 0.75em 0;
+				}
+				.welcome-subtitle {
+					font-size: 0.75em;
+					display: block;
+					text-align: center;
+				    margin: 0;
+				}
+			}	
+
+
+/* Image  */
+.image.fit {
+	display: block;
+	margin: 0 0 0 0;
+	width: 100%;
+}
+
+	.image.fit img {
+		width: 100%;
+	}
+	
+/* Registration Container */
+
+.registration_text {
+    font-size: 0.85em;
+    font-weight: 400;
+    color: #fefefe;
+    margin: 0;
+}
+
+.generation_choice {
+    display: none;
+}
+
+    .generation_choice.active {
+        display: block;
+    }
+
+.event_registration_container {
+	border: 2px solid rgba(255, 255, 255, 0.7);
+	border-radius: 4px;
+	padding: 0.5em;
+}
+
+.event_registration_sub_container {
+    display: none;
+	border: 2px solid #FF0000;
+	border-radius: 4px;
+	padding: 0.5em;
+	margin-top: 1.0em;
+}
+
+    .event_registration_sub_container:first-of-type {
+    	margin-top: 0;
+    }
+
+    .event_registration_sub_container.active {
+        display: block;
+    }
+
+.event_registration_sub_container_header {
+    padding: 0.5em 0;
+	color: #ffcc00;
+	font-weight: 600;
+	background-color: #0f0f0f;
+	display: block;
+    margin-top: 1.0em;
+}
+
+    .event_registration_sub_container_header:first-of-type {
+        margin-top: 0;
+    }
+
+/* Other Information Container */
+.table_driver {
+    display: none;
+}
+
+    .table_driver.active {
+        display: revert;
+    }
+	
+/* Confirmation Settings */
+.driver_name {
+	display: block;
+	font-size:1.5em;
+	margin: 0 0 0 0;
+	padding: 0.35em 0;
+	font-weight: 600;
+	text-align: center;
+	color: #fefefe;
+	background-color: #ff0000;
+}
+
+.driver_confirmation_container {
+    display: block;
+	border: 2px solid #FF0000;
+	border-radius: 4px;
+	padding: 0.5em;
+	margin-top: 1.0em;
+}
+
+    .driver_confirmation_container:first-of-type {
+    	margin-top: 0;
+    }
+
+.attending {
+	color: #06fc0c;
+}
+.not_attending {
+	color: #ff0000;
+}
+
+.car_info {
+	display: block;
+	color: #FEFEFE;
+	text-align: center;
+}
+
+
+/* USER CREDENTIAL SECTION */
+.isDisabled {
+  color: currentColor;
+  cursor: not-allowed;
+  opacity: 0.5;
+  text-decoration: none;
+}
+
+.isAvailable {
+  color: currentColor;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+#information {
+  display: none;
+}
+
+
+/* Registration Section Specific information */
+.createaccountcontainer {
+    display: none;
+}
+    .createaccountcontainer.active {
+        display: flex;
+    }
+
+/* ---------------------------- */
+/* MODAL SECTION STYLING 		*/
+/* ---------------------------- */
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed; /* Stay in place */
+    z-index: 1; /* Sit on top */
+    left: 0;
+    top: 0;
+    width: 100%; /* Full width */
+    height: 100%; /* Full height */
+    overflow: auto; /* Enable scroll if needed */
+    background-color: rgb(0,0,0); /* Fallback color */
+    background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+  }
+  
+  /* Modal Content/Box */
+  .modal-content {
+    background-color: #000000;
+    margin: 15% auto; /* 15% from the top and centered */
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%; /* Could be more or less, depending on screen size */
+  }
+  
+  /* The Close Button */
+  .modal-close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+  }
+  
+  .modal-close:hover,
+  .modal-close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+
+/* MODAL SECTION */
+.modalDialog {
+        position: fixed;
+        font-family: Arial, Helvetica, sans-serif;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        background: rgba(0,0,0,0.1);
+        z-index: 99999;
+        opacity:0;
+        -webkit-transition: opacity 200ms ease-in;
+        -moz-transition: opacity 200ms ease-in;
+        transition: opacity 200ms ease-in;
+        pointer-events: none;
+    }
+
+        .modalDialog.errorevent {
+            opacity:1;
+            pointer-events: auto;
+        }
+
+    .modalDialog:target {
+        opacity:1;
+        pointer-events: auto;
+    }
+
+    .modalDialog > div {
+        width: 40%;
+        position: relative;
+        margin: 10% auto;
+        padding: 5px 20px 13px 20px;
+        border: solid 2px #F88F78;
+        border-radius: 10px;
+        background: #0f0f0f;
+        /* background: -moz-linear-gradient(#fff, #999);
+        background: -webkit-linear-gradient(#fff, #999);
+        background: -o-linear-gradient(#fff, #999); */
+    }
+
+    .modalclose {
+        background: #606061;
+        color: #FFFFFF;
+        line-height: 25px;
+        position: absolute;
+        right: -12px;
+        text-align: center;
+        top: -10px;
+        width: 24px;
+        text-decoration: none;
+        font-weight: bold;
+        -webkit-border-radius: 12px;
+        -moz-border-radius: 12px;
+        border-radius: 12px;
+        -moz-box-shadow: 1px 1px 3px #000;
+        -webkit-box-shadow: 1px 1px 3px #000;
+        box-shadow: 1px 1px 3px #000;
+    }
+
+    .modalclose:hover { background: #4b6f9d; color: #FFFFFF;}
+	
+/* Login Error Message Formatting */
+.login_error_message {
+    display: block;
+    margin: 0.25em 0;
+    color: #ff0000;
+}
+
+/* Edit / Find Table Stylings */
+td.edit_find_column:hover {
+  cursor: pointer;
+  color: #ffcc00;
+}
+ 
+
+
+/* Container */
+
+.container {
+	margin: 0 auto;
+	width: 1400px;
+}
+	.container.navigation_options {
+		border-bottom: 1px solid #ff0000;
+	}
+	
+	@media screen and (max-width: 1680px) {
+
+		.container {
+			width: 1200px;
+		}
+
+	}
+
+	@media screen and (max-width: 1280px) {
+
+		.container {
+			width: 960px;
+		}
+
+	}
+
+	@media screen and (max-width: 980px) {
+
+		.container {
+			width: 90%;
+		}
+
+	}
+
+	@media screen and (max-width: 736px) {
+
+		.container {
+			width: 90%;
+		}
+
+	}
+    
+
+/* NSX User Account Creation Section */
+
+.verified_username_further_information {
+    display: none;
+    margin-top: 0.5em;
+}
+
+    .verified_username_further_information.active {
+        display: block;
+    }
+
+.verified_button {
+    pointer-events: none;
+    background-color: green !important;
+}
+
+    .account_creation_sub_container {
+        display: none;
+        border: 2px solid #FF0000;
+        border-radius: 4px;
+        padding: 0.5em;
+        margin-top: 1.0em;
+    }
+
+    .account_creation_sub_container:first-of-type {
+    	margin-top: 0;
+    }
+
+    .account_creation_sub_container.active {
+        display: block;
+    }
+
+.account_creation_sub_container_header {
+    padding: 0.5em 0.25em;
+	color: #ffcc00;
+	font-weight: 600;
+	background-color: #0f0f0f;
+	display: block;
+    margin-top: 1.0em;
+}
+
+    .account_creation_sub_container_header:first-of-type {
+        margin-top: 0;
+    }
+    
+.account_creation_sub_container_display_information {
+    border: 0.25px solid #fefefe;
+    padding: 0.25em;
+}
+
+
+    .account_creation_sub_container_display_information_question {
+        padding: 0.25em;
+    }
+
+    .display_individual_question {
+        margin-top: 0.5em !important;
+        border-bottom: 1px solid #ff0000;
+        padding-bottom: 0.5em !important;
+    }
+
+        .display_individual_question:first-of-type {
+            margin-top: 0;
+        }
+
+        .display_individual_question:last-of-type {
+            border-bottom: 0;
+            padding-bottom: 0 !important;
+        }
+
+        .display_individual_sub_question {
+            margin-bottom: 0.75em !important;
+        }
+
+
+.smaller_display_question_text {
+    font-size: 0.75em;
+    font-weight: 200;
+}
+
+table.display_question_table {
+    margin: 0;
+}
+
+    table.display_question_table td {
+        padding: 0.25em;
+        vertical-align: top;
+    }
+
+    table.display_question_table td.display_column_question{
+        width: 60%;
+        color: #FEFEFE;
+    }
+
+    table.display_question_table td.display_column_answer{
+        width: 40%;
+    }    
+
+
+    /* Participant Extra Information Stylings */
+    .more_participant_info_link {
+        color: #ffcc00;
+        font-size: 0.75em;
+        text-decoration: none;
+    }
+
+        .more_participant_info_link:hover {
+            color: #ffcc00;
+        }
+
+        .more_participant_info_link.active {
+            color: #ff0000;
+        }
+
+    .part_extra_info {
+        display: none;
+        font-size: 0.85em;
+    }
+
+        .part_extra_info.active {
+            display: block;
+        }
+
+
+/* My Account Information Section */
+.myaccount_link_active {
+    color: #ffcc00 !important;
+}
+
+/* AGENDA SECTION STYLINGS */
+.weekend_agenda_container  {
+	margin-top: 10em;
+}
+
+.day_header {
+	display: block;
+	color: #FFFFFF;
+	background-color: #ff0000;
+	text-transform: uppercase;
+	letter-spacing: 0.25em;
+	text-align: center;
+	font-size: 1.5em;
+	font-weight: 600;
+	padding: 0.25em;
+	margin-top: 0.5em;
+}
+	.day_header:first-of-type {
+		margin-top: 0;
+	}
+
+/* Event Table Styling */
+tr.event_info_row {
+	cursor: pointer;
+}
+	tr.event_info_row:hover {
+		color: #ffcc00;
+	}
+
+td.daily_event_info {
+	color: #ffcc00;
+}
+
+.individual_event_parent_container	{
+	border: 1px solid #FFFFFF;
+	padding: 0.5em;
+}
+.individual_event_child_container {
+	display: none;
+	padding: 1.0em;
+}
+
+	.individual_event_child_container.active {
+		display: revert;
+	}
+
+/* Local Attractions Section */
+.individual_local_attraction_container {
+    line-height: 1.45;
+}
+
+.individual_local_attraction_container p {
+    margin: 0 0 .5em 0;
+}
+
+
+.more_attraction_information_container {
+    display: none;
+}
+
+    .more_attraction_information_container.active {
+        display: block;
+    }
+
+ul.local_attraction_link {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+}
+
+li.local_attraction_link {
+    display: block;
+    width: 100%;
+    border: 1px solid #FFFFFF;
+    margin-top: 0.25em;
+    padding: 0.25em 0 0.25em 0.5em;
+    cursor:pointer;
+}
+    li.local_attraction_link.active {
+        color: #ffffff;
+        background-color: #ff0000;
+    }
+
+    li.local_attraction_link.active:hover {
+        color: #ffffff;
+    }
+
+li.local_attraction_link:first-of-type {
+    margin-top: 0;
+}
+
+li.local_attraction_link:hover {
+    color: #ffcc00;
+}
+
+.local_attraction_container {
+    display: none;
+    border: 1px solid #ffffff;
+    padding: 0.5em 0.5em;
+}
+
+    .local_attraction_container.active {
+        display: block;
+    }
+
+.more-text{
+    display: none;
+}
+/* .ellipsis {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -o-text-overflow: ellipsis;
+    -moz-binding: url('http://seancannon.com/_test/ellipsis.xml#ellipsis');
+}
+
+#my_text {
+    font-family:arial;
+    color:#333;
+    font-size:10px;
+    width:80%;
+}
+    
+
+#read_more {
+    border:1px solid #000;
+    background-color:#CCC;
+    cursor:pointer;
+    width:100px;
+    text-align:center;
+} */
+
+.add-read-more.show-less-content .second-section,
+.add-read-more.show-less-content .read-less {
+   display: none;
+}
+
+.add-read-more.show-more-content .read-more {
+   display: none;
+}
+
+.add-read-more .read-more,
+.add-read-more .read-less {
+   font-weight: bold;
+   margin-left: 2px;
+   color: blue;
+   cursor: pointer;
+}
+
+.new_category_name_container {
+    display: none !important;
+}
+
+    .new_category_name_container.active {
+        display: block !important;
+    }
+
+/* Local Attractions More Information Stylings */
+span.attr_more_info_field {
+    color:#ffffff;
+    font-size: 0.8rem !important;
+}
+
+.attr_more_info_lable {
+    color:#ffcc00 !important;
+    font-size: 0.8rem !important;
+    margin: 0 0 0 0 !important;
+}
+
+.swap_shop_container {
+	border: 2px solid rgba(255, 255, 255, 0.7);
+	border-radius: 4px;
+	padding: 0.5em;
+	display: none;
+    margin-bottom: 1.0em;
+}
+	.swap_shop_container.active{
+		display: revert;
+	}
+	
+    .swap_shop_container:last-of-type{
+		margin-bottom: 0;
+	}
+
+.swap_shop_individual_item_container {
+	display: none;
+}
+
+	.swap_shop_individual_item_container.active {
+		display: revert;
+	}
+
+.agenda {
+    display:none;
+}
+    .agenda.active {
+        display:block;
+    }
+
+.event_stats_inner {
+    display:none;
+    margin: 0 auto;
+    max-width: calc(100% - 10rem);
+    width: 90rem;
+    border: 1px solid #ff0000;
+    padding: 2em;
+}
+    .event_stats_inner.active {
+        display: block;
+    }
+
+/* Added a media limitation to remove the code for cell phones in vertical oritentation */
+@media screen and (max-width: 400px) {
+    .event_stats_inner {
+        display:none;
+    }
+
+    .event_stats_inner.active {
+        display: none;
+    }
+}
+
+/* .nsx_image_mini {
+    height: 200px;
+    width: 200px;
+    padding: 5px;
+} */
+
+/* Mini Car Tooltip container */
+.nsx_image_mini {
+    position: relative;
+    display: inline-grid;
+    height: 100px;
+    width: 100px;
+    padding: 5px;
+    border-bottom: 1px dotted black; /* If you want dots under the hoverable text */
+  }
+  
+  /* Tooltip text */
+  .nsx_image_mini .nsx_image_mini_hovertext {
+    visibility: hidden;
+    width: 100px;
+    background-color: black;
+    color: #fff;
+    text-align: center;
+    padding: 5px 0;
+    border-radius: 0px;
+   
+    /* Position the tooltip text - see examples below! */
+    position: absolute;
+    z-index: 1;
+  }
+  
+  /* Show the tooltip text when you mouse over the tooltip container */
+  .nsx_image_mini:hover .nsx_image_mini_hovertext {
+    visibility: visible;
+  }
+
+  .outline_column_division {
+    border: 1px #ff0000 solid;
+    border-radius: 4px;
+    padding: 1em !important;
+  }
+
+  .account_division_header {
+    display: block;
+    background-color:#FF0000;
+    padding: 6px 0px 6px 6px;
+    text-align: left;
+    font-weight: 700;
+	color: #fefefe;
+    font-family: "Open Sans Condensed", Arial, Helvetica, sans-serif;
+    letter-spacing: 0.15rem;
+    text-transform: uppercase;
+	font-size: 1.5em;    
+  }
+
+.managed_events_selection_container {
+    display: none;
+}
+
+    .managed_events_selection_container.active {
+        display: block;
+    }
+
+/* Sponsor Level boxes formatting */
+.modal_text {
+    font-size: 1.5em;
+}
+
+.Bronze {
+    min-height: 220px;
+}
+
+.In-Kind {
+    min-height: 220px;
+}
+
+.Silver {
+    min-height: 300px;
+}
+
+.Gold {
+    min-height: 400px;
+}
+
+/* Event Settings tool - main.css only styles the text-like input types */
+.event_settings_form input[type="date"],
+.event_settings_form input[type="number"] {
+    -moz-appearance: none;
+    -webkit-appearance: none;
+    appearance: none;
+    background-color: rgba(255, 255, 255, 0.075);
+    border: none;
+    border-radius: 4px;
+    color: inherit;
+    color-scheme: dark;
+    font-family: inherit;
+    font-weight: 700;
+    height: 2.5rem;
+    margin: 0 0 0.5rem 0;
+    padding: 0 1rem;
+    width: 100%;
+}
+
+.event_settings_messages ul {
+    list-style: none;
+    padding: 0.75em 1em;
+    border-radius: 4px;
+}
+
+.event_settings_error {
+    color: #ff0000;
+}
+
+    .event_settings_messages ul.event_settings_error {
+        border: 2px solid #ff0000;
+    }
+
+.event_settings_success {
+    color: #06fc0c;
+}
+
+    .event_settings_messages ul.event_settings_success {
+        border: 2px solid #06fc0c;
+    }
+
+.frontpage_image_preview {
+    margin-bottom: 0.5rem;
+    text-align: center;
+}
+
+    .frontpage_image_preview img {
+        display: block;
+        margin: 0 auto;
+        max-width: 100%;
+        max-height: 225px;
+        border-radius: 4px;
+    }
+
+/* Upload button and image name: side by side, stacked 5px apart on small screens */
+.frontpage_image_controls > :first-child {
+    padding-right: 5px;
+}
+
+    .frontpage_image_controls .button {
+        height: 2.5rem;  /* same height as the text input beside it */
+        line-height: 2.5rem;
+        margin: 0;
+    }
+
+@media screen and (max-width: 736px) {
+    .frontpage_image_controls > :first-child {
+        padding-right: 0;
+        margin-bottom: 5px;
+    }
+}
+
+.frontpage_upload_status {
+    font-size: 0.85em;
+    margin-top: 0.5rem;
+}
+
+    .frontpage_upload_status .upload_spinner {
+        display: inline-block;
+        width: 1em;
+        height: 1em;
+        margin-right: 0.5em;
+        vertical-align: -0.15em;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: #FFCC00;
+        border-radius: 50%;
+        animation: upload_spin 0.8s linear infinite;
+    }
+
+@keyframes upload_spin {
+    to { transform: rotate(360deg); }
+}
+
+
+/* Idle timer warning (assets/js/idletimer.js) */
+.idle_timer_warning {
+	display: none;
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 100000;
+	padding: 0.75em 1em;
+	background: #b71c1c;
+	color: #fff;
+	text-align: center;
+}
+.idle_timer_warning .button {
+	margin-left: 1em;
+}

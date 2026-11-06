@@ -1,0 +1,32 @@
+/* ------------------------------ */
+/* Registration Breakdown Section */
+/* ------------------------------ */
+.event_breakdown_default_container {
+    border: 1px solid white;
+    padding: 1em;
+    margin: 1em 0;
+}
+    .event_breakdown_default_container:first-of-type {
+        margin-top: 0;
+    }
+
+.included_participants_list {
+    display: none;
+    margin: 5px 0;
+    padding-top: 5px;
+    border-top: 1px white solid;
+    color: #FFCC00;
+}
+    .included_participants_list.active {
+        display: block;
+    }
+
+.participant_email_comma_sep_list {
+    border: 1px solid white;
+    margin: 10px 0;
+    padding: 1em;
+}
+
+.back_navigation_button {
+    margin: 1em 0;
+}
