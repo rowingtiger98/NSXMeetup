@@ -77,7 +77,12 @@ function HandleAccountManagementActionClick(event) {
 
 	else if (action === 'edit_event_settings' ){
         var event_id = $(this).attr('event_id');
-		RenderEditEventSettings(event_id);
+		RenderEditEventSettings(event_id, 'settings');
+    }
+
+	else if (action === 'edit_event_payments' ){
+        var event_id = $(this).attr('event_id');
+		RenderEditEventSettings(event_id, 'payments');
     }
 }
 

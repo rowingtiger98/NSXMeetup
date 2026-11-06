@@ -58,7 +58,7 @@ if ($admin_rights == 'NOT SET') {
 			<script src="assets/js/main.js"></script>
 			<script src="assets/js/mailer.js"></script>
 			<script src="assets/js/register.js"></script>
-			<script src="assets/js/account.js"></script>
+			<script src="assets/js/account.js?v=<?php echo filemtime(__DIR__.'/assets/js/account.js'); ?>"></script>
             <script src="assets/js/render.js"></script>
 			<script src="assets/js/stupidtable.js"></script>
             <script src="assets/js/sponsormanagement.js"></script>

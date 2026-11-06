@@ -1,22 +1,26 @@
 // -------------------------------------------------------------------------------------
 // Function: 	RenderEditEventSettings
-// Description: This function renders the Edit Event Settings form for an event.
+// Description: This function renders an event settings form for an event. tool picks
+//              which tool card's fields are shown: 'settings' (Edit Event Settings)
+//              or 'payments' (Enable / Edit Event Payment Options).
 // -------------------------------------------------------------------------------------
-function RenderEditEventSettings(event_id) {
-    console.log('Render the event settings for event id = ', event_id);
+function RenderEditEventSettings(event_id, tool) {
+    console.log('Render the event', tool, 'for event id = ', event_id);
 	$.ajax({
 	    url: 'EVENTSettings.php',
 	    type: 'POST',
 	    dataType: 'json',
-	    data: {method: 'RenderEditEventSettings', event_id:event_id},
+	    data: {method: 'RenderEditEventSettings', event_id:event_id, tool:tool},
 	    success: function(results) {
             if (results[0] == 'Pass') {
                 $("#main_content_container").html(results[1]);
                 RenderBackButton('backtomaineventtoolset', event_id);
                 document.querySelector('[id="save_event_settings_button"]').onclick = SaveEventSettings;
-                document.querySelector('[id="event_setting_frontpage_upload"]').onchange = UploadFrontpageImage;
-                document.querySelector('[id="event_setting_EVENT_Frontpage_Image"]').onchange = UpdateFrontpageImagePreview;
-                document.querySelector('[id="event_setting_frontpage_preview"]').onerror = HandleFrontpageImagePreviewError;
+                if (document.querySelector('[id="event_setting_frontpage_upload"]')) { // only on the settings form
+                    document.querySelector('[id="event_setting_frontpage_upload"]').onchange = UploadFrontpageImage;
+                    document.querySelector('[id="event_setting_EVENT_Frontpage_Image"]').onchange = UpdateFrontpageImagePreview;
+                    document.querySelector('[id="event_setting_frontpage_preview"]').onerror = HandleFrontpageImagePreviewError;
+                }
             } else {
                 $("#main_content_container").html('<p class="event_settings_error">' + EscapeEventSettingsText(results[1].join(' ')) + '</p>');
             }
@@ -42,6 +46,7 @@ function SaveEventSettings(event) {
     var data = {
         method: 'SaveEventSettings',
         event_id: form.attr('event_id'),
+        tool: form.attr('tool'),
         csrf_token: form.attr('csrf_token')
     };
     form.find('[db_key]').each(function() {
@@ -49,6 +54,7 @@ function SaveEventSettings(event) {
         data[key] = (this.type === 'checkbox') ? (this.checked ? '1' : '0') : $(this).val();
     });
 
+    var button_text = button.text();
     button.addClass('disabled').text('Saving...');
 	$.ajax({
 	    url: 'EVENTSettings.php',
@@ -66,7 +72,7 @@ function SaveEventSettings(event) {
             ShowEventSettingsMessages(['The settings could not be saved. Please try again.'], true);
 	    },
 	    complete: function() {
-            button.removeClass('disabled').text('Save Settings');
+            button.removeClass('disabled').text(button_text);
 	    }
 	  });
 }

@@ -37,10 +37,15 @@ if (isset($_POST['method']) && in_array($_POST['method'], EVENT_SETTINGS_METHODS
 /*              type: text | textarea | html | date | money | percent |     */
 /*                    checkbox | emails | image                             */
 /*              null_ok: store NULL when left blank (column allows NULL)    */
+/*              Each admin tool card edits its own set of fields:           */
+/*              'settings' (Edit Event Settings) and 'payments' (Enable /   */
+/*              Edit Event Payment Options).                                */
+/* Inputs:      $tool - 'settings' or 'payments'.                           */
 /* Returns:     array                                                       */
 /* ************************************************************************ */
-function EventSettingsFields() {
-    return [
+function EventSettingsFields($tool) {
+    $tools = [];
+    $tools['settings'] = [
         'General' => [
             'EVENT_Name'       => ['label' => 'Event Name', 'type' => 'text', 'max' => 256, 'required' => true,
                                    'help' => 'The name used throughout the site for this event.'],
@@ -75,6 +80,8 @@ function EventSettingsFields() {
             'EVENT_Secondary_Email_Contact' => ['label' => 'Secondary Contact Email(s)', 'type' => 'emails', 'null_ok' => true,
                                                 'help' => 'Copied on contact form messages. Separate multiple addresses with commas.'],
         ],
+    ];
+    $tools['payments'] = [
         'Fees & Payments' => [
             'EVENT_Base_Fee'              => ['label' => 'Base Fee ($)', 'type' => 'money',
                                               'help' => 'Registration fee per adult. Use 0 for a free event.'],
@@ -96,6 +103,25 @@ function EventSettingsFields() {
                                               'help' => 'The publishable key (starts with pk_). Never enter the secret key (sk_) here.'],
         ],
     ];
+    return $tools[$tool];
+}
+
+/* ************************************************************************ */
+/* Function:    EventSettingsTool                                           */
+/* Description: The admin tool the request is for, from the posted 'tool'   */
+/*              value. Ends the request if it isn't one of the tools.       */
+/* Returns:     array - ['id', 'title', 'saved'] for the tool               */
+/* ************************************************************************ */
+function EventSettingsTool() {
+    $tools = [
+        'settings' => ['title' => 'Settings',        'saved' => 'Settings saved.'],
+        'payments' => ['title' => 'Payment Options', 'saved' => 'Payment options saved.'],
+    ];
+    $tool = $_POST['tool'] ?? 'settings';
+    if (!is_string($tool) || !isset($tools[$tool])) {
+        EventSettingsRespond('Fail', ['Unknown event tool.']);
+    }
+    return ['id' => $tool] + $tools[$tool];
 }
 
 /* ************************************************************************ */
@@ -180,6 +206,7 @@ function EventSettingsDisplayValue($field, $value) {
 /* Returns:     JSON ['Pass', HTML] or ['Fail', [messages]]                 */
 /* ************************************************************************ */
 function RenderEditEventSettings() {
+    $tool = EventSettingsTool();
     list($pdo, $event) = EventSettingsLoadEvent();
     $pdo = null;
 
@@ -187,9 +214,9 @@ function RenderEditEventSettings() {
     $label_style = 'text-transform:uppercase;font-size: 1.25em;padding-right: 0.25em;color: #FFCC00;';
     $separator = '       <div class="col-12 col-12-xsmall"><div style="border-bottom: 1px solid white; margin:1em 0em;"></div></div>';
 
-    $output_html  = '<h2>'.$h($event['EVENT_Name']).' Settings</h2>';
+    $output_html  = '<h2>'.$h($event['EVENT_Name']).' '.$h($tool['title']).'</h2>';
     $output_html .= '<div style="margin-bottom:1em;" id="back_navigation_button"></div>';
-    $output_html .= '<form id="event_settings_form" class="event_settings_form" event_id="'.(int)$event['EVENT_ID'].'" csrf_token="'.$h(app_csrf_token()).'" onsubmit="return false;">';
+    $output_html .= '<form id="event_settings_form" class="event_settings_form" event_id="'.(int)$event['EVENT_ID'].'" tool="'.$h($tool['id']).'" csrf_token="'.$h(app_csrf_token()).'" onsubmit="return false;">';
 
     /* Read-only details */
     $admins = json_decode((string)$event['EVENT_Admins'], true);
@@ -198,7 +225,7 @@ function RenderEditEventSettings() {
     $output_html .= 'Directory: <b>events/'.$h($event['EVENT_Directory']).'/</b><br>';
     $output_html .= 'Admins: <b>'.(is_array($admins) && $admins ? $h(implode(', ', $admins)) : 'None').'</b></p>';
 
-    foreach (EventSettingsFields() as $section => $fields) {
+    foreach (EventSettingsFields($tool['id']) as $section => $fields) {
         $output_html .= '<h3 style="margin-top:2em;">'.$h($section).'</h3>';
         $output_html .= '<div class="row gtr-25 gtr-uniform">';
         foreach ($fields as $column => $field) {
@@ -254,7 +281,7 @@ function RenderEditEventSettings() {
     }
 
     $output_html .= '<div id="event_settings_messages" class="event_settings_messages"></div>';
-    $output_html .= '<a href="#" id="save_event_settings_button" class="button primary fit">Save Settings</a>';
+    $output_html .= '<a href="#" id="save_event_settings_button" class="button primary fit">Save '.$h($tool['title']).'</a>';
     $output_html .= '</form>';
 
     EventSettingsRespond('Pass', $output_html);
@@ -268,6 +295,7 @@ function RenderEditEventSettings() {
 /* Returns:     JSON ['Pass', message] or ['Fail', [messages]]              */
 /* ************************************************************************ */
 function SaveEventSettings() {
+    $tool = EventSettingsTool();
     list($pdo, $event) = EventSettingsLoadEvent();
 
     if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
@@ -278,7 +306,7 @@ function SaveEventSettings() {
     $values = [];
     $errors = [];
 
-    foreach (EventSettingsFields() as $fields) {
+    foreach (EventSettingsFields($tool['id']) as $fields) {
         foreach ($fields as $column => $field) {
             $raw = isset($posted[$column]) && is_string($posted[$column]) ? trim($posted[$column]) : '';
             $label = $field['label'];
@@ -343,20 +371,24 @@ function SaveEventSettings() {
     }
 
     /* Rules that involve more than one field */
-    if (!empty($values['EVENT_Start_Date']) && !empty($values['EVENT_End_Date']) && $values['EVENT_End_Date'] < $values['EVENT_Start_Date']) {
-        $errors[] = 'End Date must be on or after the Start Date.';
+    if ($tool['id'] === 'settings') {
+        if (!empty($values['EVENT_Start_Date']) && !empty($values['EVENT_End_Date']) && $values['EVENT_End_Date'] < $values['EVENT_Start_Date']) {
+            $errors[] = 'End Date must be on or after the Start Date.';
+        }
     }
-    $stripe_key = $values['EVENT_Stripe_Public_Key'];
-    if ($stripe_key !== '' && strpos($stripe_key, 'pk_') !== 0) {
-        $errors[] = (strpos($stripe_key, 'sk_') === 0 || strpos($stripe_key, 'rk_') === 0)
-            ? 'That is a Stripe SECRET key. Only the publishable key (pk_...) belongs here - the secret key must never be put on a web page.'
-            : 'Stripe Publishable Key must start with pk_.';
-    }
-    if ($values['EVENT_Enable_Stripe_Processing'] && $stripe_key === '') {
-        $errors[] = 'Enable Stripe Checkout requires a Stripe Publishable Key.';
-    }
-    if ($values['EVENT_Enable_Child_Discount'] && $values['EVENT_Child_Base_Fee'] === null) {
-        $errors[] = 'Enable Child Pricing requires a Child Fee.';
+    if ($tool['id'] === 'payments') {
+        $stripe_key = $values['EVENT_Stripe_Public_Key'];
+        if ($stripe_key !== '' && strpos($stripe_key, 'pk_') !== 0) {
+            $errors[] = (strpos($stripe_key, 'sk_') === 0 || strpos($stripe_key, 'rk_') === 0)
+                ? 'That is a Stripe SECRET key. Only the publishable key (pk_...) belongs here - the secret key must never be put on a web page.'
+                : 'Stripe Publishable Key must start with pk_.';
+        }
+        if ($values['EVENT_Enable_Stripe_Processing'] && $stripe_key === '') {
+            $errors[] = 'Enable Stripe Checkout requires a Stripe Publishable Key.';
+        }
+        if ($values['EVENT_Enable_Child_Discount'] && $values['EVENT_Child_Base_Fee'] === null) {
+            $errors[] = 'Enable Child Pricing requires a Child Fee.';
+        }
     }
 
     if ($errors) {
@@ -381,7 +413,7 @@ function SaveEventSettings() {
         EventSettingsRespond('Fail', ['The settings could not be saved. Please try again.']);
     }
 
-    EventSettingsRespond('Pass', 'Settings saved.');
+    EventSettingsRespond('Pass', $tool['saved']);
 }
 
 /* ************************************************************************ */
@@ -389,7 +421,8 @@ function SaveEventSettings() {
 /* Description: Saves an uploaded front page image for the posted event     */
 /*              into its events/<EVENT_Directory>/images/ folder, scaled to */
 /*              FRONTPAGE_IMAGE_MAX_HEIGHT, and makes it the event's front  */
-/*              page image straight away.                                   */
+/*              page image straight away. The previously uploaded image is  */
+/*              deleted.                                                    */
 /* Returns:     JSON ['Pass', ['filename' => ..., 'url' => ...]] or         */
 /*              ['Fail', [messages]]                                        */
 /* ************************************************************************ */
@@ -435,6 +468,15 @@ function UploadFrontpageImage() {
     }
     $stmt = null;
     $pdo = null;
+
+    // Remove the image this one replaced - only an earlier upload (frontpage_<date>_<time>),
+    // never a hand-placed image or one from the shared folder
+    $previous = basename((string)$event['EVENT_Frontpage_Image']);
+    if ($previous !== $filename && preg_match('/^frontpage_\d{8}_\d{6}\.(jpg|png)$/', $previous) && is_file($dir.'/'.$previous)) {
+        if (!unlink($dir.'/'.$previous)) {
+            error_log('UploadFrontpageImage: could not delete the previous image '.$dir.'/'.$previous);
+        }
+    }
 
     EventSettingsRespond('Pass', ['filename' => $filename, 'url' => $event_dir.'/'.$filename]);
 }
