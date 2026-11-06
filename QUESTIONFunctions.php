@@ -138,7 +138,8 @@ function RenderBaseFeeInformation($event_data) {
 /*              registration types for each registrant. The chosen type's   */
 /*              cost (in cents) goes in the cost attribute of cost_driver1  */
 /*              / cost_driver2 (see ReactToRegistrationTypeSelection in     */
-/*              register.js). When there's only one type it's preselected.  */
+/*              register.js). Nothing is selected when the page loads, so   */
+/*              both costs start at 0.                                      */
 /* Returns:     HTML                                                        */
 /* ************************************************************************ */
 function RenderRegistrationFeeInformation($event_data) {
@@ -150,9 +151,6 @@ function RenderRegistrationFeeInformation($event_data) {
     $types = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $stmt = null;
     $pdo = null;
-
-    $preselected = (count($types) === 1) ? $types[0] : null;
-    $starting_cost = $preselected ? (int)round($preselected['REGTYPE_Cost'] * 100) : 0;
 
     $output_html = '<div id="event_base_fee_container" class="event_registration_sub_container active">';
     $output_html .= '<div class="event_registration_sub_container_header">';
@@ -184,17 +182,15 @@ function RenderRegistrationFeeInformation($event_data) {
         $output_html .= '<tr>';
         $output_html .= '<td>Registration type</td>';
         foreach (['driver1' => ' active', 'driver2' => ''] as $driver => $active) {
-            $output_html .= '<td id="cost_'.$driver.'" class="table_driver'.$active.'" cost="'.$starting_cost.'">';
+            $output_html .= '<td id="cost_'.$driver.'" class="table_driver'.$active.'" cost="0">';
             $output_html .= '<select id="regtype_select_'.$driver.'" class="regtype_select" driver="'.$driver.'">';
-            if (!$preselected) {
-                $output_html .= '<option value="" cost="0" description="">- Select a registration type -</option>';
-            }
+            $output_html .= '<option value="" cost="0" description="" selected>- Select a registration type -</option>';
             foreach ($types as $type) {
-                $output_html .= '<option value="'.(int)$type['REGTYPE_ID'].'" cost="'.(int)round($type['REGTYPE_Cost'] * 100).'" description="'.$h($type['REGTYPE_Description']).'"'.($preselected ? ' selected' : '').'>';
+                $output_html .= '<option value="'.(int)$type['REGTYPE_ID'].'" cost="'.(int)round($type['REGTYPE_Cost'] * 100).'" description="'.$h($type['REGTYPE_Description']).'">';
                 $output_html .= $h($type['REGTYPE_Name']).' - $'.number_format((float)$type['REGTYPE_Cost'], 2).'</option>';
             }
             $output_html .= '</select>';
-            $output_html .= '<div id="regtype_description_'.$driver.'" class="regtype_choice_description">'.($preselected ? $h(strip_tags((string)$preselected['REGTYPE_Description'])) : '').'</div>';
+            $output_html .= '<div id="regtype_description_'.$driver.'" class="regtype_choice_description"></div>';
             $output_html .= '</td>';
         }
         $output_html .= '</tr>';
@@ -264,8 +260,9 @@ function RenderEventSpecificQuestions($event_data) {
         if ($event_data['EVENT_Collect_Payments']) {
             $output_html .= '<tr>';
             $output_html .= '<td>TOTAL COST to attend the event based on selected events attending.</td>';
-            $output_html .= '<td id="cost_driver1" class="table_driver active"><span id="driver1_cost" total='.$event_data['EVENT_Base_Fee'].'>$'.number_format($event_data['EVENT_Base_Fee'], 2).'</span></td>';
-            $output_html .= '<td id="cost_driver2" class="table_driver"><span id="driver2_cost" child_discount_applied="no" total='.$event_data['EVENT_Base_Fee'].'>$'.number_format($event_data['EVENT_Base_Fee'], 2).'</span></td>';
+            // Totals start at $0.00 - the registration type drop downs add each registrant's fee
+            $output_html .= '<td id="cost_driver1" class="table_driver active"><span id="driver1_cost" total="0">$0.00</span></td>';
+            $output_html .= '<td id="cost_driver2" class="table_driver"><span id="driver2_cost" child_discount_applied="no" total="0">$0.00</span></td>';
             $output_html .= '</tr>';
         }
 

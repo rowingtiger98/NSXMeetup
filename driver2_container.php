@@ -6,9 +6,9 @@
                     Passenger
                 </div>
                 <div id="driver_two_role_selection_container" role="riding" class="col-9 col-12-xsmall">
-                        <input type="radio" id="driver_two_role_passenger" name="driver_two_role_radio" cost="<?php echo $event_data['EVENT_Base_Fee']; ?>" value="riding" checked>
+                        <input type="radio" id="driver_two_role_passenger" name="driver_two_role_radio" cost="0" value="riding" checked>
                         <label for="driver_two_role_passenger">Passenger</label>
-                        <input type="radio" id="driver_two_role_driver" name="driver_two_role_radio" cost="<?php echo $event_data['EVENT_Base_Fee']; ?>" value="driving">
+                        <input type="radio" id="driver_two_role_driver" name="driver_two_role_radio" cost="0" value="driving">
                         <label for="driver_two_role_driver">Driving their own car</label>
                         <?php if ($event_data['EVENT_Enable_Child_Discount']) { ?>
                             <input type="radio" id="driver_two_role_child" name="driver_two_role_radio" cost="<?php echo $event_data['EVENT_Child_Base_Fee']; ?>" value="child">

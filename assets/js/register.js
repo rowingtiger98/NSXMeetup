@@ -887,6 +887,48 @@ function InitRegistrationTypeSelection() {
 	if ($("#regtype_select_driver2").length) {
 		$("#info_field_driver1_additional_guest").attr('cost', $("#cost_driver2").attr('cost'));
 	}
+
+	// Driver two needs a registration type too once they're added
+	$("#info_field_driver1_additional_guest").on('change', UpdateCheckoutButtonState);
+
+	// Other code (e.g. the password match check) also turns the register button's 'disabled' class
+	// on and off, so the click itself is stopped here - before the button's own onclick runs.
+	document.addEventListener('click', function(event) {
+		var button = event.target.closest('[requires_regtype="yes"]');
+		if (button && !RegistrationTypesComplete()) {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+		}
+	}, true);
+
+	UpdateCheckoutButtonState();
+}
+
+/* -------------------------------------------------------------------------------------------------------- */
+/* Function:	RegistrationTypesComplete																	*/
+/* Description:	True when driver one has a registration type and, if driver two has been added, driver two	*/
+/*				does too. False when the event has no registration types to choose from.					*/
+/* -------------------------------------------------------------------------------------------------------- */
+function RegistrationTypesComplete() {
+	if (!$("#regtype_select_driver1").length) {
+		return false;
+	}
+	if ($("#regtype_select_driver1").val() === '') {
+		return false;
+	}
+	if ($("#info_field_driver1_additional_guest").is(':checked') && $("#regtype_select_driver2").val() === '') {
+		return false;
+	}
+	return true;
+}
+
+/* -------------------------------------------------------------------------------------------------------- */
+/* Function:	UpdateCheckoutButtonState																	*/
+/* Description:	Enables the checkout / register button (when the event collects payments) only once every	*/
+/*				registrant has a registration type.														*/
+/* -------------------------------------------------------------------------------------------------------- */
+function UpdateCheckoutButtonState() {
+	$('[requires_regtype="yes"]').toggleClass('disabled', !RegistrationTypesComplete());
 }
 
 /* -------------------------------------------------------------------------------------------------------- */
@@ -919,4 +961,5 @@ function ReactToRegistrationTypeSelection() {
 			update_driver_totals('driver2');
 		}
 	}
+	UpdateCheckoutButtonState();
 }
