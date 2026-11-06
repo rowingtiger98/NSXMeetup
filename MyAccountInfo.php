@@ -36,6 +36,7 @@ if ($admin_rights == 'NOT SET') {
 
 		<!-- Main -->
 			<input type="hidden" id="session_information" info_one="<?php echo $login_userid; ?>" info_two="<?php echo $login_username; ?>" />	
+			<input type="hidden" id="csrf_token_field" value="<?php echo htmlspecialchars(app_csrf_token()); ?>" />
 			<div id="main" user_role="<?php echo $login_userid; ?>" class="wrapper" style="padding:2rem 0 2rem 0;">
 				<section class="wrapper" style="padding:2rem 0 2rem 0;">
 					<div id="main_content_container" class="inner">

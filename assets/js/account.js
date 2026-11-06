@@ -1125,7 +1125,7 @@ function EnterNewEventToDatabase() {
 		$.ajax({
 		  url: 'EVENTCreation.php',
 		  type: 'POST',
-		  data: {method: 'EnterNewEventToDatabase', event_name:event_name, event_directory:event_directory, start_date:start_date, end_date:end_date, event_admins:event_admins, sponsors:sponsors, event_opening:event_opening},
+		  data: {method: 'EnterNewEventToDatabase', csrf_token:$("#csrf_token_field").val(), event_name:event_name, event_directory:event_directory, start_date:start_date, end_date:end_date, event_admins:event_admins, sponsors:sponsors, event_opening:event_opening},
 		  success: function(data) {
 			//   alert(data);
 			resolve(data);
@@ -1156,7 +1156,7 @@ function CreateNewDirectoryPath(new_path) {
 		$.ajax({
 		  url: 'EVENTCreation.php',
 		  type: 'POST',
-		  data: {method: 'CreateNewDirectoryPath', new_path:new_path},
+		  data: {method: 'CreateNewDirectoryPath', csrf_token:$("#csrf_token_field").val(), new_path:new_path},
 		  success: function(data) {
 			resolve(data);
 			  results = eval(data);
