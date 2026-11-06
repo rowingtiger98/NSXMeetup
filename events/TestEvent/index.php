@@ -60,7 +60,7 @@ if(isset($_GET['event_id'])) {
 		<meta name="description" content="" />
 		<meta name="keywords" content="" />
 		<link rel="stylesheet" href="../../assets/css/main.css" />
-		<link rel="stylesheet" href="../../assets/css/nsxmeetup002.css" />
+		<link rel="stylesheet" href="../../assets/css/nsxmeetup.css" />
 		<script src='https://www.google.com/recaptcha/api.js'></script>
 	</head>
 	<body class="is-preload">
@@ -202,7 +202,7 @@ if(isset($_GET['event_id'])) {
                                     </div> -->
                                 </div>
                                 <ul class="actions special">
-                                    <a href="../../register_old.php?event_id=<?php echo $event_id; ?>" event_id="<?php echo $event_id; ?>" class="button large primary fit">Register Today</a>
+                                    <a href="../../register_all.php?event_id=<?php echo $event_id; ?>" event_id="<?php echo $event_id; ?>" class="button large primary fit">Register ALL Today</a>
                                     <!-- <a href="#" class="button  small fit">Registration Opening Soon</a> -->
                                 </ul>
                             </div>

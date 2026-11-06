@@ -53,7 +53,7 @@ if(isset($_GET['event_id'])) {
 		<meta name="description" content="" />
 		<meta name="keywords" content="" />
 		<link rel="stylesheet" href="../../assets/css/main.css" />
-		<link rel="stylesheet" href="../../assets/css/nsxmeetup002.css" />
+		<link rel="stylesheet" href="../../assets/css/nsxmeetup.css" />
 		<script src='https://www.google.com/recaptcha/api.js'></script>
 	</head>
 	<body class="is-preload">

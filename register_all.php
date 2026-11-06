@@ -7,10 +7,13 @@ app_session_start();
 if(isset($_GET['event_id'])) {
     include_once 'GENERALFunctions.php';
     $event_data = GetEventInformationFromID($_GET['event_id']);
-    $home_link = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://" . $_SERVER['HTTP_HOST'] . "/events&bsol;" . $event_data['EVENT_Directory'];
+    // Relative, so it works wherever the site is hosted (e.g. kirbypark.net/luna/)
+    $directory = (string)($event_data['EVENT_Directory'] ?? '');
+    $home_link = preg_match('/^[A-Za-z0-9_-]+$/', $directory) ? 'events/'.$directory.'/' : 'index.php';
     $reg_ready = True;
 	// echo "Ron is working on a bug, if you see this  (04/14/25)";   
 } else {
+    $home_link = 'index.php';
     $reg_ready = False;
     $event_data = [
         "EVENT_ID" => 0,
@@ -47,7 +50,7 @@ if(isset($_SESSION['login_user'])){
 			<header id="header">
                 <nav>
                     <ul class="nav">
-                        <li><a href="<?php echo $home_link; ?>">Home</a></li>
+                        <li><a href="<?php echo htmlspecialchars($home_link); ?>">Home</a></li>
                     </ul>
                 </nav>
                 <div id="logo">
