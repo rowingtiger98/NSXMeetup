@@ -89,3 +89,48 @@ function CreateDefaultRegistrationType(PDO $pdo, $event_id) {
     $stmt = $pdo->prepare('INSERT INTO nsx_meetup_registration_types (REGTYPE_Event_ID, REGTYPE_Name, REGTYPE_Cost, REGTYPE_Description, REGTYPE_Enabled) VALUES (?, ?, 0, NULL, 0)');
     $stmt->execute([$event_id, DEFAULT_REGTYPE_NAME]);
 }
+
+/* ************************************************************************ */
+/* Function:    EnsureEnabledRegistrationType                               */
+/* Description: An event that collects payments needs at least one enabled  */
+/*              registration type. If none is enabled, this enables the     */
+/*              event's oldest type (lowest REGTYPE_ID - normally "Basic    */
+/*              Event Registration"), first adding the default type if the  */
+/*              event has none at all.                                      */
+/* Inputs:      $pdo - PHP Data Object, $event_id - the event's id.         */
+/* Returns:     The name of the type it enabled, or null if one already was */
+/* ************************************************************************ */
+function EnsureEnabledRegistrationType(PDO $pdo, $event_id) {
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM nsx_meetup_registration_types WHERE REGTYPE_Event_ID = ? AND REGTYPE_Enabled = 1');
+    $stmt->execute([$event_id]);
+    if ($stmt->fetchColumn() > 0) {
+        return null;
+    }
+
+    $stmt = $pdo->prepare('SELECT REGTYPE_ID, REGTYPE_Name FROM nsx_meetup_registration_types WHERE REGTYPE_Event_ID = ? ORDER BY REGTYPE_ID LIMIT 1');
+    $stmt->execute([$event_id]);
+    $type = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$type) {
+        CreateDefaultRegistrationType($pdo, $event_id);
+        $type = ['REGTYPE_ID' => $pdo->lastInsertId(), 'REGTYPE_Name' => DEFAULT_REGTYPE_NAME];
+    }
+
+    $stmt = $pdo->prepare('UPDATE nsx_meetup_registration_types SET REGTYPE_Enabled = 1 WHERE REGTYPE_ID = ?');
+    $stmt->execute([$type['REGTYPE_ID']]);
+    return $type['REGTYPE_Name'];
+}
+
+/* ************************************************************************ */
+/* Function:    IsLastEnabledRegistrationType                               */
+/* Description: True if the event collects payments and $regtype_id is its  */
+/*              only enabled registration type - the one that has to stay.  */
+/* ************************************************************************ */
+function IsLastEnabledRegistrationType(PDO $pdo, array $event, $regtype_id) {
+    if (empty($event['EVENT_Collect_Payments'])) {
+        return false;
+    }
+    $stmt = $pdo->prepare('SELECT REGTYPE_ID FROM nsx_meetup_registration_types WHERE REGTYPE_Event_ID = ? AND REGTYPE_Enabled = 1');
+    $stmt->execute([$event['EVENT_ID']]);
+    $enabled = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    return count($enabled) === 1 && (int)$enabled[0] === (int)$regtype_id;
+}

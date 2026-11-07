@@ -622,6 +622,7 @@ function EnterDriverInformation() {
 	$event_id = $_POST['event_id'];
     $balance = $_POST['balance'];
     $sold_out = $_POST['sold_out'];
+    $registration_type = RegistrationTypeForEvent($_POST['registration_type'] ?? '', $event_id);
 
 	$results = array();
 	
@@ -802,7 +803,7 @@ function EnterDriverInformation() {
 		$safe_name = str_replace("'", "\'", $name);
 		$safe_display_name = str_replace("'", "\'", $display_name);		
 		$dbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
-		$insert_query = "INSERT INTO `nsx_meetup_participants` (`Event_ID`, `Participant_Name`, `Participant_Display_Name`, `Participant_Confirmation_Number`, `Participant_Address`, `Participant_City`, `Participant_State`, `Participant_Zip`, `Participant_Email`, `Participant_Cell`, `Participant_Is_NSX`, `Participant_Role`,`Participant_Events_Attending`, `Participant_Car_Info`, `Participant_Traveling_With`,`Participant_Display_Attending`, `Participant_Car_Image`, `Participant_Shared_Information`, `Participant_Social_Information`, `Participant_Balance_Due`, `Participant_Wait_Listed`) VALUES (:event_id, :safe_name, :safe_display_name, :confirmation_number, :street, :city, :state, :zip, :email, :cell, :is_nsx, :role, :rider_choices, :car_dict, :travel_with, :post_attend, :car_image, :shared_information, :social_information, :balance, :wait_listed)";
+		$insert_query = "INSERT INTO `nsx_meetup_participants` (`Event_ID`, `Participant_Name`, `Participant_Display_Name`, `Participant_Confirmation_Number`, `Participant_Address`, `Participant_City`, `Participant_State`, `Participant_Zip`, `Participant_Email`, `Participant_Cell`, `Participant_Is_NSX`, `Participant_Role`,`Participant_Events_Attending`, `Participant_Car_Info`, `Participant_Traveling_With`,`Participant_Display_Attending`, `Participant_Car_Image`, `Participant_Shared_Information`, `Participant_Social_Information`, `Participant_Balance_Due`, `Participant_Wait_Listed`, `Participant_Registration_Type`) VALUES (:event_id, :safe_name, :safe_display_name, :confirmation_number, :street, :city, :state, :zip, :email, :cell, :is_nsx, :role, :rider_choices, :car_dict, :travel_with, :post_attend, :car_image, :shared_information, :social_information, :balance, :wait_listed, :registration_type)";
 		$sth = $dbh->prepare($insert_query);
         $sth->bindParam(':event_id', $event_id);
 		$sth->bindParam(':safe_name', $safe_name);
@@ -825,6 +826,7 @@ function EnterDriverInformation() {
 		$sth->bindParam(':social_information', $social_media_choices);
         $sth->bindParam(':balance', $balance);
         $sth->bindParam(':wait_listed', $wait_listed);
+        $sth->bindValue(':registration_type', $registration_type, ($registration_type === null) ? PDO::PARAM_NULL : PDO::PARAM_INT);
 		try {
 			$dbh->beginTransaction();
 			$sth->execute();
@@ -861,6 +863,28 @@ function EnterDriverInformation() {
 	echo json_encode($results);
  }
   
+/* ************************************************************************ */
+/* Funciton:    RegistrationTypeForEvent                               	    */
+/* Description: Checks a posted registration type ID: it must be one of the */
+/*              event's enabled registration types.                         */
+/* Returns:     The REGTYPE_ID, or null when none was chosen or it isn't    */
+/*              valid (a registration is never refused over it).            */
+/* ************************************************************************ */
+function RegistrationTypeForEvent($regtype_id, $event_id) {
+    if (!is_string($regtype_id) || !ctype_digit($regtype_id)) {
+        return null;
+    }
+    $pdo = Create_SQL_PHP_DataObject(DB_NAME);
+    $stmt = $pdo->prepare('SELECT REGTYPE_ID FROM nsx_meetup_registration_types WHERE REGTYPE_ID = ? AND REGTYPE_Event_ID = ? AND REGTYPE_Enabled = 1');
+    $stmt->execute([(int)$regtype_id, (int)$event_id]);
+    $found = $stmt->fetchColumn();
+    if ($found === false) {
+        error_log('EnterDriverInformation: registration type '.$regtype_id.' is not an enabled type for event '.$event_id);
+        return null;
+    }
+    return (int)$found;
+}
+
 /* ************************************************************************ */
 /* Funciton:    guidv4                                              	    */
 /* Description: This function generates a v4 UUID.                          */

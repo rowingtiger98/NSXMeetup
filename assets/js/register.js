@@ -567,13 +567,16 @@ function EnterUserToParticipantDatabase(driver, role, event_id) {
         var balance = 0.00;
     }
 
+	// The registration type chosen in the Event Registration Fee section (only there when the event collects payments)
+	var registration_type = $("#regtype_select_"+driver).val() || '';
+
 	console.log('Entering '  +driver);
 
 	return new Promise((resolve, reject) => {
 	  $.ajax({
 	    url: 'GENERALFunctions.php',
 	    type: 'POST',
-	    data: {method: 'EnterDriverInformation', name:name, email:email, cell:cell, street:street, city:city, state:state.value, zip:zip, car_info:car_info, driver_choices:driver_choices, role:role, travel_with:travel_with, car_generation:car_generation, post_attend:post_attend, social_media_info:social_media_info, event_display_name:event_display_name.value, shared_information_choices:shared_information_choices, event_id:event_id, balance:balance, sold_out:sold_out},
+	    data: {method: 'EnterDriverInformation', name:name, email:email, cell:cell, street:street, city:city, state:state.value, zip:zip, car_info:car_info, driver_choices:driver_choices, role:role, travel_with:travel_with, car_generation:car_generation, post_attend:post_attend, social_media_info:social_media_info, event_display_name:event_display_name.value, shared_information_choices:shared_information_choices, event_id:event_id, balance:balance, sold_out:sold_out, registration_type:registration_type},
 	    success: function(data) {
 	  	//   alert(data);
 		  resolve(data);

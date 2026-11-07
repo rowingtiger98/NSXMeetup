@@ -300,6 +300,9 @@ function SetRegistrationTypeEnabled() {
     list($pdo, $event) = RegTypeLoadEvent(true);
     $regtype_id = RegTypePostedID($pdo, $event['EVENT_ID']);
     $enabled = (($_POST['enabled'] ?? '') === '1') ? 1 : 0;
+    if (!$enabled && IsLastEnabledRegistrationType($pdo, $event, $regtype_id)) {
+        EventAdminRespond('Fail', ['Collect Payments is on, so at least one registration type must stay enabled. Enable another type first, or turn off Collect Payments in Payment Options.']);
+    }
 
     $stmt = $pdo->prepare('UPDATE nsx_meetup_registration_types SET REGTYPE_Enabled = ? WHERE REGTYPE_ID = ? AND REGTYPE_Event_ID = ?');
     try {
@@ -320,6 +323,9 @@ function SetRegistrationTypeEnabled() {
 function DeleteRegistrationType() {
     list($pdo, $event) = RegTypeLoadEvent(true);
     $regtype_id = RegTypePostedID($pdo, $event['EVENT_ID']);
+    if (IsLastEnabledRegistrationType($pdo, $event, $regtype_id)) {
+        EventAdminRespond('Fail', ['Collect Payments is on, so at least one registration type must stay enabled. Enable another type first, or turn off Collect Payments in Payment Options.']);
+    }
 
     $stmt = $pdo->prepare('DELETE FROM nsx_meetup_registration_types WHERE REGTYPE_ID = ? AND REGTYPE_Event_ID = ?');
     try {

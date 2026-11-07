@@ -87,9 +87,9 @@ function EventSettingsFields($tool) {
         'Fees & Payments' => [
             'EVENT_Collect_Payments'      => ['label' => 'Collect Payments', 'type' => 'checkbox', 'widths' => [8, 4],
                                               'help' => 'Leave this off for a free event - registrants won\'t be asked to pay. '
-                                                      .'When it\'s on, go to Add / Edit / Delete Registration Types and enable at least one registration type '
-                                                      .'(every event starts with a disabled "'.DEFAULT_REGTYPE_NAME.'" type at $0.00), set its cost, '
-                                                      .'and add more types if you need them.'],
+                                                      .'When it\'s on, at least one registration type must be enabled. If none is when you save, the event\'s first type '
+                                                      .'(every event starts with a disabled "'.DEFAULT_REGTYPE_NAME.'" type at $0.00) is enabled for you. '
+                                                      .'Then go to Add / Edit / Delete Registration Types to set its cost, and add more types if you need them.'],
             'EVENT_Payment_Instructions'  => ['label' => 'Payment Instructions', 'type' => 'html', 'null_ok' => true,
                                               'help' => 'Shown to registrants with their balance due. HTML is allowed.'],
             'EVENT_Processing_Percentage' => ['label' => 'Processing Fee (%)', 'type' => 'percent', 'null_ok' => true,
@@ -342,14 +342,29 @@ function SaveEventSettings() {
     }
     $stmt->bindValue(':event_id', (int)$event['EVENT_ID'], PDO::PARAM_INT);
 
+    $enabled_type = null;
     try {
+        $pdo->beginTransaction();
         $stmt->execute();
+        // Collecting payments means registrants must have a registration type to choose
+        if (!empty($values['EVENT_Collect_Payments'])) {
+            $enabled_type = EnsureEnabledRegistrationType($pdo, (int)$event['EVENT_ID']);
+        }
+        $pdo->commit();
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log('SaveEventSettings failed for event '.$event['EVENT_ID'].': '.$e->getMessage());
         EventAdminRespond('Fail', ['The settings could not be saved. Please try again.']);
     }
 
-    EventAdminRespond('Pass', $tool['saved']);
+    $message = $tool['saved'];
+    if ($enabled_type !== null) {
+        $message .= ' Collect Payments needs an enabled registration type, so "'.$enabled_type.'" was enabled. '
+                  .'Check its cost in Add / Edit / Delete Registration Types.';
+    }
+    EventAdminRespond('Pass', $message);
 }
 
 /* ************************************************************************ */
