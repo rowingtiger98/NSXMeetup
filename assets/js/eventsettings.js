@@ -21,6 +21,10 @@ function RenderEditEventSettings(event_id, tool) {
                     document.querySelector('[id="event_setting_EVENT_Frontpage_Image"]').onchange = UpdateFrontpageImagePreview;
                     document.querySelector('[id="event_setting_frontpage_preview"]').onerror = HandleFrontpageImagePreviewError;
                 }
+                if (document.querySelector('[id="payment_methods"]')) { // only on the payment options form
+                    document.querySelector('[id="event_setting_EVENT_Collect_Payments"]').onchange = TogglePaymentMethods;
+                    $(".payment_method_toggle").on('change', TogglePaymentMethodDrawer);
+                }
             } else {
                 $("#main_content_container").html('<p class="event_settings_error">' + EscapeEventSettingsText(results[1].join(' ')) + '</p>');
             }
@@ -75,6 +79,34 @@ function SaveEventSettings(event) {
             button.removeClass('disabled').text(button_text);
 	    }
 	  });
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	TogglePaymentMethods
+// Description: Shows the Payment Methods section only while Collect Payments is checked.
+// -------------------------------------------------------------------------------------
+function TogglePaymentMethods() {
+    var sections = $("#payment_methods, .payment_methods_separator");
+    if (this.checked) {
+        sections.slideDown(200);
+    } else {
+        sections.slideUp(200);
+    }
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	TogglePaymentMethodDrawer
+// Description: Opens a payment method's options drawer when its switch is turned on,
+//              and closes it when turned off.
+// -------------------------------------------------------------------------------------
+function TogglePaymentMethodDrawer() {
+    var drawer = $("#" + $(this).attr('drawer'));
+    $(this).attr('aria-expanded', this.checked ? 'true' : 'false');
+    if (this.checked) {
+        drawer.slideDown(200);
+    } else {
+        drawer.slideUp(200);
+    }
 }
 
 // -------------------------------------------------------------------------------------

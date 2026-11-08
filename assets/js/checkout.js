@@ -27,7 +27,10 @@ function ProcessStripeCheckOut() {
             } else {
                 console.log("Failure getting client secret from Stripe: " + results[1]);
             }
-	    },	
+	    },
+	    error: function(xhr, status, error) {
+	        console.log('CreateStripeIntent request failed:', xhr.status, status, error, xhr.responseText);
+	    }
 	  });
 
 

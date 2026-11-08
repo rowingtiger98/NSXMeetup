@@ -15,6 +15,7 @@ require_once __DIR__ . '/SessionBootstrap.php';
 require_once __DIR__ . '/databaseFunctions.php';
 require_once __DIR__ . '/eventImages.php';
 require_once __DIR__ . '/eventAdmin.php';
+require_once __DIR__ . '/paymentMethods.php';
 
 app_session_start();
 
@@ -86,6 +87,7 @@ function EventSettingsFields($tool) {
     $tools['payments'] = [
         'Fees & Payments' => [
             'EVENT_Collect_Payments'      => ['label' => 'Collect Payments', 'type' => 'checkbox', 'widths' => [8, 4],
+                                              'after' => 'RenderPaymentMethodOptions',
                                               'help' => 'Leave this off for a free event - registrants won\'t be asked to pay. '
                                                       .'When it\'s on, at least one registration type must be enabled. If none is when you save, the event\'s first type '
                                                       .'(every event starts with a disabled "'.DEFAULT_REGTYPE_NAME.'" type at $0.00) is enabled for you. '
@@ -94,12 +96,19 @@ function EventSettingsFields($tool) {
                                               'help' => 'Shown to registrants with their balance due. HTML is allowed.'],
             'EVENT_Processing_Percentage' => ['label' => 'Processing Fee (%)', 'type' => 'percent', 'null_ok' => true,
                                               'help' => 'Service fee added to the total due, as a percentage. Leave blank for none.'],
-            'EVENT_Enable_Stripe_Processing' => ['label' => 'Enable Stripe Checkout', 'type' => 'checkbox',
-                                              'help' => 'Take card payments through Stripe. Requires the publishable key below.'],
-            'EVENT_Stripe_Public_Key'     => ['label' => 'Stripe Publishable Key', 'type' => 'text', 'max' => 128,
-                                              'help' => 'The publishable key (starts with pk_). Never enter the secret key (sk_) here.'],
         ],
     ];
+
+    /* Drawn by RenderPaymentMethodOptions (under Collect Payments) instead of in the list */
+    $methods = [];
+    foreach (PAYMENT_METHODS as $method => $info) {
+        $methods[$info['column']] = ['label' => $info['name'], 'type' => 'checkbox', 'rendered_by' => 'payment_methods'];
+    }
+    $methods['EVENT_Stripe_Public_Key'] = ['label' => 'Stripe Publishable Key', 'type' => 'text', 'max' => 128, 'rendered_by' => 'payment_methods',
+                                           'drawer' => 'stripe',
+                                           'help' => 'The publishable key (starts with pk_). Never enter the secret key (sk_) here.'];
+    $tools['payments']['Payment Methods'] = $methods;
+
     return $tools[$tool];
 }
 
@@ -139,6 +148,59 @@ function EventSettingsDisplayValue($field, $value) {
 }
 
 /* ************************************************************************ */
+/* Function:    RenderPaymentMethodOptions                                  */
+/* Description: The Payment Methods section under Collect Payments: an      */
+/*              on/off switch for each payment method (saved with the       */
+/*              form) that opens a drawer for its options. Only shown while */
+/*              Collect Payments is checked (eventsettings.js shows and     */
+/*              hides it). Fields marked 'drawer' => <method> in            */
+/*              EventSettingsFields go in that method's drawer; the other   */
+/*              drawers are placeholders for now.                           */
+/* Inputs:      $event - the event row, $separator - the row divider HTML.  */
+/* Returns:     HTML (a full-width column of the settings grid)             */
+/* ************************************************************************ */
+function RenderPaymentMethodOptions($event, $separator) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+    $fields = EventSettingsFields('payments')['Payment Methods'];
+    $hidden = empty($event['EVENT_Collect_Payments']) ? ' style="display:none;"' : '';
+
+    $output_html  = '<div id="payment_methods" class="col-12 payment_methods"'.$hidden.'>';
+    $output_html .= '   <p><span class="payment_methods_label">Payment Methods:</span> Turn on each way registrants can pay, then set up its options. Registrants see a section on the checkout page for each one that\'s on.</p>';
+    foreach (PAYMENT_METHODS as $method => $info) {
+        $toggle = 'event_setting_'.$info['column'];
+        $drawer = 'payment_method_'.$method.'_drawer';
+        $on = !empty($event[$info['column']]);
+        $output_html .= '   <div class="payment_method" payment_method="'.$method.'">';
+        $output_html .= '       <div class="payment_method_header">';
+        $output_html .= '           <span class="payment_method_name">'.$h($info['name']).'</span>';
+        $output_html .= '           <input type="checkbox" id="'.$toggle.'" db_key="'.$info['column'].'" class="payment_method_toggle" drawer="'.$drawer.'" aria-controls="'.$drawer.'" aria-expanded="'.($on ? 'true' : 'false').'"'.($on ? ' checked' : '').'>';
+        $output_html .= '           <label for="'.$toggle.'" class="payment_method_switch" title="Turn '.$h($info['name']).' on or off"><span class="payment_method_off">Off</span><span class="payment_method_on">On</span></label>';
+        $output_html .= '       </div>';
+        $output_html .= '       <div id="'.$drawer.'" class="payment_method_drawer"'.($on ? '' : ' style="display:none;"').'>';
+        $drawer_fields = 0;
+        foreach ($fields as $column => $field) {
+            if (($field['drawer'] ?? '') !== $method) {
+                continue;
+            }
+            $id = 'event_setting_'.$column;
+            $max = isset($field['max']) ? ' maxlength="'.(int)$field['max'].'"' : '';
+            $output_html .= '           <label for="'.$id.'" class="payment_method_field_label">'.$h($field['label']).'</label>';
+            $output_html .= '           <input type="text" id="'.$id.'" db_key="'.$column.'" value="'.$h($event[$column] ?? '').'"'.$max.' />';
+            $output_html .= '           <p class="payment_method_field_help">'.$h($field['help']).'</p>';
+            $drawer_fields++;
+        }
+        if (!$drawer_fields) {
+            $output_html .= '           <p>Here is where you will configure the '.$h($info['name']).' options.</p>';
+        }
+        $output_html .= '       </div>';
+        $output_html .= '   </div>';
+    }
+    $output_html .= '</div>';
+    $output_html .= str_replace('class="col-12 col-12-xsmall"', 'class="col-12 col-12-xsmall payment_methods_separator"'.$hidden, $separator);
+    return $output_html;
+}
+
+/* ************************************************************************ */
 /* Function:    RenderEditEventSettings                                     */
 /* Description: Returns the Edit Event Settings form for the posted event.  */
 /* Returns:     JSON ['Pass', HTML] or ['Fail', [messages]]                 */
@@ -164,6 +226,10 @@ function RenderEditEventSettings() {
     $output_html .= 'Admins: <b>'.(is_array($admins) && $admins ? $h(implode(', ', $admins)) : 'None').'</b></p>';
 
     foreach (EventSettingsFields($tool['id']) as $section => $fields) {
+        $fields = array_filter($fields, function ($field) { return empty($field['rendered_by']); });
+        if (!$fields) {
+            continue;
+        }
         $output_html .= '<h3 style="margin-top:2em;">'.$h($section).'</h3>';
         $output_html .= '<div class="row gtr-25 gtr-uniform">';
         foreach ($fields as $column => $field) {
@@ -215,6 +281,9 @@ function RenderEditEventSettings() {
             }
             $output_html .= '       </div>';
             $output_html .= $separator;
+            if (!empty($field['after'])) {
+                $output_html .= $field['after']($event, $separator);
+            }
         }
         $output_html .= '</div>';
     }
@@ -322,8 +391,8 @@ function SaveEventSettings() {
                 ? 'That is a Stripe SECRET key. Only the publishable key (pk_...) belongs here - the secret key must never be put on a web page.'
                 : 'Stripe Publishable Key must start with pk_.';
         }
-        if ($values['EVENT_Enable_Stripe_Processing'] && $stripe_key === '') {
-            $errors[] = 'Enable Stripe Checkout requires a Stripe Publishable Key.';
+        if ($values['EVENT_Collect_Payments'] && $values['EVENT_Enable_Stripe_Processing'] && $stripe_key === '') {
+            $errors[] = 'Stripe needs a Stripe Publishable Key - enter it under Stripe, or turn Stripe off.';
         }
     }
 

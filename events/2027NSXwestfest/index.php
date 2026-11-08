@@ -1,5 +1,10 @@
 <?php
 include('../../login.php'); // Includes Login Script
+// Resolve the logged-in user before any HTML is sent: session.php redirects (and stops)
+// when the session has idled out, which only works before output starts.
+if (isset($_SESSION['login_user'])) {
+    include '../../session.php';
+}
 include_once '../../AGENDAFunctions.php';
 include_once '../../ATTENDINGFunctions.php';
 include_once '../../CONTACTFunctions.php';
@@ -66,7 +71,6 @@ if(isset($_GET['event_id'])) {
         // ---------------------------------------------------------------------------------- //
 
         if(isset($_SESSION['login_user'])){
-            include '../../session.php';
             $logged_in = 'yes';
             $header_path = '../../header_user.php';
             $active_page = parse_url($current_page_url, PHP_URL_QUERY);

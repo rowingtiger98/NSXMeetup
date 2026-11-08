@@ -2,6 +2,7 @@
 require_once 'SessionBootstrap.php';
 include_once 'QUESTIONFunctions.php' ;
 include_once 'CONTACTFunctions.php';
+include_once 'paymentMethods.php';
 app_session_start();
 
 if(isset($_GET['event_id'])) {
@@ -100,12 +101,14 @@ if(isset($_SESSION['login_user'])){
                                 // (UpdateCheckoutButtonState in register.js). Not for the waiting list.
                                 $regtype_required = !$event_data['EVENT_Sold_Out'];
                             ?>
-                                <!-- Handle STRIPE Credit Card Processing if it is available -->
-                                <?php if($event_data['EVENT_Enable_Stripe_Processing']) { ?>
-                                    <a href="#" id="stripe_checkout_button" class="button primary fit<?php echo $regtype_required ? ' disabled' : ''; ?>" requires_regtype="<?php echo $regtype_required ? 'yes' : 'no'; ?>" event_id="<?php echo $event_data['EVENT_ID']; ?>" event_name="<?php echo $event_data['EVENT_Name']; ?>" style="margin-top:1.0em;" sold_out="<?php echo ($event_data['EVENT_Sold_Out'])?"yes":"no"; ?>" reg_button_driver1_total=<?php echo $starting_balance; ?> reg_button_driver2_total=<?php echo $starting_balance; ?> guest_active="no"><?php echo ($event_data['EVENT_Sold_Out'])?"Join Waiting List":"Proceed to Checkout";?></a>
-                                <?php } else { ?>
-                                    <a href="#" id="main_register_button" class="button primary fit<?php echo $regtype_required ? ' disabled' : ''; ?>" requires_regtype="<?php echo $regtype_required ? 'yes' : 'no'; ?>" event_id="<?php echo $event_data['EVENT_ID']; ?>" event_name="<?php echo $event_data['EVENT_Name']; ?>" style="margin-top:1.0em;" sold_out="<?php echo ($event_data['EVENT_Sold_Out'])?"yes":"no"; ?>" reg_button_driver1_total=<?php echo $starting_balance; ?> reg_button_driver2_total=<?php echo $starting_balance; ?> guest_active="no"><?php echo ($event_data['EVENT_Sold_Out'])?"Join Waiting List":"REGISTER";?></a>
-                                <?php } ?>
+                                <?php
+                                // With payment methods set up, registrants are saved first and then go to the checkout
+                                // page (event_checkout.php) to pay. Otherwise (and for the waiting list) they register
+                                // and see their balance on the confirmation page.
+                                $go_to_checkout = !$event_data['EVENT_Sold_Out'] && EnabledPaymentMethods($event_data);
+                                $button_text = $event_data['EVENT_Sold_Out'] ? 'Join Waiting List' : ($go_to_checkout ? 'Proceed to Checkout' : 'REGISTER');
+                                ?>
+                                <a href="#" id="main_register_button" class="button primary fit<?php echo $regtype_required ? ' disabled' : ''; ?>" requires_regtype="<?php echo $regtype_required ? 'yes' : 'no'; ?>" checkout="<?php echo $go_to_checkout ? 'yes' : 'no'; ?>" event_id="<?php echo $event_data['EVENT_ID']; ?>" event_name="<?php echo $event_data['EVENT_Name']; ?>" style="margin-top:1.0em;" sold_out="<?php echo ($event_data['EVENT_Sold_Out'])?"yes":"no"; ?>" reg_button_driver1_total=<?php echo $starting_balance; ?> reg_button_driver2_total=<?php echo $starting_balance; ?> guest_active="no"><?php echo $button_text; ?></a>
                             <?php } else { ?>
                                 <a href="#" id="main_register_button" class="button primary fit" event_id="<?php echo $event_data['EVENT_ID']; ?>" event_name="<?php echo $event_data['EVENT_Name']; ?>" style="margin-top:1.0em;" sold_out="<?php echo ($event_data['EVENT_Sold_Out'])?"yes":"no"; ?>"><?php echo ($event_data['EVENT_Sold_Out'])?"Join Waiting List":"REGISTER";?></a>
                             <?php } ?>
@@ -139,8 +142,8 @@ if(isset($_SESSION['login_user'])){
 			<script src="assets/js/util.js"></script>
 			<script src="assets/js/main.js"></script>
 			<script src="assets/js/mailer.js"></script>
-			<script src="assets/js/register.js"></script>
-            <script src="assets/js/checkout.js"></script>
+			<script src="assets/js/register.js?v=<?php echo filemtime(__DIR__.'/assets/js/register.js'); ?>"></script>
+            <script src="assets/js/checkout.js?v=<?php echo filemtime(__DIR__.'/assets/js/checkout.js'); ?>"></script>
 			
 			<script>
 			  $( document ).ready(function() {
@@ -207,11 +210,6 @@ if(isset($_SESSION['login_user'])){
                     main_register_button.onclick = RegisterForTheEvent;
                 }
 
-                const stripe_checkout_button = document.querySelector('[id="stripe_checkout_button"]')
-                if (stripe_checkout_button) {
-                    console.log("Activating the main resgister button.");
-                    stripe_checkout_button.onclick = ProcessStripeCheckOut;
-                }
                 
 				
 				// Attending choices Click Handler
@@ -232,8 +230,14 @@ if(isset($_SESSION['login_user'])){
 					elms[i].onclick = HandleButtonActionClick;
 				}
 
+				// Back from the checkout page's Change Registration - fill the form in again (after all the handlers above are set)
+				if (new URLSearchParams(window.location.search).get('restore') === '1') {
+					RestoreRegistrationForm($("#main_register_button").attr('event_id'));
+				}
+
 			  });
 			</script>			
+			<?php if ($logged_in === 'yes') echo app_idle_timer_script(); ?>
 
 	</body>
 </html>

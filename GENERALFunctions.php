@@ -1,5 +1,7 @@
 <?php
     require_once __DIR__ . '/databaseFunctions.php';
+    require_once __DIR__ . '/SessionBootstrap.php';
+    require_once __DIR__ . '/paymentMethods.php';
 
     if(isset($_POST['method'])) {
         $_POST['method']();
@@ -622,7 +624,18 @@ function EnterDriverInformation() {
 	$event_id = $_POST['event_id'];
     $balance = $_POST['balance'];
     $sold_out = $_POST['sold_out'];
-    $registration_type = RegistrationTypeForEvent($_POST['registration_type'] ?? '', $event_id);
+    $regtype = RegistrationTypeForEvent($_POST['registration_type'] ?? '', $event_id);
+    $registration_type = $regtype ? $regtype['id'] : null;
+    if ($regtype) {
+        // The registrant's total as shown on the form (driverX_cost): the registration type's fee plus the
+        // pre-pay options they checked - worked out here from the database rather than taken from the browser
+        $prepay = ChosenPrepayOptions(PrepayOptions(Create_SQL_PHP_DataObject(DB_NAME), $event_id), $driver_choices);
+        $server_balance = $regtype['cost_cents'] + array_sum(array_column($prepay, 'cents'));
+        if ((string)$server_balance !== (string)$balance) {
+            error_log('EnterDriverInformation: the form sent a balance of '.$balance.' but the registration costs '.$server_balance.' (event '.$event_id.')');
+        }
+        $balance = $server_balance;
+    }
 
 	$results = array();
 	
@@ -834,6 +847,7 @@ function EnterDriverInformation() {
 			$results[] = $dbh->lastInsertId();
 			$new_participant_idnnum = $dbh->lastInsertId();
 			$dbh->commit();
+			RememberCheckoutParticipant($event_id, $new_participant_idnnum, ($_POST['new_registration'] ?? '') === 'yes');
 
 			// Now that the person has been entered into system as a participant, the person needs to 
 			// be linked with the event itself.
@@ -867,22 +881,39 @@ function EnterDriverInformation() {
 /* Funciton:    RegistrationTypeForEvent                               	    */
 /* Description: Checks a posted registration type ID: it must be one of the */
 /*              event's enabled registration types.                         */
-/* Returns:     The REGTYPE_ID, or null when none was chosen or it isn't    */
-/*              valid (a registration is never refused over it).            */
+/* Returns:     ['id' => REGTYPE_ID, 'cost_cents' => its cost in cents], or */
+/*              null when none was chosen or it isn't valid (a registration */
+/*              is never refused over it).                                  */
 /* ************************************************************************ */
 function RegistrationTypeForEvent($regtype_id, $event_id) {
     if (!is_string($regtype_id) || !ctype_digit($regtype_id)) {
         return null;
     }
     $pdo = Create_SQL_PHP_DataObject(DB_NAME);
-    $stmt = $pdo->prepare('SELECT REGTYPE_ID FROM nsx_meetup_registration_types WHERE REGTYPE_ID = ? AND REGTYPE_Event_ID = ? AND REGTYPE_Enabled = 1');
+    $stmt = $pdo->prepare('SELECT REGTYPE_ID, REGTYPE_Cost FROM nsx_meetup_registration_types WHERE REGTYPE_ID = ? AND REGTYPE_Event_ID = ? AND REGTYPE_Enabled = 1');
     $stmt->execute([(int)$regtype_id, (int)$event_id]);
-    $found = $stmt->fetchColumn();
-    if ($found === false) {
+    $found = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$found) {
         error_log('EnterDriverInformation: registration type '.$regtype_id.' is not an enabled type for event '.$event_id);
         return null;
     }
-    return (int)$found;
+    return ['id' => (int)$found['REGTYPE_ID'], 'cost_cents' => (int)round($found['REGTYPE_Cost'] * 100)];
+}
+
+/* ************************************************************************ */
+/* Funciton:    RememberCheckoutParticipant                            	    */
+/* Description: Keeps the registrants entered from this browser session,    */
+/*              per event, so the checkout page (event_checkout.php) knows  */
+/*              who to collect payment for - without trusting ids from the  */
+/*              browser. $new_registration (driver one) starts a fresh list.*/
+/* ************************************************************************ */
+function RememberCheckoutParticipant($event_id, $participant_id, $new_registration) {
+    app_session_start();
+    $event_id = (int)$event_id;
+    if ($new_registration || !isset($_SESSION['checkout_participants'][$event_id])) {
+        $_SESSION['checkout_participants'][$event_id] = [];
+    }
+    $_SESSION['checkout_participants'][$event_id][] = (int)$participant_id;
 }
 
 /* ************************************************************************ */

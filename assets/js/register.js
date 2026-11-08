@@ -45,11 +45,15 @@ function LoadDriveOneNSXChoces(event) {
 /* Function:	RegisterForTheEvent																			*/
 /* Description:	This function reacts to the register button be clicked. This is the mail click handler.		*/
 /* -------------------------------------------------------------------------------------------------------- */
-async function RegisterForTheEvent() {
+async function RegisterForTheEvent(event) {
+	if (event) {
+		event.preventDefault(); // the button is a link to # - don't jump to the top of the page
+	}
 
 	$("#event_registration_results_text").html("<h2>Processing....</h2>");
 	var event_id = $(this).attr('event_id');
     var sold_out = $(this).attr('sold_out');
+    var go_to_checkout = ($(this).attr('checkout') === 'yes'); // Proceed to Checkout - pay after registering
 
 	// When the user clicks to register, we need to see if this person...
 	// 1. Is a new user and wants to create and account
@@ -139,7 +143,19 @@ async function RegisterForTheEvent() {
 		        	})						
 		}		
 		
-		if(entered) {
+		if(entered && go_to_checkout) {
+			// Finish this before leaving the page, or the browser cancels it
+			try {
+				await UpdateUserAttendedEvents(event_id, new_user_ids);
+			} catch (error) {
+				console.log(error);
+			}
+			// So Change Registration on the checkout page can bring the form back filled in
+			SaveRegistrationForm(event_id);
+			// The server remembers who was just registered, so only the event goes in the link
+			window.location.href = 'event_checkout.php?event_id=' + encodeURIComponent(event_id);
+
+		} else if(entered) {
 			console.log("Calling CreateConfirmationPage with ids = " + new_user_ids)
 			CreateConfirmationPage(new_user_ids, event_id, sold_out);
 
@@ -576,7 +592,7 @@ function EnterUserToParticipantDatabase(driver, role, event_id) {
 	  $.ajax({
 	    url: 'GENERALFunctions.php',
 	    type: 'POST',
-	    data: {method: 'EnterDriverInformation', name:name, email:email, cell:cell, street:street, city:city, state:state.value, zip:zip, car_info:car_info, driver_choices:driver_choices, role:role, travel_with:travel_with, car_generation:car_generation, post_attend:post_attend, social_media_info:social_media_info, event_display_name:event_display_name.value, shared_information_choices:shared_information_choices, event_id:event_id, balance:balance, sold_out:sold_out, registration_type:registration_type},
+	    data: {method: 'EnterDriverInformation', name:name, email:email, cell:cell, street:street, city:city, state:state.value, zip:zip, car_info:car_info, driver_choices:driver_choices, role:role, travel_with:travel_with, car_generation:car_generation, post_attend:post_attend, social_media_info:social_media_info, event_display_name:event_display_name.value, shared_information_choices:shared_information_choices, event_id:event_id, balance:balance, sold_out:sold_out, registration_type:registration_type, new_registration:(driver == 'driver1') ? 'yes' : 'no'},
 	    success: function(data) {
 	  	//   alert(data);
 		  resolve(data);
@@ -964,5 +980,78 @@ function ReactToRegistrationTypeSelection() {
 			update_driver_totals('driver2');
 		}
 	}
+	UpdateCheckoutButtonState();
+}
+
+/* -------------------------------------------------------------------------------------------------------- */
+/* Function:	SaveRegistrationForm / RestoreRegistrationForm												*/
+/* Description:	Before going to the checkout page, the form's answers are kept in sessionStorage (this tab	*/
+/*				only, gone when it closes). Change Registration on the checkout page removes the unpaid	*/
+/*				registration and comes back with ?restore=1, and the form is filled in again. Passwords and	*/
+/*				the create account choice are never kept.													*/
+/* -------------------------------------------------------------------------------------------------------- */
+var REGISTRATION_FORM_KEY = 'nsxmeetup_registration_form_';
+
+function SaveRegistrationForm(event_id) {
+	var fields = [];
+	$("#main").find('input[id], select[id], textarea[id]').each(function() {
+		if (['password', 'hidden', 'file', 'submit', 'button'].indexOf(this.type) !== -1 || this.name === 'create_nsxmeetup_accnt') {
+			return;
+		}
+		fields.push({id: this.id, type: this.type, value: $(this).val(), checked: this.checked});
+	});
+	try {
+		sessionStorage.setItem(REGISTRATION_FORM_KEY + event_id, JSON.stringify(fields));
+	} catch (e) {}
+}
+
+function RestoreRegistrationForm(event_id) {
+	var fields = null;
+	try {
+		fields = JSON.parse(sessionStorage.getItem(REGISTRATION_FORM_KEY + event_id));
+		sessionStorage.removeItem(REGISTRATION_FORM_KEY + event_id);
+	} catch (e) {}
+	if (!Array.isArray(fields)) {
+		return;
+	}
+
+	// Checkboxes and radio buttons are clicked (not just set) so their handlers update the page and the cart
+	function RestoreChoice(field) {
+		var element = document.getElementById(field.id);
+		if (element && element.checked !== field.checked && (element.type === 'checkbox' || field.checked)) {
+			element.click();
+		}
+	}
+
+	// 1. The additional guest first - it opens driver two's section
+	fields.filter(function(field) { return field.id === 'info_field_driver1_additional_guest'; }).forEach(RestoreChoice);
+
+	// 2. Drop downs, in page order - a generation choice shows its color / year choices, a registration type sets its fee
+	fields.forEach(function(field) {
+		var element = document.getElementById(field.id);
+		if (field.type.indexOf('select') !== 0 || !element || field.value === null || element.value === field.value) {
+			return;
+		}
+		if ($(element).find('option').filter(function() { return this.value === field.value; }).length) {
+			element.value = field.value;
+			element.dispatchEvent(new Event('change', {bubbles: true}));
+		}
+	});
+
+	// 3. Driver two's role, and the yes / no choices
+	fields.forEach(function(field) {
+		if ((field.type === 'checkbox' || field.type === 'radio') && field.id !== 'info_field_driver1_additional_guest') {
+			RestoreChoice(field);
+		}
+	});
+
+	// 4. Everything typed in
+	fields.forEach(function(field) {
+		var element = document.getElementById(field.id);
+		if (element && ['checkbox', 'radio'].indexOf(field.type) === -1 && field.type.indexOf('select') !== 0) {
+			element.value = field.value;
+		}
+	});
+
 	UpdateCheckoutButtonState();
 }
