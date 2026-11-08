@@ -1289,3 +1289,93 @@ input[type="checkbox"].payment_method_toggle:checked + label.payment_method_swit
 	color: inherit;  /* not the Total Due's bold yellow */
 	border-top: 1px solid rgba(255, 255, 255, 0.25);
 }
+
+/* Find / Edit / Delete Registrations list (NewRenderFindEditRegistration in ACCOUNTManagement.php) */
+.registrant_table td {
+	vertical-align: middle;
+}
+.registrant_table .registrant_center {
+	text-align: center;
+	width: 1%;
+	white-space: nowrap;
+}
+.registrant_name_cell .edit_find_column {
+	cursor: pointer;
+}
+.registrant_view_icon {
+	color: #ffcc00;
+	border-bottom: 0;
+	margin-right: 0.35em;
+}
+.registrant_none {
+	opacity: 0.5;
+}
+.registrant_status {
+	display: inline-block;
+	white-space: nowrap;
+	font-size: 0.85em;
+	padding: 0.15em 0.6em;
+	border-radius: 1em;
+	border: 1px solid currentColor;
+}
+.registrant_status.status_paid       { color: #4caf50; }
+.registrant_status.status_awaiting   { color: #ffcc00; }
+.registrant_status.status_no_method  { color: #ff7043; }
+.registrant_status.status_no_charge,
+.registrant_status.status_wait_list  { color: rgba(255, 255, 255, 0.6); }
+.registrant_amount {
+	display: block;
+	font-size: 0.8em;
+	opacity: 0.8;
+	margin-top: 0.2em;
+}
+.registrant_table .registrant_center input[type="checkbox"] + label {
+	padding-left: 1.5rem;
+	padding-right: 0;
+}
+.registrant_delete_button {
+	color: rgba(255, 255, 255, 0.7);
+	border-bottom: 0;
+	white-space: nowrap;
+}
+.registrant_delete_button:hover {
+	color: #ff4d4d;
+}
+.registrant_delete_button .registrant_delete_confirm {
+	display: none;
+	margin-left: 0.4em;
+	font-size: 0.8em;
+}
+.registrant_delete_button.confirming {
+	color: #fff;
+	background: #b71c1c;
+	border-radius: 4px;
+	padding: 0.2em 0.5em;
+}
+.registrant_delete_button.confirming .registrant_delete_confirm {
+	display: inline;
+}
+
+/* Edit Information page (PARTICIPANTManagement.php RenderEditRegistrationType) */
+#edit_registration_type_container {
+	margin-top: 1.5em;
+}
+.edit_balance_preview {
+	font-size: 1.25em;
+	font-weight: 700;
+	color: #ffcc00;
+	margin: 0.4em 0 0 0;
+}
+.edit_balance_preview .edit_balance_old {
+	text-decoration: line-through;
+	opacity: 0.6;
+	font-weight: 400;
+}
+.edit_balance_note {
+	font-size: 0.8em;
+	opacity: 0.8;
+	margin-top: 0.75em;
+}
+.registrant_saved_messages {
+	margin-bottom: 1.5em;
+}

@@ -474,7 +474,11 @@ function RenderFindEditRegistration(event_id) {
 	  data: {method: 'NewRenderFindEditRegistration', event_id:event_id},
 	  success: function(data) {
         console.log(data);
-		results = eval(data);
+		results = JSON.parse(data);
+		if (results[0] === 'Fail') { // not an admin of this event, or the session expired
+			$("#main_content_container").html('<p class="event_settings_error">' + $('<div>').text([].concat(results[1]).join(' ')).html() + '</p>');
+			return;
+		}
 		// $("#details_info").html(results[0]);
 		$("#main_content_container").html(results[0]);
 		RenderBackButton('backtomaineventtoolset', event_id);
@@ -482,7 +486,8 @@ function RenderFindEditRegistration(event_id) {
 		document.querySelector('[id="participant_name_search"]').onkeyup = FilterParticipantSearch;
 		$("table").stupidtable();
 
-		var elms = document.querySelectorAll("[id='edit_find_participant_link']");
+		// The name and the magnifying glass both open the registration
+		var elms = document.querySelectorAll("[id='edit_find_participant_link'], .registrant_view_icon");
 		console.log('RenderFindEditRegistration: Found', elms.length, 'edit_find_participant_link elements.')
 		for(var i = 0; i < elms.length; i++) {
 			elms[i].onclick = HandleAccountManagementActionClick;
@@ -492,42 +497,115 @@ function RenderFindEditRegistration(event_id) {
         for(var i = 0; i < elms.length; i++) {
 			elms[i].onclick = EmailPaymemtProcessedByAdmin;
 		}		
+		$(".registrant_delete_button").on('click', DeleteRegistrant);
 	  }
 	});	
 }
 
 // -------------------------------------------------------------------------------------
 // Function: 	EmailPaymemtProcessedByAdmin
-// Description: This function emails a participant that their payment has been processed 
-//              by an event admin.
+// Description: The Received checkbox on the registrant list. Saves the registrant as
+//              paid / not paid (REGISTRANTManagement.php SetRegistrantPaid); marking
+//              them paid also emails them that their payment was received. If the save
+//              fails, the checkbox and status go back to how they were.
 // -------------------------------------------------------------------------------------
 function EmailPaymemtProcessedByAdmin() {
-    const event_name = $(this).attr('event_name');
-    const email_address = $(this).attr('email_address');
-    const participant_name = $(this).attr('part_name');
-    const participant_id = $(this).attr('part_idnum');
-    console.log('Called EmailPaymemtProcessedByAdmin for '+participant_name+' : '+email_address+' : '+participant_id+'');
-    var checkbox = document.getElementById('participant_paid_checkbox_'+participant_id+'').checked;
-    if (checkbox) {
-        $.ajax({
-            url: 'GENERALFunctions.php',
-            type: 'POST',
-            data: {method: 'SendRegistrationPaymentConfirmation', event_name:event_name, email_address:email_address, participant_name:participant_name, participant_id:participant_id},
-            success: function(data) {
-            console.log(data);         
+    var checkbox = this;
+    var participant_id = $(this).attr('part_idnum');
+    var paid = checkbox.checked;
+    UpdateRegistrantStatus(participant_id, paid);
+    checkbox.disabled = true;
+    $.ajax({
+        url: 'REGISTRANTManagement.php',
+        type: 'POST',
+        dataType: 'json',
+        data: {method: 'SetRegistrantPaid', event_id: $("#edit_find_user_registration").attr('event_id'), participant_id: participant_id, paid: paid ? '1' : '0', csrf_token: $("#edit_find_user_registration").attr('csrf_token')},
+        success: function(results) {
+            if (results[0] == 'Pass') {
+                ShowRegistrantListMessage(results[1], false);
+            } else {
+                checkbox.checked = !paid;
+                UpdateRegistrantStatus(participant_id, !paid);
+                ShowRegistrantListMessage([].concat(results[1]).join(' '), true);
             }
-        });
-    } else {
-        $.ajax({
-            url: 'GENERALFunctions.php',
-            type: 'POST',
-            data: {method: 'RemovePaymentConfirmation', participant_id:participant_id},
-            success: function(data) {
-            console.log(data);         
-            }
-        });
-    }		
+        },
+        error: function() {
+            checkbox.checked = !paid;
+            UpdateRegistrantStatus(participant_id, !paid);
+            ShowRegistrantListMessage('The change could not be saved. Please try again.', true);
+        },
+        complete: function() {
+            checkbox.disabled = false;
+        }
+    });
+}
 
+// -------------------------------------------------------------------------------------
+// Function: 	UpdateRegistrantStatus
+// Description: Switches a registrant's Payment Status badge when Received is ticked
+//              (Paid) or unticked (back to the status it had unpaid - see
+//              RenderRegistrantStatus in ACCOUNTManagement.php).
+// -------------------------------------------------------------------------------------
+function UpdateRegistrantStatus(participant_id, paid) {
+    var badge = $('tr[registrant_id="' + participant_id + '"] .registrant_status');
+    if (!badge.length || badge.hasClass('status_no_charge') || badge.hasClass('status_wait_list')) {
+        return;
+    }
+    var label = paid ? 'Paid' : badge.attr('unpaid_label');
+    var css = paid ? 'status_paid' : badge.attr('unpaid_class');
+    var icon = paid ? 'fa-check-circle' : badge.attr('unpaid_icon');
+    badge.attr('class', 'registrant_status ' + css);
+    badge.find('.icon').attr('class', 'icon solid ' + icon);
+    badge.find('.registrant_status_label').text(label);
+    badge.closest('td').attr('data-sort-value', label);
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	DeleteRegistrant
+// Description: The first click on a registrant's trash can asks for confirmation on the
+//              button itself; a second click within a few seconds deletes the
+//              registration (REGISTRANTManagement.php) and removes its row.
+// -------------------------------------------------------------------------------------
+function DeleteRegistrant(event) {
+    event.preventDefault();
+    var button = $(this);
+    if (button.hasClass('disabled')) {
+        return;
+    }
+    if (!button.hasClass('confirming')) {
+        button.addClass('confirming');
+        setTimeout(function() {
+            button.removeClass('confirming');
+        }, 4000);
+        return;
+    }
+    button.removeClass('confirming').addClass('disabled');
+
+    var row = button.closest('tr');
+    $.ajax({
+        url: 'REGISTRANTManagement.php',
+        type: 'POST',
+        dataType: 'json',
+        data: {method: 'DeleteRegistrant', event_id: $("#edit_find_user_registration").attr('event_id'), participant_id: button.attr('participant_id'), csrf_token: $("#edit_find_user_registration").attr('csrf_token')},
+        success: function(results) {
+            if (results[0] == 'Pass') {
+                ShowRegistrantListMessage(results[1], false);
+                row.fadeOut(300, function() { row.remove(); });
+            } else {
+                ShowRegistrantListMessage([].concat(results[1]).join(' '), true);
+            }
+        },
+        error: function() {
+            ShowRegistrantListMessage('The registration could not be deleted. Please try again.', true);
+        },
+        complete: function() {
+            button.removeClass('disabled');
+        }
+    });
+}
+
+function ShowRegistrantListMessage(message, is_error) {
+    $("#registrant_list_messages").html($('<p>').addClass(is_error ? 'event_settings_error' : 'event_settings_success').text(message));
 }
 
 // -------------------------------------------------------------------------------------
@@ -677,7 +755,7 @@ function ReactToGenerationSelection(element) {
 // Function: 	RenderParticipantInformation
 // Description: This function renders the participant information and allows editing.
 // -------------------------------------------------------------------------------------
-function RenderParticipantInformation(event_id, participant_id, collect_payment) {
+function RenderParticipantInformation(event_id, participant_id, collect_payment, messages) {
 	console.log('Render participant information (556)');
 	// var participant_id = $(this).attr('participant_id');
     // var event_id = $(this).attr('event_id');
@@ -694,6 +772,11 @@ function RenderParticipantInformation(event_id, participant_id, collect_payment)
 		// $("#details_info").append('<button class="primary fit" id="edit_participant_information_button" event_id="'+event_id+'" participant_id="'+participant_id+'" collect_payment="'+collect_payment+'" backbutton="no" style="margin-top:1.0em;">Edit Information</button>');
 				
 		$("#main_content_container").html(results[1]);
+		if (messages && messages.length) { // e.g. after Update Information: saved, and any balance change
+			var list = $('<ul class="event_settings_success registrant_saved_messages">');
+			messages.forEach(function(message) { list.append($('<li>').text(message)); });
+			$("#main_content_container").prepend(list);
+		}
 		$("#main_content_container").append('<button class="primary fit" id="edit_participant_information_button" event_id="'+event_id+'" participant_id="'+participant_id+'" collect_payments="'+collect_payment+'" backbutton="no" style="margin-top:1.0em;">Edit Information</button>');
 		
         RenderBackButton(back_button_action, event_id);
@@ -721,10 +804,19 @@ function RenderEditParticipantInformation() {
 	  type: 'POST',
 	  data: {method: 'RenderParticipantInformation', event_id:event_id, participant_id:participant_id, collect_payment:collect_payment},
 	  success: function(data) {
-		results = eval(data);
+		results = JSON.parse(data);
+		if (results[0] === 'Fail') { // not an admin of this event, or the session expired
+			$("#main_content_container").html('<p class="event_settings_error">' + $('<div>').text([].concat(results[1]).join(' ')).html() + '</p>');
+			return;
+		}
 		$("#main_content_container").html(results[0]);
+		$("#main_content_container").append('<div id="edit_participant_messages"></div>');
 		$("#main_content_container").append('<button class="primary fit" id="update_participant_information_button" participant_id="'+participant_id+'" event_id="'+event_id+'" collect_payments="'+collect_payment+'" style="margin-top:1.0em;">Update Information</button>');
 		document.querySelector('[id="update_participant_information_button"]').onclick = UpdateParticipantInformation;
+		// Balance preview: registration type and the pre-pay option boxes
+		$("#edit_registration_type").on('change', UpdateEditBalancePreview);
+		$('[id^="info_checkbox_field_driver1_"]').on('change', UpdateEditBalancePreview);
+		UpdateEditBalancePreview();
         // RenderBackButton('backtofindeditregistration', event_id);
 		document.querySelector('[id="back_button_link"]').onclick = HandleBackButtonClick;
 		// Generation Selection
@@ -736,194 +828,121 @@ function RenderEditParticipantInformation() {
 	});	
 }
 
-// -------------------------------------------------------------------------------------f
-// Function: 	UpdateParticipantInformation
-// Description: This function renders the participant information and allows editing.
 // -------------------------------------------------------------------------------------
-function UpdateParticipantInformation() {
-	console.log('Update information');
-	var participant_id = $("#update_participant_information_button").attr('participant_id');
-    var event_id = $(this).attr('event_id');
-    var collect_payment = $(this).attr('collect_payments');
-	console.log(participant_id, ":", event_id, ":", collect_payment);	
-	var update_items = new Object();
-	var car_information = new Object();
-	var checkbox_information = new Object();
-	var update_participant_info = false;
-	
-	// Check Text Fields
-	$('[id^="info_text_field_driver1_"]').each(function() {
-		if ($(this).attr('start_value') == $(this).val()) {
-			console.log('Value = '+$(this).attr('database_key') + ' Do not update');
-		} else {
-			update_participant_info = true;
-			console.log('Value = '+$(this).attr('database_key') + 'Update');
-			update_items[$(this).attr('database_key')] = $(this).val();
-		}
-	});
-	
-	// Check State Select Values
-	var state = document.getElementById("info_select_field_driver1_state");
-	if (state.getAttribute('start_value') != state.value) {
-		update_participant_info = true;
-		update_items[state.getAttribute('database_key')] = state.value;
+// Function: 	UpdateParticipantInformation
+// Description: Sends the Edit Information page to REGISTRANTManagement.php
+//              (SaveRegistrant), which checks it, builds the car details and works out
+//              the balance again. Then goes back to the registrant's page with the
+//              result - including any balance change.
+// -------------------------------------------------------------------------------------
+function UpdateParticipantInformation(event) {
+	if (event) {
+		event.preventDefault();
 	}
+	var button = $("#update_participant_information_button");
+	if (button.hasClass('disabled')) {
+		return;
+	}
+	var participant_id = button.attr('participant_id');
+	var event_id = button.attr('event_id');
+	var collect_payment = button.attr('collect_payments');
 
-	// Look for a change in the type of car selected.
-	var generation = document.getElementById("nsx_gen_response_gen_selection_driver1");
-	if (generation.getAttribute('start_value') != generation.value) {
-		console.log('Different car all together selected');
-		update_participant_info = true;
-		if (generation.value == 'Other') {
-			update_items['Driver_Is_NSX'] = 0;
-			var car_make  = document.getElementById("nsx_gen_response_driver1_other_make");
-			var car_model = document.getElementById("nsx_gen_response_driver1_other_model");
-			var car_year  = document.getElementById("nsx_gen_response_driver1_other_year");
-			car_information['car_make'] = car_make.value;
-			car_information['car_model'] = car_model.value;
-			car_information['car_year'] = car_year.value;
-			console.log(JSON.stringify(car_information));
-			update_items['Driver_Car_Info'] = JSON.stringify(car_information);
-			update_items['Driver_Car_Image'] = 'Other_car.png';
-			
-		} else {
-			update_items['Driver_Is_NSX'] = 1;
-			var car_year = document.getElementById("nsx_gen_select_driver1_nsx_year");
-			var car_color = document.getElementById("nsx_gen_select_driver1_nsx_color");
-			car_information['car_year'] = car_year.value;
-			car_information['car_color'] = car_color.value;
-			console.log(JSON.stringify(car_information));
-			update_items['Driver_Car_Info'] = JSON.stringify(car_information);
-			if (generation.value == 'First_Generation') {
-				if (parseInt(car_information['car_year']) <= 2001) {
-					update_items['Driver_Car_Image'] = (generation.value).toLowerCase()+'_popup_'+car_information['car_color'].toLowerCase()+'.png';
-				} else {
-					//alert(car_information['car_color']);
-					update_items['Driver_Car_Image'] = (generation.value).toLowerCase()+'_nonpopup_'+car_information['car_color'].toLowerCase()+'.png';
-				}
-			} else {
-				update_items['Driver_Car_Image'] = (generation.value).toLowerCase()+'_new_'+car_information['car_color'].toLowerCase()+'.png';
-			}			
-		}
-		
-	// Otherwise, look for changes in the car details
+	var data = {
+		method: 'SaveRegistrant',
+		event_id: event_id,
+		participant_id: participant_id,
+		csrf_token: $("#edit_participant_csrf_token").val(),  // sent with the form, so it matches the current session
+		name: $("#info_text_field_driver1_name").val(),
+		email: $("#info_text_field_driver1_email").val(),
+		cell: $("#info_text_field_driver1_cell").val(),
+		street: $("#info_text_field_driver1_street").val(),
+		city: $("#info_text_field_driver1_city").val(),
+		state: $("#info_select_field_driver1_state").val(),
+		zip: $("#info_text_field_driver1_zip").val(),
+		car_generation: $("#nsx_gen_response_gen_selection_driver1").val()
+	};
+	if (data.car_generation === 'Other') {
+		data.car_make = $("#nsx_gen_response_driver1_other_make").val();
+		data.car_model = $("#nsx_gen_response_driver1_other_model").val();
+		data.car_year = $("#nsx_gen_response_driver1_other_year").val();
 	} else {
-		var need_update = false;
-		// Look for NSX Changes
-		if (generation.value != 'Other') {
-			$('[id^="nsx_gen_select_driver1_nsx_"]').each(function() {
-				var elem = document.getElementById($(this).attr('id'));
-				console.log($(this).attr('id') + ' : Element Value = ' + elem.value);
-				if (elem.getAttribute('start_value') != elem.value) {
-					need_update = true;
-					update_participant_info = true;
-				}
-				car_information[elem.getAttribute('database_key')] = elem.value;
-			});
-			
-			if (need_update) {
-				if (generation.value == 'First_Generation') {
-					if (parseInt(car_information['car_year']) <= 2001) {
-						update_items['Participant_Car_Image'] = (generation.value).toLowerCase()+'_popup_'+car_information['car_color'].toLowerCase()+'.png';
-					} else {
-						alert(car_information['car_color']);
-						update_items['Participant_Car_Image'] = (generation.value).toLowerCase()+'_nonpopup_'+car_information['car_color'].toLowerCase()+'.png';
-					}
-				} else {
-					update_items['Participant_Car_Image'] = (generation.value).toLowerCase()+'_new_'+car_information['car_color'].toLowerCase()+'.png';
-				}				
-			 }			
-			
-		} else {
-		// Look for Other Car Changes
-			$('[id^="nsx_gen_response_driver1_other_"]').each(function() {
-				if ($(this).attr('start_value') != $(this).val()) {
-					need_update = true;
-					update_participant_info = true;
-				}
-				car_information[$(this).attr('database_key')] = $(this).val();
-			});
-			
-			if (need_update) {
-				update_items['Participant_Car_Image'] = 'Other_car.png';
-			}
-		}
-		
-		if (need_update) {
-			console.log(JSON.stringify(car_information));
-			update_items['Participant_Car_Info'] = JSON.stringify(car_information);
-		}
+		data.car_year = $("#nsx_gen_select_driver1_nsx_year").val();
+		data.car_color = $("#nsx_gen_select_driver1_nsx_color").val();
 	}
-	
-	// look for updates in the Participant options Selections
-	var checkbox_update = false;
-	$('[id^="info_checkbox_field_driver1_"]').each(function () {
-		console.log($(this).attr('key') + ' = ' + $(this).attr('start_value'));
-		var checkbox = document.getElementById($(this).attr('id')).checked;
-		if(checkbox) {
-			$new_state = "yes";
-		} else {
-			$new_state = "no";
-		}
-		
-		if ($new_state != $(this).attr('start_value')) {
-			checkbox_update = true;
-			update_participant_info = true;
-		}
-		checkbox_information[$(this).attr('key')] = $new_state;		
+	// The registration type is only on the page when the event collects payments
+	if ($("#edit_registration_type").length) {
+		data.registration_type = $("#edit_registration_type").val();
+	}
+	// Answers to the event's questions: yes / no boxes and drop downs
+	$('[id^="info_checkbox_field_driver1_"]').each(function() {
+		data['answers[' + $(this).attr('key') + ']'] = this.checked ? 'yes' : 'no';
 	});
-	
-	if (checkbox_update) {
-		console.log(JSON.stringify(checkbox_information));
-		update_items['Participant_Events_Attending'] = JSON.stringify(checkbox_information);
-	}	
-	
-	console.log("my object: %o", update_items)
-	
-	if (update_participant_info) {
-	    $.ajax({
-	      url: 'GENERALFunctions.php',
-	      type: 'POST',
-	      data: {method: 'UpdateParticipantInformation', participant_id:participant_id, update_items:update_items},
-	      success: function(data) {
-			console.log(data);
-	    	results = eval(data);
-			console.log(results[0]);
-			if (results[0] == 'FAIL') {
-				alert('The database update failed.');
+	$('[id^="info_question_select_field_driver1_"]').each(function() {
+		data['answers[' + $(this).attr('key') + ']'] = $(this).val() || '';
+	});
+
+	button.addClass('disabled').text('Saving...');
+	$.ajax({
+		url: 'REGISTRANTManagement.php',
+		type: 'POST',
+		dataType: 'json',
+		data: data,
+		success: function(results) {
+			if (results[0] == 'Pass') {
+				RenderParticipantInformation(event_id, participant_id, collect_payment, results[1]);
 			} else {
-	            $.ajax({
-	              url: 'GENERALFunctions.php',
-	              type: 'POST',
-	              //data: {method: 'RenderParticipantInformation', driver_id:driver_id},
-	              data: {method: 'CreateConfirmationPage', driver1:participant_id, driver2:''},
-	              success: function(data) {
-	            	results = eval(data);
-	            	$("#details_info").html(results[0]);
-	            	$("#details_info").append('<button class="primary fit" id="edit_participant_information_button" participant_id="'+participant_id+'" style="margin-top:1.0em;">Edit Information</button>');
-	            	
-	            	document.querySelector('[id="edit_participant_information_button"]').onclick = RenderEditParticipantInformation;
-                
-	              }
-	            });
+				ShowEditParticipantMessages([].concat(results[1]), true);
 			}
-	      }
-	    });		
+		},
+		error: function() {
+			ShowEditParticipantMessages(['The registration could not be saved. Please try again.'], true);
+		},
+		complete: function() {
+			button.removeClass('disabled').text('Update Information');
+		}
+	});
+}
+
+function ShowEditParticipantMessages(messages, is_error) {
+	var list = $('<ul>').addClass(is_error ? 'event_settings_error' : 'event_settings_success');
+	messages.forEach(function(message) {
+		list.append($('<li>').text(message));
+	});
+	$("#edit_participant_messages").html(list);
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	UpdateEditBalancePreview
+// Description: On the Edit Information page, shows what the balance will become: the
+//              chosen registration type's cost plus the checked pre-pay options (the
+//              boxes with accounting="yes"), as SaveRegistrant works it out. Without a
+//              registration type the balance isn't recalculated.
+// -------------------------------------------------------------------------------------
+function UpdateEditBalancePreview() {
+	var container = $("#edit_registration_type_container");
+	if (!container.length) {
+		return;
+	}
+	var current = parseInt(container.attr('current_balance'), 10) || 0;
+	var type_cost = $("#edit_registration_type option:selected").attr('cost');
+	var preview = $("#edit_balance_preview");
+	var format = function(cents) { return '$' + (cents / 100).toFixed(2); };
+
+	if (type_cost === undefined || type_cost === '') {
+		preview.text(format(current) + ' (not recalculated)');
+		return;
+	}
+	var balance = parseInt(type_cost, 10) || 0;
+	$('[id^="info_checkbox_field_driver1_"][accounting="yes"]').each(function() {
+		if (this.checked) {
+			balance += Math.round((parseFloat($(this).attr('cost')) || 0) * 100);
+		}
+	});
+	preview.empty();
+	if (balance === current) {
+		preview.text(format(balance));
 	} else {
-	    $.ajax({
-	      url: 'GENERALFunctions.php',
-	      type: 'POST',
-	      //data: {method: 'RenderParticipantInformation', driver_id:driver_id},
-	      data: {method: 'CreateConfirmationPage', driver1:driver_id, driver2:''},
-	      success: function(data) {
-	    	results = eval(data);
-	    	$("#details_info").html(results[0]);
-	    	$("#details_info").append('<button class="primary fit" id="edit_participant_information_button" driver_id="'+driver_id+'" style="margin-top:1.0em;">Edit Information</button>');
-	    	
-	    	document.querySelector('[id="edit_participant_information_button"]').onclick = RenderEditParticipantInformation;
-        
-	      }
-	    });
+		preview.append($('<span class="edit_balance_old">').text(format(current)), ' → ', $('<span class="edit_balance_new">').text(format(balance)));
 	}
 }
 

@@ -1,5 +1,7 @@
 <?php
   require_once __DIR__ . '/databaseFunctions.php';
+  require_once __DIR__ . '/eventAdmin.php';       // EventAdminAuthorize() for the registrant list
+  require_once __DIR__ . '/paymentMethods.php';   // PAYMENT_METHODS names
 
   if(isset($_POST['method'])) {
     $_POST['method']();
@@ -360,8 +362,8 @@ function  RenderManagementToolsSection () {
     /* -- Find / Edit Registrations -- */
     $output_html .= '<div>';
     $output_html .= '    <span class="number"><span class="icon solid fa-user"></span></span>';
-    $output_html .= '    <h3>Find / Edit Registrations</h3>';
-    $output_html .= '    <p>To find and / or edit a particiapnts information, simple click the link below. Use the filter box on the new page to quickly find the participant you need..</p>';
+    $output_html .= '    <h3>Find / Edit / Delete Registrations</h3>';
+    $output_html .= '    <p>Find, view, edit or delete a registration, see how each registrant is paying, and mark payments received. Use the filter box on the new page to quickly find the participant you need.</p>';
     $output_html .= '    <button id="admin_event_handler" action="find_edit_registration" class="button primary small fit" event_id="'.$event_id.'" collect_payment="'.$collect_payments.'">Click Here</button>';
     $output_html .= '</div>';
 
@@ -799,15 +801,22 @@ function RenderSwapShopManagement() {
 /* Returns:     HTML                                        				*/
 /* ************************************************************************ */
 function NewRenderFindEditRegistration() {
-    $event_id = $_POST['event_id'];
+    $event_id = (int)($_POST['event_id'] ?? 0);
 
-	$output_html = '<div id="edit_find_user_registration" class="">';
+    // Registrants' details and payments - event admins (or overlords) only
+    app_session_start();
+    EventAdminAuthorize(Create_SQL_PHP_DataObject(DB_NAME), $event_id);
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+
+	$output_html = '<div id="edit_find_user_registration" class="" event_id="'.$event_id.'" csrf_token="'.$h(app_csrf_token()).'">';
     $output_html .= '<h1 class="major">Registrant Search</h1>';
     $output_html .= '<div id="back_navigation_button"></div>';    
 	$output_html .= '	<div id="rider_search_form_container" class="rider_search_form_container" >';
-	$output_html .= '       <p class="small">To search for a participant, simply start typing their name into the box below. The list will be filtered after each entered letter.</p>';
+	$output_html .= '       <p class="small">To search for a participant, simply start typing their name into the box below. The list will be filtered after each entered letter. '
+                   .'Click a name (or <span class="icon solid fa-search"></span>) to see and edit the registration.</p>';
 	$output_html .= '		<input type="text" id="participant_name_search" name="participant_name_search" placeholder="Enter a name to filter the list">';
 	$output_html .= '	</div>';
+	$output_html .= '	<div id="registrant_list_messages"></div>';
 	
 	/***********************/
 	/* Setup DB Connection */
@@ -821,20 +830,44 @@ function NewRenderFindEditRegistration() {
 	$result = $link->query($event_query);
 	if ($result->num_rows > 0) {
         $row =  mysqli_fetch_assoc($result);
-        $participants = $row['EVENT_Participants'];
+        $participant_ids = array_map('intval', array_filter(array_map('trim', explode(',', (string)$row['EVENT_Participants'])), 'strlen'));
         $collect_payments = ($row['EVENT_Collect_Payments'])?'yes':'no';
-        $user_query = sprintf("SELECT * FROM `nsx_meetup_participants` WHERE `Participant_ID` IN (%s) ORDER BY `Participant_Name`", $participants);
-        $user_result = $link->query($user_query);
         $output_html .= '<div class="event_registration_sub_container active">';
-        $output_html .= '<table id="participant_checkin_table" class="alt rider_checkin_table"><thead><tr><th data-sort="string">Participant Name (Click to sort)</th><th>Payment Received</th></tr></thead><tbody>';
-        while ($part_row = mysqli_fetch_assoc($user_result)) {
-            $output_html .= '<tr name="'.$part_row['Participant_Name'].'"><td id="edit_find_participant_link" class="edit_find_column" action="render_participant_information" event_id="'.$event_id.'" collect_payments="'.$collect_payments.'" participant_id="'.$part_row['Participant_ID'].'">'.$part_row['Participant_Name'].' ('.$part_row['Participant_Role'].')</td>';
-            $output_html .= '<td width="5%" style="text-align:center;"><input type="checkbox" event_name="'.$row['EVENT_Name'].'" email_address="'.$part_row['Participant_Email'].'" part_name="'.$part_row['Participant_Name'].'" part_idnum="'.$part_row['Participant_ID'].'" id="participant_paid_checkbox_'.$part_row['Participant_ID'].'" '.($part_row['Participant_Balance_Paid']?" checked":"").' >';
-            $output_html .=  '<label for="participant_paid_checkbox_'.$part_row['Participant_ID'].'"></label></td>';
-            $output_html .= '</tr>';
+        if (!$participant_ids) {
+            $output_html .= '<p>No one has registered for this event yet.</p>';
+        } else {
+            // The event's registration type names, for the Registration Type column
+            $stmt = Create_SQL_PHP_DataObject(DB_NAME)->prepare('SELECT REGTYPE_ID, REGTYPE_Name FROM nsx_meetup_registration_types WHERE REGTYPE_Event_ID = ?');
+            $stmt->execute([$event_id]);
+            $regtype_names = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
+            $user_query = sprintf("SELECT * FROM `nsx_meetup_participants` WHERE `Participant_ID` IN (%s) ORDER BY `Participant_Name`", implode(',', $participant_ids));
+            $user_result = $link->query($user_query);
+            $output_html .= '<div class="table-wrapper">';
+            $output_html .= '<table id="participant_checkin_table" class="alt rider_checkin_table registrant_table"><thead><tr>';
+            $output_html .= '<th data-sort="string">Registrant (click to sort)</th><th data-sort="string">Registration Type</th><th data-sort="string">Paying With</th><th data-sort="string">Payment Status</th><th class="registrant_center">Received</th><th class="registrant_center">Delete</th>';
+            $output_html .= '</tr></thead><tbody>';
+            while ($part_row = mysqli_fetch_assoc($user_result)) {
+                $id = (int)$part_row['Participant_ID'];
+                list($status, $status_class, $status_icon) = RegistrantPaymentStatus($part_row, $collect_payments === 'yes');
+                $method = (string)$part_row['Participant_Payment_Method'];
+                $view_attributes = 'action="render_participant_information" event_id="'.$event_id.'" collect_payments="'.$collect_payments.'" participant_id="'.$id.'"';
+
+                $output_html .= '<tr name="'.$h($part_row['Participant_Name']).'" registrant_id="'.$id.'">';
+                $output_html .= '<td class="registrant_name_cell">';
+                $output_html .= '<a href="#" class="registrant_view_icon" title="View / edit this registration" '.$view_attributes.'><span class="icon solid fa-search"></span></a> ';
+                $output_html .= '<span id="edit_find_participant_link" class="edit_find_column" '.$view_attributes.'>'.$h($part_row['Participant_Name']).' ('.$h($part_row['Participant_Role']).')</span></td>';
+                $regtype = $regtype_names[$part_row['Participant_Registration_Type'] ?? ''] ?? '';
+                $output_html .= '<td>'.($regtype !== '' ? $h($regtype) : '<span class="registrant_none">-</span>').'</td>';
+                $output_html .= '<td>'.(isset(PAYMENT_METHODS[$method]) ? $h(PAYMENT_METHODS[$method]['name']) : '<span class="registrant_none">-</span>').'</td>';
+                $output_html .= '<td class="registrant_status_cell" data-sort-value="'.$h($status).'">'.RenderRegistrantStatus($part_row, $collect_payments === 'yes').'</td>';
+                $output_html .= '<td class="registrant_center"><input type="checkbox" event_name="'.$h($row['EVENT_Name']).'" email_address="'.$h($part_row['Participant_Email']).'" part_name="'.$h($part_row['Participant_Name']).'" part_idnum="'.$id.'" id="participant_paid_checkbox_'.$id.'" '.($part_row['Participant_Balance_Paid']?" checked":"").' >';
+                $output_html .= '<label for="participant_paid_checkbox_'.$id.'" title="Payment received"></label></td>';
+                $output_html .= '<td class="registrant_center"><a href="#" class="registrant_delete_button" participant_id="'.$id.'" participant_name="'.$h($part_row['Participant_Name']).'" title="Delete this registration"><span class="icon solid fa-trash-alt"></span><span class="registrant_delete_confirm">Click again to delete</span></a></td>';
+                $output_html .= '</tr>';
+            }
+            $output_html .= "</tbody></table></div>";
         }
-        $output_html .= "</tbody></table>";
 	}
 	$output_html .= '</div></div>';
 	
@@ -845,6 +878,51 @@ function NewRenderFindEditRegistration() {
 	$results = [$output_html];
 	echo json_encode($results);
 }	
+
+/* ************************************************************************ */
+/* Funciton:    RegistrantPaymentStatus                                	    */
+/* Description: Where a registrant's payment stands, for the registrant     */
+/*              list: wait list, no charge, paid, awaiting payment (chose a */
+/*              pay-later method at checkout) or no method chosen (never    */
+/*              finished checkout).                                         */
+/* Returns:     [label, CSS class, Font Awesome icon]                       */
+/* ************************************************************************ */
+function RegistrantPaymentStatus(array $participant, $collect_payments) {
+    if (!empty($participant['Participant_Wait_Listed'])) {
+        return ['Wait list', 'status_wait_list', 'fa-clock'];
+    }
+    if (!$collect_payments || (int)$participant['Participant_Balance_Due'] <= 0) {
+        return ['No charge', 'status_no_charge', 'fa-minus-circle'];
+    }
+    if (!empty($participant['Participant_Balance_Paid'])) {
+        return ['Paid', 'status_paid', 'fa-check-circle'];
+    }
+    if ((string)$participant['Participant_Payment_Method'] !== '') {
+        return ['Awaiting payment', 'status_awaiting', 'fa-hourglass-half'];
+    }
+    return ['No method chosen', 'status_no_method', 'fa-exclamation-circle'];
+}
+
+/* ************************************************************************ */
+/* Funciton:    RenderRegistrantStatus                                 	    */
+/* Description: The status badge and amount for the registrant list. It     */
+/*              also carries the unpaid status, so ticking / unticking      */
+/*              Received can switch the badge without reloading            */
+/*              (UpdateRegistrantStatus in account.js).                     */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderRegistrantStatus(array $participant, $collect_payments) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+    list($label, $class, $icon) = RegistrantPaymentStatus($participant, $collect_payments);
+    $unpaid = $participant;
+    $unpaid['Participant_Balance_Paid'] = 0;
+    list($unpaid_label, $unpaid_class, $unpaid_icon) = RegistrantPaymentStatus($unpaid, $collect_payments);
+    $amount = ($collect_payments && (int)$participant['Participant_Balance_Due'] > 0 && empty($participant['Participant_Wait_Listed']))
+        ? '<span class="registrant_amount">$'.number_format($participant['Participant_Balance_Due'] / 100, 2).'</span>' : '';
+
+    return '<span class="registrant_status '.$class.'" unpaid_label="'.$h($unpaid_label).'" unpaid_class="'.$unpaid_class.'" unpaid_icon="'.$unpaid_icon.'">'
+          .'<span class="icon solid '.$icon.'"></span> <span class="registrant_status_label">'.$h($label).'</span></span>'.$amount;
+}
 
 /* ************************************************************************ */
 /* Funciton:    RenderEmailListGeneration                         		    */

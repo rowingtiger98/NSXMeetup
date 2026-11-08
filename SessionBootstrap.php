@@ -131,6 +131,21 @@ function app_url(string $path): string
 }
 
 /**
+ * A full URL (https://host/site/...) for a site-relative path, for links and
+ * images that have to work in an email too. Falls back to app_url()'s
+ * site-relative URL when there's no host (e.g. run from the command line).
+ */
+function AbsoluteSiteURL(string $path): string
+{
+    $url = app_url($path);
+    if (empty($_SERVER['HTTP_HOST'])) {
+        return $url;
+    }
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    return $scheme . '://' . $_SERVER['HTTP_HOST'] . '/' . ltrim($url, '/');
+}
+
+/**
  * True if the logged-in user has been idle longer than APP_IDLE_TIMEOUT.
  */
 function app_session_idle_expired(): bool

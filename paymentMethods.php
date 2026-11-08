@@ -180,3 +180,28 @@ function ProcessingFeeCents($subtotal_cents, $percent) {
 function FormatPercent($percent) {
     return rtrim(rtrim(number_format((float)$percent, 2, '.', ''), '0'), '.').'%';
 }
+
+/* ************************************************************************ */
+/* Function:    SendNoReplyEmail                                            */
+/* Description: Sends an HTML email from no-reply@nsxmeetup.com (replies go */
+/*              to general.information@nsxmeetup.com) - registration and    */
+/*              payment emails.                                             */
+/* Returns:     bool - whether mail() accepted it                           */
+/* ************************************************************************ */
+function SendNoReplyEmail($to, $subject, $html) {
+    if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+        error_log('SendNoReplyEmail: not a valid email address: '.$to);
+        return false;
+    }
+    $subject = str_replace(["\r", "\n"], ' ', (string)$subject);
+    $headers = 'MIME-Version: 1.0'."\r\n"
+             .'From: NSX Meetup <no-reply@nsxmeetup.com>'."\r\n"
+             .'Reply-To: general.information@nsxmeetup.com'."\r\n"
+             .'Content-Type: text/html; charset=UTF-8'."\r\n"
+             .'X-Mailer: PHP/'.phpversion();
+    $sent = mail($to, '=?UTF-8?B?'.base64_encode($subject).'?=', $html, $headers, '-fno-reply@nsxmeetup.com');
+    if (!$sent) {
+        error_log('SendNoReplyEmail: mail() failed for '.$to);
+    }
+    return $sent;
+}

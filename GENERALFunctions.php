@@ -452,21 +452,6 @@ function RenderPayLaterInstructions($method, array $event, array $participants, 
 }
 
 /* ************************************************************************ */
-/* Funciton:    AbsoluteSiteURL                                        	    */
-/* Description: A full URL (https://host/site/...) for a site-relative path,*/
-/*              for links and images that have to work in an email too.     */
-/*              Falls back to the site-relative URL without a host.         */
-/* ************************************************************************ */
-function AbsoluteSiteURL($path) {
-    $url = app_url($path);
-    if (empty($_SERVER['HTTP_HOST'])) {
-        return $url;
-    }
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    return $scheme.'://'.$_SERVER['HTTP_HOST'].'/'.ltrim($url, '/');
-}
-
-/* ************************************************************************ */
 /* Funciton:    CreateConfirmationPage                                 	    */
 /* Description: This function sends the message from the web page.          */
 /* Returns:     Nothing                                        				*/
@@ -797,15 +782,7 @@ function SendRegistrationConfirmationEmail(array $event, array $people, array $a
             .'contact general.information@nsxmeetup.com with any questions.</p>';
     $body .= '</body></html>';
 
-    $subject = str_replace(["\r", "\n"], ' ', $title);
-    $headers = 'MIME-Version: 1.0'."\r\n"
-             .'From: NSX Meetup <no-reply@nsxmeetup.com>'."\r\n"
-             .'Reply-To: general.information@nsxmeetup.com'."\r\n"
-             .'Content-Type: text/html; charset=UTF-8'."\r\n"
-             .'X-Mailer: PHP/'.phpversion();
-    if (!mail($to, '=?UTF-8?B?'.base64_encode($subject).'?=', $body, $headers, '-fno-reply@nsxmeetup.com')) {
-        error_log('SendRegistrationConfirmationEmail: mail() failed for '.$to);
-    }
+    SendNoReplyEmail($to, $title, $body);
 }
 
 
@@ -1162,81 +1139,6 @@ function SendRegistrationPaymentInformation($email_address, $message) {
 
         $results =  "Could not send the message to ".$email_address.".";       
     }    
-}
-
-/* ************************************************************************ */
-/* Funciton:    SendRegistrationPaymentConfirmation                   	    */
-/* Description: This function sends a password recovery link to the user.   */
-/* Returns:     Nothing                                        				*/
-/* ************************************************************************ */
-function SendRegistrationPaymentConfirmation() {
-    $event_name = $_POST['event_name'];
-    $email_address = $_POST['email_address'];
-    $participant_name = $_POST['participant_name'];
-    $participant_id = $_POST['participant_id'];
-
-    $message = 'Hello '.$participant_name.',<br><br>This email is to confirm we have received payment, and that you are fully registered, for the 2026 NSX Mideast Meet in Cary, NC from May 28-31, 2026.  
-    We look forward to hosting you for another year of NSX comradery!<br><br>If you have not yet booked your hotel, please do so using the following link. 
-    There are two hotels you can choose from, which are side-by-side.  (The Hilton Garden Inn is traditionally the host hotel where most people stay, and the 
-    Doubletree is the overflow hotel if the Garden Inn has sold out) <a href="https://nsxmeetup.com/events/2026MideastMeetup/hotels.php">Click Here</a> for more hotel
-    information and booking links.<br><br>Regards,<br>Your NSX Mideast Meet Organizing Committee';
-
-    $ip = $_SERVER['REMOTE_ADDR'];
-    $to = $email_address;
-    $subject = sprintf("%s Registration and Payment Confirmation", $event_name);
-    $email_message = $message;
-    $headers = 'MIME-Version: 1.0' . "\r\n" .
-                'From: general.information@nsxmeetup.com' . "\r\n" .
-                'Content-type: text/html; charset=iso-8859-1' . "\r\n" .
-                'Reply-To: general.information@nsxmeetup.com' . "\r\n" .
-                'X-Mailer: PHP/' . phpversion();
-            
-    $status = mail($to, $subject, $email_message, $headers);
-    if ($status) {
-        $results =  "An email with this payment confirmation was successfully send to: ".$email_address."";
-        $eventdbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
-        $update_query = "UPDATE `nsx_meetup_participants` SET `Participant_Balance_Paid`=1 WHERE `Participant_ID`=:id";
-        $eventsth = $eventdbh->prepare($update_query);
-        $eventsth->bindParam(':id', $participant_id);
-        $eventdbh->beginTransaction();
-        $eventsth->execute();
-        $eventdbh->commit();	        
-    } else {
-        $results =  "Could not send the message to ".$email_address.".";       
-    }
-    
-    echo $results;
-}
-
-/* ************************************************************************ */
-/* Funciton:    RemovePaymentConfirmation                         		    */
-/* Description: This function returns the rendered email list generation.   */
-/* Returns:     HTML                                                		*/
-/* ************************************************************************ */ 
-function RemovePaymentConfirmation() {
-    $participant_id = $_POST['participant_id'];
-    $results = array();
-    try {
-        $eventdbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
-        $update_query = "UPDATE `nsx_meetup_participants` SET `Participant_Balance_Paid`=0 WHERE `Participant_ID`=:id";
-        $eventsth = $eventdbh->prepare($update_query);
-        $eventsth->bindParam(':id', $participant_id);
-        $eventdbh->beginTransaction();
-        $eventsth->execute();
-        $eventdbh->commit();
-        
-        $results[] = 'success';
-        $results[] = 'Participant ID = '.$participant_id.' Set back to 0';
-
-    } catch(PDOExecption $e) {
-            
-        $dbh->rollback();
-        $results[] = 'fail';
-        $results[] = $e->getMessage();
-    } 
-    
-    echo json_encode($results);
-
 }
 
 /* ************************************************************************ */
@@ -1865,32 +1767,6 @@ function RenderParticipantInformation() {
 	closeDB($link);	
 	
 	$results = [$output_html];
-	echo json_encode($results);
-}
-
-/* ************************************************************************ */
-/* Function:    UpdateParticipantInformation                            	*/
-/* Description: This function updates the database for a participant.		*/
-/* Returns:     HTML                                        				*/
-/* ************************************************************************ */
-function UpdateParticipantInformation() {
-	$participant_id = $_POST['participant_id'];
-	$update_info = $_POST['update_items'];
-	$results = array();
-
-	$conn = connectDB('kirbypar_nsx_meetup');
-	$output_html = '';
-	$overall_results = 'OK';
-	foreach($update_info as $key => $value) {
-		$output_html .= $key . ' = ' . $value;
-		$sql_query = "UPDATE `nsx_meetup_participants` SET `".$key."` = '".$value."' WHERE Participant_ID = '".$participant_id."'";
-        if (!(mysqli_query($conn, $sql_query))) {
-	       $overall_results = 'FAIL';        
-        }
-	}
-	closeDB($conn);
-	
-	$results = [$overall_results];
 	echo json_encode($results);
 }
 

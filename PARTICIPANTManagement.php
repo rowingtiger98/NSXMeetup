@@ -1,5 +1,6 @@
 <?php
   require_once __DIR__ . '/databaseFunctions.php';
+  require_once __DIR__ . '/eventAdmin.php';  // EventAdminAuthorize() - event admins only
 
   if(isset($_POST['method'])) {
     $_POST['method']();
@@ -11,11 +12,18 @@
 /* Returns:     HTML                                        				*/
 /* ************************************************************************ */
 function RenderParticipantInformation() {  
-	$event_id = $_POST['event_id'];
-	$participant_id = $_POST['participant_id'];
-    $collect_payment = $_POST['collect_payment'];
+	$event_id = (int)($_POST['event_id'] ?? 0);
+	$participant_id = (int)($_POST['participant_id'] ?? 0);
+    $collect_payment = (($_POST['collect_payment'] ?? '') === 'yes') ? 'yes' : 'no';
+
+    // A registrant's details - event admins (or overlords) only
+    app_session_start();
+    EventAdminAuthorize(Create_SQL_PHP_DataObject(DB_NAME), $event_id);
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
 	$output_html = '';
-    $output_html = '<div id="back_navigation_button">';
+    // The current session's CSRF token for Update Information (read by UpdateParticipantInformation in account.js)
+    $output_html = '<input type="hidden" id="edit_participant_csrf_token" value="'.$h(app_csrf_token()).'" />';
+    $output_html .= '<div id="back_navigation_button">';
     $output_html .= '<a href="#" id="back_button_link" action="backtoparticipantsinformation" event_id="'.$event_id.'" participant_id="'.$participant_id.'" collect_payment="'.$collect_payment.'" class="button primary">Cancel</a>';
     $output_html .= '</div>';
 
@@ -38,22 +46,22 @@ function RenderParticipantInformation() {
 		$output_html .= '	</div>';
         $output_html .= '    <div class="row gtr-25 gtr-uniform">';
         $output_html .= '    	<div class="col-4 col-12-xsmall">';
-        $output_html .= '    		<input type="text" name="name" id="info_text_field_driver1_name" value="'.$row['Participant_Name'].'" start_value="'.$row['Participant_Name'].'" database_key = "Participant_Name" placeholder="Name" />';
+        $output_html .= '    		<input type="text" name="name" id="info_text_field_driver1_name" value="'.$h($row['Participant_Name']).'" start_value="'.$h($row['Participant_Name']).'" database_key = "Participant_Name" placeholder="Name" />';
         $output_html .= '    	</div>';
         $output_html .= '    	<div class="col-4 col-12-xsmall">';
-        $output_html .= '    		<input type="text" name="email" id="info_text_field_driver1_email" value="'.$row['Participant_Email'].'" start_value="'.$row['Participant_Email'].'" database_key = "Participant_Email" placeholder="Email Address" />';
+        $output_html .= '    		<input type="text" name="email" id="info_text_field_driver1_email" value="'.$h($row['Participant_Email']).'" start_value="'.$h($row['Participant_Email']).'" database_key = "Participant_Email" placeholder="Email Address" />';
         $output_html .= '    	</div>';
 		$output_html .= '		<div class="col-4 col-12-xsmall">';
-        $output_html .= '    		<input type="text" name="cell" id="info_text_field_driver1_cell" value="'.$row['Participant_Cell'].'" start_value="'.$row['Participant_Cell'].'" database_key = "Participant_Cell" placeholder="Cell Phone Number" />';
+        $output_html .= '    		<input type="text" name="cell" id="info_text_field_driver1_cell" value="'.$h($row['Participant_Cell']).'" start_value="'.$h($row['Participant_Cell']).'" database_key = "Participant_Cell" placeholder="Cell Phone Number" />';
         $output_html .= '    	</div>';
         $output_html .= '    	<div class="col-5 col-12-xsmall">';
-        $output_html .= '    		<input type="text" name="street" id="info_text_field_driver1_street" value="'.$row['Participant_Address'].'" start_value="'.$row['Participant_Address'].'" database_key = "Participant_Address" placeholder="Street Address" />';
+        $output_html .= '    		<input type="text" name="street" id="info_text_field_driver1_street" value="'.$h($row['Participant_Address']).'" start_value="'.$h($row['Participant_Address']).'" database_key = "Participant_Address" placeholder="Street Address" />';
         $output_html .= '    	</div>';
         $output_html .= '    	<div class="col-3 col-12-xsmall">';
-        $output_html .= '    		<input type="text" name="city" id="info_text_field_driver1_city" value="'.$row['Participant_City'].'" start_value="'.$row['Participant_City'].'" database_key = "Participant_City" placeholder="City" />';
+        $output_html .= '    		<input type="text" name="city" id="info_text_field_driver1_city" value="'.$h($row['Participant_City']).'" start_value="'.$h($row['Participant_City']).'" database_key = "Participant_City" placeholder="City" />';
         $output_html .= '    	</div>';
 		$output_html .= '		<div class="col-2 col-12-xsmall">';
-        $output_html .= '            <select name="state" id="info_select_field_driver1_state" start_value="'.$row['Participant_State'].'" database_key = "Participant_City"style="color:rgba(255, 255, 255, 0.7)";>';
+        $output_html .= '            <select name="state" id="info_select_field_driver1_state" start_value="'.$h($row['Participant_State']).'" database_key = "Participant_State" style="color:rgba(255, 255, 255, 0.7)";>';
         $output_html .= '            	<option value="AL"'.($row['Participant_State']=="AL"?" selected":"").'>AL</option>';
         $output_html .= '            	<option value="AK"'.($row['Participant_State']=="AK"?" selected":"").'>AK</option>';
         $output_html .= '            	<option value="AZ"'.($row['Participant_State']=="AZ"?" selected":"").'>AZ</option>';
@@ -108,18 +116,18 @@ function RenderParticipantInformation() {
         $output_html .= '            </select>								';
         $output_html .= '    	</div>';
 		$output_html .= '		<div class="col-2 col-12-xsmall">';
-        $output_html .= '    		<input type="text" name="zip" id="info_text_field_driver1_zip" value="'.$row['Participant_Zip'].'" start_value="'.$row['Participant_Zip'].'" database_key = "Participant_Zip" placeholder="Zip" />';
+        $output_html .= '    		<input type="text" name="zip" id="info_text_field_driver1_zip" value="'.$h($row['Participant_Zip']).'" start_value="'.$h($row['Participant_Zip']).'" database_key = "Participant_Zip" placeholder="Zip" />';
         $output_html .= '    	</div>';
 		
 
+		$car_information = (json_decode((string)$row['Participant_Car_Info'], true) ?: []) + ['car_year' => '', 'car_color' => '', 'car_make' => '', 'car_model' => ''];
 		if ($row['Participant_Is_NSX']) {
-		    $car_information = json_decode($row['Participant_Car_Info'], true);
-			$generation_info = intval($car_information['car_year']) < 2017 ? 'First_Generation' : 'Second_Generation';
+			$generation_info = intval($car_information['car_year'] ?? 0) < 2017 ? 'First_Generation' : 'Second_Generation';
 		} else {
 			$generation_info = 'Other';
 		}
 
-        $output_html .= '    	<div id ="info_select_field_driver1_is_nsx" start_value="'.$row['Participant_Is_NSX'].'" database_key = "Participant_Is_NSX" class="col-4 col-12-xsmall">';
+        $output_html .= '    	<div id ="info_select_field_driver1_is_nsx" start_value="'.$h($row['Participant_Is_NSX']).'" database_key = "Participant_Is_NSX" class="col-4 col-12-xsmall">';
         $output_html .= '    		<select id="nsx_gen_response_gen_selection_driver1" name="generation_selection_driver1" driver="driver1" start_value="'.$generation_info.'" current_choice="none" style="color:rgba(255, 255, 255, 0.7)";>';
         $output_html .= '            	<option value="First_Generation"'.($generation_info=="First_Generation"?" selected":"").'>First Generation</option>';
         $output_html .= '            	<option value="Second_Generation"'.($generation_info=="Second_Generation"?" selected":"").'>Second Generation</option>';
@@ -131,7 +139,7 @@ function RenderParticipantInformation() {
 		//if ($row['Participant_Is_NSX']) {
 			$output_html .= '		<div id="nsx_gen_response_container_driver1_nsx_year"  class="col-4 col-12-xsmall generation_choice'.($row['Participant_Is_NSX']?' active':'').'">';
 			$output_html .= '			<!-- <input type="text" name="model_year_driver1" id="nsx_gen_response_driver1_nsx_year" value="" placeholder="Year" /> -->';
-			$output_html .= '            <select name="model_year_driver1" id="nsx_gen_select_driver1_nsx_year" start_value="'.$car_information['car_year'].'" database_key = "car_year" style="color:rgba(255, 255, 255, 0.7)";>';
+			$output_html .= '            <select name="model_year_driver1" id="nsx_gen_select_driver1_nsx_year" start_value="'.$h($car_information['car_year'] ?? '').'" database_key = "car_year" style="color:rgba(255, 255, 255, 0.7)";>';
 			$output_html .= '            	<option value="">Year</option>';
 			$output_html .= '            	<option value="1991"'.($car_information['car_year']=="1991"?" selected":"").'>1991</option>';
 			$output_html .= '            	<option value="1992"'.($car_information['car_year']=="1992"?" selected":"").'>1992</option>';
@@ -160,7 +168,7 @@ function RenderParticipantInformation() {
 			$output_html .= '		</div>';
 			$output_html .= '		<div id="nsx_gen_response_container_driver1_nsx_color" class="col-4 col-12-xsmall generation_choice'.($row['Participant_Is_NSX']?' active':'').'">';
 			$output_html .= '			<!--<input type="text" name="model_color_driver1" id="nsx_gen_select_driver1_nsx_color" value="" placeholder="Color" /> -->';
-			$output_html .= '            <select name="model_color_driver1" id="nsx_gen_select_driver1_nsx_color" start_value="'.$car_information['car_color'].'" database_key = "car_color" style="color:rgba(255, 255, 255, 0.7)";>';
+			$output_html .= '            <select name="model_color_driver1" id="nsx_gen_select_driver1_nsx_color" start_value="'.$h($car_information['car_color'] ?? '').'" database_key = "car_color" style="color:rgba(255, 255, 255, 0.7)";>';
 			$output_html .= '            	<option value="">Color</option>';
 			$output_html .= '            	<option value="red"'.($car_information['car_color']=="red"?" selected":"").'>Red</option>';
 			$output_html .= '            	<option value="white"'.($car_information['car_color']=="white"?" selected":"").'>White</option>';
@@ -177,21 +185,22 @@ function RenderParticipantInformation() {
 			$output_html .= '			';
 			$output_html .= '		</div>';
 			
-			$car_information = json_decode($row['Participant_Car_Info'], true);
 			$output_html .= '		<div id="nsx_gen_response_container_driver1_other_make" class="col-3 col-12-xsmall generation_choice'.($row['Participant_Is_NSX']?'':' active').'">';
-			$output_html .= '			<input type="text" name="other_make_driver1" id="nsx_gen_response_driver1_other_make" value="'.$car_information['car_make'].'" start_value="'.$car_information['car_make'].'" database_key = "car_make" placeholder="Make" />';
+			$output_html .= '			<input type="text" name="other_make_driver1" id="nsx_gen_response_driver1_other_make" value="'.$h($car_information['car_make'] ?? '').'" start_value="'.$h($car_information['car_make'] ?? '').'" database_key = "car_make" placeholder="Make" />';
 			$output_html .= '		</div>';
 			$output_html .= '		<div id="nsx_gen_response_container_driver1_other_model" class="col-3 col-12-xsmall generation_choice'.($row['Participant_Is_NSX']?'':' active').'">';
-			$output_html .= '			<input type="text" name="other_model_driver1" id="nsx_gen_response_driver1_other_model" value="'.$car_information['car_model'].'" start_value="'.$car_information['car_model'].'" database_key = "car_model" placeholder="Model" />';
+			$output_html .= '			<input type="text" name="other_model_driver1" id="nsx_gen_response_driver1_other_model" value="'.$h($car_information['car_model'] ?? '').'" start_value="'.$h($car_information['car_model'] ?? '').'" database_key = "car_model" placeholder="Model" />';
 			$output_html .= '		</div>';
 			$output_html .= '		<div id="nsx_gen_response_container_driver1_other_year" class="col-2 col-12-xsmall generation_choice'.($row['Participant_Is_NSX']?'':' active').'">';
-			$output_html .= '			<input type="text" name="other_year_driver1" id="nsx_gen_response_driver1_other_year" value="'.$car_information['car_year'].'" start_value="'.$car_information['car_year'].'" database_key = "car_year" placeholder="Year" />';
+			$output_html .= '			<input type="text" name="other_year_driver1" id="nsx_gen_response_driver1_other_year" value="'.$h($car_information['car_year'] ?? '').'" start_value="'.$h($car_information['car_year'] ?? '').'" database_key = "car_year" placeholder="Year" />';
 			$output_html .= '		</div>';
 
         $output_html .= '    </div>';
 		$output_html .= '</div>		';
 
-		$other_information = json_decode($row['Participant_Events_Attending'], true);
+		$output_html .= RenderEditRegistrationType($event_id, $row);
+
+		$other_information = json_decode((string)$row['Participant_Events_Attending'], true) ?: [];
         $output_html .= RenderParticipantQuestionsAndAnswers($event_id, $other_information);
 		
 		// $output_html .= '			    <div id="event_info_container" class="event_registration_sub_container active">';
@@ -317,6 +326,56 @@ function RenderParticipantInformation() {
 }
 
 /* ************************************************************************ */
+/* Funciton:    RenderEditRegistrationType                                  */
+/* Description: The registrant's registration type (any of the event's      */
+/*              types) and their balance, with a preview of the new balance */
+/*              as the type and pre-pay options change (UpdateEditBalance-  */
+/*              Preview in account.js) - type cost plus checked pre-pay     */
+/*              options, as at registration. Only when the event collects   */
+/*              payments.                                                   */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderEditRegistrationType($event_id, array $participant) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+    $pdo = Create_SQL_PHP_DataObject(DB_NAME);
+    $stmt = $pdo->prepare('SELECT EVENT_Collect_Payments FROM nsx_meetup_events WHERE EVENT_ID = ?');
+    $stmt->execute([(int)$event_id]);
+    if (!$stmt->fetchColumn()) {
+        return '';
+    }
+    $stmt = $pdo->prepare('SELECT REGTYPE_ID, REGTYPE_Name, REGTYPE_Cost, REGTYPE_Enabled FROM nsx_meetup_registration_types WHERE REGTYPE_Event_ID = ? ORDER BY REGTYPE_Name');
+    $stmt->execute([(int)$event_id]);
+    $types = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $current_type = (string)($participant['Participant_Registration_Type'] ?? '');
+    $balance = (int)$participant['Participant_Balance_Due'];
+
+    $output_html  = '<div id="edit_registration_type_container" class="event_registration_sub_container active" current_balance="'.$balance.'">';
+    $output_html .= '  <div class="row gtr-25 gtr-uniform">';
+    $output_html .= '    <div class="col-6 col-12-small">';
+    $output_html .= '      <label for="edit_registration_type">Registration Type</label>';
+    $output_html .= '      <select id="edit_registration_type">';
+    $output_html .= '        <option value="" cost="">- No registration type -</option>';
+    foreach ($types as $type) {
+        $id = (string)(int)$type['REGTYPE_ID'];
+        $output_html .= '<option value="'.$id.'" cost="'.(int)round($type['REGTYPE_Cost'] * 100).'"'.($id === $current_type ? ' selected' : '').'>'
+                       .$h($type['REGTYPE_Name']).' - $'.number_format((float)$type['REGTYPE_Cost'], 2).(empty($type['REGTYPE_Enabled']) ? ' (disabled)' : '').'</option>';
+    }
+    $output_html .= '      </select>';
+    $output_html .= '    </div>';
+    $output_html .= '    <div class="col-6 col-12-small">';
+    $output_html .= '      <label>Balance</label>';
+    $output_html .= '      <p id="edit_balance_preview" class="edit_balance_preview">$'.number_format($balance / 100, 2).'</p>';
+    $output_html .= '    </div>';
+    $output_html .= '  </div>';
+    $output_html .= '  <p id="edit_balance_note" class="edit_balance_note">The balance is the registration type\'s cost plus the checked pre-pay options below. '
+                   .($current_type === '' ? 'This registration has no registration type, so its balance won\'t be recalculated unless you choose one.' : '')
+                   .(!empty($participant['Participant_Balance_Paid']) ? ' This registrant is marked paid.' : '').'</p>';
+    $output_html .= '</div>';
+    return $output_html;
+}
+
+/* ************************************************************************ */
 /* Funciton:    RenderParticipantQuestionsAndAnswers                       	*/
 /* Description: This function renders the event's questions with the        */
 /*              participants current answers. This is for editing.          */
@@ -349,14 +408,17 @@ function RenderParticipantQuestionsAndAnswers ($event_id, $current_selections) {
 	$result = $link->query($question_query);
 	if ($result->num_rows > 0) {
         while($row = $result->fetch_assoc()) {
-            $output_html .= $row['QUESTION_Instruction_Text'];
+            if (!$row['QUESTION_Active']) {
+                continue; // as on the registration form (answers to retired questions are kept when saving)
+            }
+            $answer = (string)($current_selections[$row['QUESTION_Label']] ?? '');
             switch($row['QUESTION_Type']) {
                 case('BOOLEAN'):
-                    $is_checked = ($current_selections[$row['QUESTION_Label']] == "yes") ? " checked" : "";
+                    $is_checked = ($answer == "yes") ? " checked" : "";
                     $output_html .= '<tr>';
                     $output_html .= '    <td>'.$row['QUESTION_Instruction_Text'].'</td>';
                     $output_html .= '    <td id="column_driver1" class="table_driver active">';
-                    $output_html .= '        <input type="checkbox" accounting="'.($row['QUESTION_Add_To_Basket']?"yes":"no").'" cost="'.$row['QUESTION_Amount'].'" id="info_checkbox_field_driver1_'.$row['QUESTION_Label'].'" driver="driver1" key="'.$row['QUESTION_Label'].'" start_value="'.$current_selections[$row['QUESTION_Label']].'" name="driver1_'.$row['QUESTION_Label'].'" '.$is_checked.'>';
+                    $output_html .= '        <input type="checkbox" accounting="'.($row['QUESTION_Add_To_Basket']?"yes":"no").'" cost="'.$row['QUESTION_Amount'].'" id="info_checkbox_field_driver1_'.$row['QUESTION_Label'].'" driver="driver1" key="'.$row['QUESTION_Label'].'" start_value="'.htmlspecialchars($answer, ENT_QUOTES).'" name=""driver1_'.$row['QUESTION_Label'].'" '.$is_checked.'>';
                     $output_html .= '        <label for="info_checkbox_field_driver1_'.$row['QUESTION_Label'].'"></label>';
                     $output_html .= '    </td>';
                     $output_html .= '</tr>    ';
@@ -391,10 +453,11 @@ function RenderEditSelectQuestion($data, $current_selections) {
 
     /* Driver One */
     $output_html .= '    <td id="question_driver1" class="table_driver active">';
-    $output_html .= '        <select id="info_question_select_field_driver1_'.$data['QUESTION_Label'].'" driver="driver1" key="'.$data['QUESTION_Label'].'" name="driver1_'.$data['QUESTION_Label'].'" start_value="'.$current_selections[$data['QUESTION_Label']].'" desc="'.$data['QUESTION_Description'].'">';
+    $output_html .= '        <select id="info_question_select_field_driver1_'.$data['QUESTION_Label'].'" driver="driver1" key="'.$data['QUESTION_Label'].'" name="driver1_'.$data['QUESTION_Label'].'" start_value="'.htmlspecialchars((string)($current_selections[$data['QUESTION_Label']] ?? ''), ENT_QUOTES).'" desc=""'.$data['QUESTION_Description'].'">';
     $output_html .= '            <option value="" disabled >'.$data['QUESTION_Select_Default_Text'].'</option>';
     foreach($choices as $key => $value) {
-        $selected_text = ($value == $current_selections[$data['QUESTION_Label']])?" selected":"";
+        $current = (string)($current_selections[$data['QUESTION_Label']] ?? '');
+        $selected_text = ((string)$key === $current || $value === $current) ? " selected" : "";  // stored as the key (older ones as the text)
         $output_html .= '<option value="'.$key.'"'.$selected_text.'>'.$value.'</option>';
     }
     $output_html .= '        </select>';
