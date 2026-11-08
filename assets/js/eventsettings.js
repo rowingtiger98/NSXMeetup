@@ -27,6 +27,9 @@ function RenderEditEventSettings(event_id, tool) {
                     $(".payment_qr_upload").on('change', UploadPaymentQRCode);
                     $(".payment_qr_remove_button").on('click', RemovePaymentQRCode);
                     $(".payment_test_link").on('click', OpenPaymentTestLink);
+                    $("#processing_fee_toggle").on('change', function() {
+                        $("#event_setting_EVENT_Processing_Percentage").prop('disabled', !this.checked);
+                    });
                 }
             } else {
                 $("#main_content_container").html('<p class="event_settings_error">' + EscapeEventSettingsText(results[1].join(' ')) + '</p>');
@@ -56,9 +59,20 @@ function SaveEventSettings(event) {
         tool: form.attr('tool'),
         csrf_token: form.attr('csrf_token')
     };
+    // The processing fee needs a percentage while its switch is on
+    var fee_toggle = document.getElementById('processing_fee_toggle');
+    if (fee_toggle && fee_toggle.checked && $("#event_setting_EVENT_Collect_Payments").is(':checked') && !(parseFloat($("#event_setting_EVENT_Processing_Percentage").val()) > 0)) {
+        ShowEventSettingsMessages(['Enter the processing fee percentage, or turn the processing fee off.'], true);
+        return;
+    }
+
     form.find('[db_key]').each(function() {
         var key = 'settings[' + $(this).attr('db_key') + ']';
-        data[key] = (this.type === 'checkbox') ? (this.checked ? '1' : '0') : $(this).val();
+        if (this.disabled) {
+            data[key] = ''; // e.g. the processing fee percentage while its switch is off - saved as no fee
+        } else {
+            data[key] = (this.type === 'checkbox') ? (this.checked ? '1' : '0') : $(this).val();
+        }
     });
 
     var button_text = button.text();

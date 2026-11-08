@@ -92,8 +92,8 @@ function EventSettingsFields($tool) {
                                                       .'When it\'s on, at least one registration type must be enabled. If none is when you save, the event\'s first type '
                                                       .'(every event starts with a disabled "'.DEFAULT_REGTYPE_NAME.'" type at $0.00) is enabled for you. '
                                                       .'Then go to Add / Edit / Delete Registration Types to set its cost, and add more types if you need them.'],
-            'EVENT_Processing_Percentage' => ['label' => 'Processing Fee (%)', 'type' => 'percent', 'null_ok' => true,
-                                              'help' => 'Service fee added to the total due, as a percentage. Leave blank for none.'],
+            'EVENT_Processing_Percentage' => ['label' => 'Processing Fee (%)', 'type' => 'percent', 'null_ok' => true, 'rendered_by' => 'payment_methods',
+                                              'help' => 'The percentage added to each registration\'s total, e.g. 3 or 2.9.'],
         ],
     ];
 
@@ -177,6 +177,7 @@ function RenderPaymentMethodOptions($event, $separator) {
     $hidden = empty($event['EVENT_Collect_Payments']) ? ' style="display:none;"' : '';
 
     $output_html  = '<div id="payment_methods" class="col-12 payment_methods"'.$hidden.'>';
+    $output_html .= RenderProcessingFeeOption($event);
     $output_html .= '   <p><span class="payment_methods_label">Payment Methods:</span> Turn on each way registrants can pay, then set up its options. Registrants see a section on the checkout page for each one that\'s on.</p>';
     foreach (PAYMENT_METHODS as $method => $info) {
         $toggle = 'event_setting_'.$info['column'];
@@ -230,6 +231,38 @@ function RenderPaymentMethodOptions($event, $separator) {
     }
     $output_html .= '</div>';
     $output_html .= str_replace('class="col-12 col-12-xsmall"', 'class="col-12 col-12-xsmall payment_methods_separator"'.$hidden, $separator);
+    return $output_html;
+}
+
+/* ************************************************************************ */
+/* Function:    RenderProcessingFeeOption                                   */
+/* Description: The Processing Fee at the top of the payment section: an    */
+/*              on/off switch that opens the percentage. It's on when the   */
+/*              event has a percentage; turned off, the percentage input is */
+/*              disabled and saves blank (eventsettings.js), so no fee.     */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderProcessingFeeOption(array $event) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+    $field = EventSettingsFields('payments')['Fees & Payments']['EVENT_Processing_Percentage'];
+    $percent = $event['EVENT_Processing_Percentage'];
+    $on = ($percent !== null && (float)$percent > 0);
+    $value = $on ? rtrim(rtrim(number_format((float)$percent, 2, '.', ''), '0'), '.') : '';
+
+    $output_html  = '   <p><span class="payment_methods_label">Processing Fee:</span> Add a percentage to every registration\'s total to cover payment processing costs. '
+                   .'It applies to every payment method and shows as its own line on the checkout page.</p>';
+    $output_html .= '   <div class="payment_method processing_fee_option">';
+    $output_html .= '       <div class="payment_method_header">';
+    $output_html .= '           <span class="payment_method_name">Charge a Processing Fee</span>';
+    $output_html .= '           <input type="checkbox" id="processing_fee_toggle" class="payment_method_toggle" drawer="processing_fee_drawer" aria-controls="processing_fee_drawer" aria-expanded="'.($on ? 'true' : 'false').'"'.($on ? ' checked' : '').'>';
+    $output_html .= '           <label for="processing_fee_toggle" class="payment_method_switch" title="Turn the processing fee on or off"><span class="payment_method_off">Off</span><span class="payment_method_on">On</span></label>';
+    $output_html .= '       </div>';
+    $output_html .= '       <div id="processing_fee_drawer" class="payment_method_drawer"'.($on ? '' : ' style="display:none;"').'>';
+    $output_html .= '           <label for="event_setting_EVENT_Processing_Percentage" class="payment_method_field_label">'.$h($field['label']).'</label>';
+    $output_html .= '           <input type="number" id="event_setting_EVENT_Processing_Percentage" db_key="EVENT_Processing_Percentage" value="'.$h($value).'" min="0.01" max="100" step="0.01" placeholder="3"'.($on ? '' : ' disabled').' />';
+    $output_html .= '           <p class="payment_method_field_help">'.$h($field['help']).'</p>';
+    $output_html .= '       </div>';
+    $output_html .= '   </div>';
     return $output_html;
 }
 
@@ -410,6 +443,9 @@ function SaveEventSettings() {
                         $errors[] = $label.($field['type'] === 'percent' ? ' must be a number from 0 to 100.' : ' must be a number of 0 or more.');
                     }
                     $values[$column] = round((float)$raw, 2);
+                    if ($column === 'EVENT_Processing_Percentage' && $values[$column] == 0) {
+                        $values[$column] = null; // 0% is no fee
+                    }
                     break;
 
                 case 'emails':

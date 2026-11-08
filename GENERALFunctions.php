@@ -307,8 +307,9 @@ function CreateConfirmationPageAttendColumnnsObject($event_id) {
 /*              render the payment due information should there be any.     */
 /*              When driver one chose a pay-later method at checkout        */
 /*              (Participant_Payment_Method: Venmo, PayPal) it shows that   */
-/*              method's account and instructions, without the credit card  */
-/*              fee. $send_email - also email it to driver one.             */
+/*              method's account and instructions. The processing fee       */
+/*              applies to every method. $send_email - also email it to     */
+/*              driver one.                                                 */
 /* Returns:     Nothing                                        				*/
 /* ************************************************************************ */
 function RenderPaymentInformation($driver1, $driver2, $event_id, $send_email = true) {
@@ -354,11 +355,12 @@ function RenderPaymentInformation($driver1, $driver2, $event_id, $send_email = t
             $total_due = $total_due + $driver2_total;            
         }
 
-        if ($row['EVENT_Processing_Percentage'] > 0 && $pay_later === '') {  // the card fee doesn't apply to Venmo / PayPal
-            $service_fee = round(($total_due * ($row['EVENT_Processing_Percentage']/100)), 2);
+        // The processing fee applies to every payment method (same math as the checkout page)
+        $service_fee = ProcessingFeeCents((int)round($total_due * 100), $row['EVENT_Processing_Percentage']) / 100;
+        if ($service_fee > 0) {
             $charges_html .= '<tr>';
-            $charges_html .= '<td>Merchant Services for Credit Card Transaction (not a part of NSXMeetup.com):</td>';
-            $charges_html .= '<td style="text-align:right;">$'.$service_fee.'</td>';
+            $charges_html .= '<td>Processing Fee ('.FormatPercent($row['EVENT_Processing_Percentage']).'):</td>';
+            $charges_html .= '<td style="text-align:right;">$'.number_format($service_fee, 2).'</td>';
             $charges_html .= '</tr>';
             $total_due = $total_due + $service_fee;                    
         }

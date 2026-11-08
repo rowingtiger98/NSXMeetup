@@ -158,3 +158,25 @@ function PaymentQRCodePath(array $event, $method) {
     }
     return $path;
 }
+
+/* ************************************************************************ */
+/* Function:    ProcessingFeeCents                                          */
+/* Description: The processing fee on a total (EVENT_Processing_Percentage, */
+/*              blank or 0 for none). It applies to every payment method -  */
+/*              used by the checkout page and the confirmation, so they     */
+/*              always agree.                                               */
+/* Inputs:      $subtotal_cents, $percent.                                  */
+/* Returns:     int - cents                                                 */
+/* ************************************************************************ */
+function ProcessingFeeCents($subtotal_cents, $percent) {
+    $percent = (float)$percent;
+    if ($percent <= 0 || $subtotal_cents <= 0) {
+        return 0;
+    }
+    return (int)round($subtotal_cents * $percent / 100);
+}
+
+/* The percentage for labels, e.g. 3 -> "3%", 2.90 -> "2.9%" */
+function FormatPercent($percent) {
+    return rtrim(rtrim(number_format((float)$percent, 2, '.', ''), '0'), '.').'%';
+}

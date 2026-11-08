@@ -1283,3 +1283,9 @@ input[type="checkbox"].payment_method_toggle:checked + label.payment_method_swit
 .payment_method_drawer > :last-child {
 	margin-bottom: 0 !important;
 }
+.checkout_order_table .checkout_fee td {
+	font-size: 0.9em;
+	font-weight: 400;
+	color: inherit;  /* not the Total Due's bold yellow */
+	border-top: 1px solid rgba(255, 255, 255, 0.25);
+}

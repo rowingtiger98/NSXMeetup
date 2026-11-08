@@ -62,7 +62,8 @@ $payment_methods = $event ? EnabledPaymentMethods($event) : [];
 
 /* The registrants entered from this browser session (RememberCheckoutParticipant in GENERALFunctions.php) */
 $registrants = [];
-$total_due = 0;  // cents
+$total_due = 0;  // cents - registrations still owed, plus the processing fee
+$processing_fee = 0;  // cents
 $checkout_ids = $event ? array_map('intval', $_SESSION['checkout_participants'][(int)$event['EVENT_ID']] ?? []) : [];
 if ($checkout_ids) {
     $pdo = Create_SQL_PHP_DataObject(DB_NAME);
@@ -93,6 +94,9 @@ if ($checkout_ids) {
             $total_due += (int)$registrant['Participant_Balance_Due'];
         }
     }
+    // The processing fee applies to every payment method
+    $processing_fee = ProcessingFeeCents($total_due, $event['EVENT_Processing_Percentage']);
+    $total_due += $processing_fee;
 }
 $format_cents = function ($cents) { return '$'.number_format($cents / 100, 2); };
 
@@ -324,6 +328,9 @@ function RemoveUnpaidCheckoutParticipants(array $event) {
                                     <?php } ?>
                                     </tbody>
                                     <tfoot>
+                                        <?php if ($processing_fee > 0) { ?>
+                                            <tr class="checkout_fee"><td>Processing Fee (<?php echo $h(FormatPercent($event['EVENT_Processing_Percentage'])); ?>)</td><td class="checkout_amount"><?php echo $format_cents($processing_fee); ?></td></tr>
+                                        <?php } ?>
                                         <tr><td>Total Due</td><td class="checkout_amount"><?php echo $format_cents($total_due); ?></td></tr>
                                     </tfoot>
                                 </table>
