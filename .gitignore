@@ -22,3 +22,6 @@ Thumbs.db
 
 # One-off SQL to run by hand in phpMyAdmin
 /sql/
+
+# Composer packages (the Stripe PHP library) - installed on the server, not kept in git
+/vendor/
