@@ -305,9 +305,13 @@ function CreateConfirmationPageAttendColumnnsObject($event_id) {
 /* Funciton:    RenderPaymentInformation                              	    */
 /* Description: This function uses the driver and event information to      */
 /*              render the payment due information should there be any.     */
+/*              When driver one chose a pay-later method at checkout        */
+/*              (Participant_Payment_Method: Venmo, PayPal) it shows that   */
+/*              method's account and instructions, without the credit card  */
+/*              fee. $send_email - also email it to driver one.             */
 /* Returns:     Nothing                                        				*/
 /* ************************************************************************ */
-function RenderPaymentInformation($driver1, $driver2, $event_id) {
+function RenderPaymentInformation($driver1, $driver2, $event_id, $send_email = true) {
 	$conn = connectDB('kirbypar_nsx_meetup');
 	$query = sprintf("SELECT * from `nsx_meetup_events` WHERE `Event_ID`= '%s'", $event_id);
 	$result = $conn->query($query);
@@ -315,56 +319,74 @@ function RenderPaymentInformation($driver1, $driver2, $event_id) {
 	if($result->num_rows == 1) {
         $row = $result->fetch_assoc();
 
-        if ($row['EVENT_Payment_Instructions'] != '') {
+        $driver1_query = sprintf("SELECT * from `nsx_meetup_participants` WHERE `Participant_ID`=%d", $driver1);
+        $driver1_result = $conn->query($driver1_query);
+        $driver1_row = $driver1_result->fetch_assoc();
+        $driver2_row = null;
+        if ($driver2 != '') {
+            $driver2_query = sprintf("SELECT * from `nsx_meetup_participants` WHERE `Participant_ID`=%d", $driver2);
+            $driver2_result = $conn->query($driver2_query);
+            $driver2_row = $driver2_result->fetch_assoc();
+        }
+
+        // The pay-later method (Venmo, PayPal) driver one agreed to at checkout, if any
+        $pay_later = (string)($driver1_row['Participant_Payment_Method'] ?? '');
+        if (!isset(HANDLE_PAYMENT_METHODS[$pay_later])) {
+            $pay_later = '';
+        }
+
+        /* Charges - worked out first, since the pay-later instructions show the total */
+        $charges_html = '<table><tbody>';
+        $driver1_total = ($driver1_row['Participant_Balance_Due'] / 100);
+        $total_due =  $total_due + $driver1_total;
+   
+        $charges_html .= '<tr>';
+        $charges_html .= '<td>'.$driver1_row['Participant_Name'].'\'s Amount owned based on selected events attending:</td>';
+        $charges_html .= '<td style="text-align:right;">$'.number_format($driver1_total, 2).'</td>';
+        $charges_html .= '</tr>';
+
+        if ($driver2_row) {
+            $driver2_total = ($driver2_row['Participant_Balance_Due'] / 100);
+            $charges_html .= '<tr>';
+            $charges_html .= '<td>'.$driver2_row['Participant_Name'].'\'s Amount owned based on selected events attending:</td>';
+            $charges_html .= '<td style="text-align:right;">$'.number_format($driver2_total, 2).'</td>';
+            $charges_html .= '</tr>';
+            $total_due = $total_due + $driver2_total;            
+        }
+
+        if ($row['EVENT_Processing_Percentage'] > 0 && $pay_later === '') {  // the card fee doesn't apply to Venmo / PayPal
+            $service_fee = round(($total_due * ($row['EVENT_Processing_Percentage']/100)), 2);
+            $charges_html .= '<tr>';
+            $charges_html .= '<td>Merchant Services for Credit Card Transaction (not a part of NSXMeetup.com):</td>';
+            $charges_html .= '<td style="text-align:right;">$'.$service_fee.'</td>';
+            $charges_html .= '</tr>';
+            $total_due = $total_due + $service_fee;                    
+        }
+
+        $charges_html .= '<tr>';
+        $charges_html .= '<td style="color:#ffcc00;">Total Due for the event</td>';
+        $charges_html .= '<td style="text-align:right;color:#ffcc00;font-weight:700;">$'.number_format($total_due, 2).'</td>';
+        $charges_html .= '</tr>';
+        $charges_html .= '</tbody></table>'; 
+
+        /* Payment instructions */
+        if ($pay_later !== '') {
             $output_html = '<h3>Payment Instructions</h3>';
-            $output_html .= $row['EVENT_Payment_Instructions'];
+            $output_html .= RenderPayLaterInstructions($pay_later, $row, array_filter([$driver1_row, $driver2_row]), (int)round($total_due * 100));
+            $output_html .= '<h3>Charges Information</h3>';
+        } elseif ($row['EVENT_PayPal_Description'] != '') {
+            $output_html = '<h3>Payment Instructions</h3>';
+            $output_html .= $row['EVENT_PayPal_Description'];
             $output_html .= '<br>';
             $output_html .= '<h3>Charges Information</h3>';
         } else {
             $output_html = '<h3>Charges Information</h3>';
         }
-        
-        $output_html .= '<table><tbody>';
-        $driver1_query = sprintf("SELECT * from `nsx_meetup_participants` WHERE `Participant_ID`=%d", $driver1);
-        $driver1_result = $conn->query($driver1_query);
-        $driver1_row = $driver1_result->fetch_assoc();
-        $driver1_total = ($driver1_row['Participant_Balance_Due'] / 100);
-        $total_due =  $total_due + $driver1_total;
-   
-        $output_html .= '<tr>';
-        $output_html .= '<td>'.$driver1_row['Participant_Name'].'\'s Amount owned based on selected events attending:</td>';
-        $output_html .= '<td style="text-align:right;">$'.number_format($driver1_total, 2).'</td>';
-        $output_html .= '</tr>';
-       
+        $output_html .= $charges_html;
 
-        if ($driver2 != '') {
-            $driver2_query = sprintf("SELECT * from `nsx_meetup_participants` WHERE `Participant_ID`=%d", $driver2);
-            $driver2_result = $conn->query($driver2_query);
-            $driver2_row = $driver2_result->fetch_assoc();
-            $driver2_total = ($driver2_row['Participant_Balance_Due'] / 100);
-            $output_html .= '<tr>';
-            $output_html .= '<td>'.$driver2_row['Participant_Name'].'\'s Amount owned based on selected events attending:</td>';
-            $output_html .= '<td style="text-align:right;">$'.number_format($driver2_total, 2).'</td>';
-            $output_html .= '</tr>';
-            $total_due = $total_due + $driver2_total;            
+        if ($send_email) {
+            SendRegistrationPaymentInformation($driver1_row['Participant_Email'], $output_html);
         }
-
-        if ($row['EVENT_Processing_Percentage'] > 0) {
-            $service_fee = round(($total_due * ($row['EVENT_Processing_Percentage']/100)), 2);
-            $output_html .= '<tr>';
-            $output_html .= '<td>Merchant Services for Credit Card Transaction (not a part of NSXMeetup.com):</td>';
-            $output_html .= '<td style="text-align:right;">$'.$service_fee.'</td>';
-            $output_html .= '</tr>';
-            $total_due = $total_due + $service_fee;                    
-        }
-
-        $output_html .= '<tr>';
-        $output_html .= '<td style="color:#ffcc00;">Total Due for the event</td>';
-        $output_html .= '<td style="text-align:right;color:#ffcc00;font-weight:700;">$'.number_format($total_due, 2).'</td>';
-        $output_html .= '</tr>';
-        $output_html .= '</tbody></table>'; 
-
-        SendRegistrationPaymentInformation($driver1_row['Participant_Email'], $output_html);
 
     } else {
         $output_html = 'The event with event ID = '.$event_id.' is either not found or has duplicate database information';
@@ -377,19 +399,98 @@ function RenderPaymentInformation($driver1, $driver2, $event_id) {
 }
 
 /* ************************************************************************ */
+/* Funciton:    RenderPayLaterInstructions                             	    */
+/* Description: How to pay with the method chosen at checkout (Venmo,       */
+/*              PayPal): the amount and account, the suggested payment note,*/
+/*              the admins' instructions and an Open link - beside the QR   */
+/*              code when there is one (4u image / 8u details, each 12u on  */
+/*              small screens). Image and link URLs are absolute so they    */
+/*              also work in the emailed copy.                              */
+/* Inputs:      $method, $event - the event row, $participants - their rows,*/
+/*              $cents - the total due.                                     */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderPayLaterInstructions($method, array $event, array $participants, $cents) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+    $info = HANDLE_PAYMENT_METHODS[$method];
+    $name = PAYMENT_METHODS[$method]['name'];
+    $handle = (string)$event[$info['handle_column']];
+    $account = $info['handle_prefix'].$handle;
+
+    $names = [];
+    foreach ($participants as $participant) {
+        if (empty($participant['Participant_Balance_Paid'])) {
+            $names[] = $participant['Participant_Name'];
+        }
+    }
+    $note = $event['EVENT_Name'].' - '.implode(', ', $names);
+
+    $instructions = trim((string)$event[$info['description_column']]);
+    if ($instructions === '') {
+        $instructions = nl2br($h($info['default_description']));
+    } elseif (!$info['description_html']) {
+        $instructions = nl2br($h($instructions));
+    }
+
+    $details  = '<p>Send <b>$'.$h(number_format($cents / 100, 2)).'</b> to <b>'.$h($account).'</b> on '.$h($name).'.</p>';
+    $details .= '<p class="checkout_handle_note_label">Payment note:</p>';
+    $details .= '<p class="checkout_handle_note">'.$h($note).'</p>';
+    $details .= '<div class="checkout_instructions">'.$instructions;
+    $details .= '<p class="checkout_handle_link"><a href="'.$h(HandlePaymentLink($method, $handle, $cents, $note)).'" target="_blank" rel="noopener">Open '.$h($name).' to send your payment</a></p></div>';
+
+    $qr_code = PaymentQRCodePath($event, $method);
+    if ($qr_code === '') {
+        return '<div class="pay_later_instructions">'.$details.'</div>';
+    }
+    $output_html  = '<div class="row gtr-uniform pay_later_instructions">';
+    $output_html .= '  <div class="col-4 col-12-small checkout_handle_qr"><img src="'.$h(AbsoluteSiteURL($qr_code)).'" alt="'.$h($name).' QR code for '.$h($account).'" /><p>Scan with your phone\'s camera or '.$h($info['app_name']).'</p></div>';
+    $output_html .= '  <div class="col-8 col-12-small">'.$details.'</div>';
+    $output_html .= '</div>';
+    return $output_html;
+}
+
+/* ************************************************************************ */
+/* Funciton:    AbsoluteSiteURL                                        	    */
+/* Description: A full URL (https://host/site/...) for a site-relative path,*/
+/*              for links and images that have to work in an email too.     */
+/*              Falls back to the site-relative URL without a host.         */
+/* ************************************************************************ */
+function AbsoluteSiteURL($path) {
+    $url = app_url($path);
+    if (empty($_SERVER['HTTP_HOST'])) {
+        return $url;
+    }
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    return $scheme.'://'.$_SERVER['HTTP_HOST'].'/'.ltrim($url, '/');
+}
+
+/* ************************************************************************ */
 /* Funciton:    CreateConfirmationPage                                 	    */
 /* Description: This function sends the message from the web page.          */
 /* Returns:     Nothing                                        				*/
 /* ************************************************************************ */
 function  CreateConfirmationPage() {
-	$driver1 = $_POST['driver1'];
-	$driver2 = $_POST['driver2'];
-    $event_id = $_POST['event_id'];
-    $collect_payment = $_POST['collect_payment'];
-    $backbutton = $_POST['backbutton'];
-    $sold_out = $_POST['sold_out'];
+	// Only the registration page (backbutton 'no') emails the confirmation - not the admins' participant view
+	echo json_encode(BuildConfirmationPage($_POST['driver1'], $_POST['driver2'], $_POST['event_id'], $_POST['collect_payment'], $_POST['backbutton'], $_POST['sold_out'], ($_POST['backbutton'] ?? '') === 'no'));
+}
 
+/* ************************************************************************ */
+/* Funciton:    BuildConfirmationPage                                  	    */
+/* Description: The registration (or wait list) confirmation for driver one */
+/*              and driver two: payment information, then each person's     */
+/*              details and attendance choices. Used by                     */
+/*              CreateConfirmationPage (registration page) and by the       */
+/*              checkout page after Complete Registration.                  */
+/*              $send_email - a copy is emailed to driver one              */
+/*              (SendRegistrationConfirmationEmail); pass false when        */
+/*              showing the page again. Ends with a button back to the      */
+/*              event's home page (not on the admins' view).                */
+/* Returns:     [header HTML, confirmation HTML]                            */
+/* ************************************************************************ */
+function BuildConfirmationPage($driver1, $driver2, $event_id, $collect_payment, $backbutton, $sold_out, $send_email = true) {
 	$result = array();
+    $payment_html = '';
+    $people = [];  // driver one and two's rows, for the emailed copy
 	
     $page_header = ($sold_out == 'yes') ? '<h2>WAIT LIST CONFIRMATION</h2>' : '<h2>REGISTRATION CONFIRMATION</h2>';
 
@@ -421,7 +522,8 @@ function  CreateConfirmationPage() {
             $output_html .= '      <span class="driver_name">Payment Information</span>';
             $output_html .= '     </div>';
             $output_html .= '     <div class="col-12">';
-            $output_html .=         RenderPaymentInformation($driver1, $driver2, $event_id);
+            $payment_html = RenderPaymentInformation($driver1, $driver2, $event_id, false);
+            $output_html .=         $payment_html;
             $output_html .= '     </div>';        
             $output_html .= '   </div>';
             $output_html .= '</div>';
@@ -442,6 +544,7 @@ function  CreateConfirmationPage() {
     $result = $conn->query($query);
     if($result->num_rows > 0) {
         $row = $result->fetch_assoc();
+        $people[] = $row;
             $output_html .= '<div class="row gtr-uniform">';
             $output_html .= '  <div class="col-12">';
             $output_html .= '   <span class="driver_name">'.$row['Participant_Name'].' - '.$row['Participant_Role'].'';
@@ -521,6 +624,7 @@ function  CreateConfirmationPage() {
 	    $result = $conn->query($query);
 	    if($result->num_rows > 0) {
           $row = $result->fetch_assoc();
+          $people[] = $row;
 	          $output_html .= '<div class="row gtr-uniform">';
 	    	  $output_html .= '  <div class="col-12">';
 	    	  $output_html .= '   <span class="driver_name">'.$row['Participant_Name'].' - '.$row['Participant_Role'].'';
@@ -592,9 +696,114 @@ function  CreateConfirmationPage() {
 	    $output_html .= '</div>';			
 	} 	
 	
-    $results[] = $page_header;
-	$results[] = $output_html;
-	echo json_encode($results);
+	$event = GetEventInformationFromID((int)$event_id);
+	if ($backbutton == 'no' && !empty($event)) {
+	    $output_html .= RenderEventHomeButton($event);
+	}
+	if ($send_email && !empty($event) && $people) {
+	    SendRegistrationConfirmationEmail($event, $people, $attend_columns, $sold_out == 'yes', $collect_payment == 'yes' ? $payment_html : '');
+	}
+
+	return [$page_header, $output_html];
+}
+
+/* ************************************************************************ */
+/* Funciton:    RenderEventHomeButton                                  	    */
+/* Description: The button at the bottom of the confirmation that goes back */
+/*              to the event's home page (events/<directory>/).             */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderEventHomeButton(array $event) {
+    $directory = (string)$event['EVENT_Directory'];
+    $link = preg_match('/^[A-Za-z0-9_-]+$/', $directory) ? 'events/'.$directory.'/' : 'index.php';
+    return '<div class="confirmation_home_button"><a href="'.htmlspecialchars($link, ENT_QUOTES).'" class="button primary fit">Back to the '
+          .htmlspecialchars((string)$event['EVENT_Name'], ENT_QUOTES).' Home Page</a></div>';
+}
+
+/* ************************************************************************ */
+/* Funciton:    SendRegistrationConfirmationEmail                      	    */
+/* Description: Emails driver one a copy of the registration (or wait list) */
+/*              confirmation from no-reply@nsxmeetup.com: the payment       */
+/*              information, then each person's details and attendance      */
+/*              choices, laid out as plain tables for email programs.       */
+/* Inputs:      $event - event row, $people - driver one (and two) rows,    */
+/*              $attend_columns - question label => confirmation text,      */
+/*              $wait_list, $payment_html - RenderPaymentInformation's HTML */
+/*              ('' when the event doesn't collect payments).               */
+/* ************************************************************************ */
+function SendRegistrationConfirmationEmail(array $event, array $people, array $attend_columns, $wait_list, $payment_html) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+    $to = trim((string)$people[0]['Participant_Email']);
+    if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+        error_log('SendRegistrationConfirmationEmail: no valid email address for participant '.$people[0]['Participant_ID']);
+        return;
+    }
+    $title = $event['EVENT_Name'].($wait_list ? ' Wait List Confirmation' : ' Registration Confirmation');
+    $cell = 'style="padding:4px 8px;border-bottom:1px solid #ddd;"';
+
+    $body  = '<html><body style="font-family:Arial,Helvetica,sans-serif;color:#222;max-width:700px;">';
+    $body .= '<h2>'.$h($title).'</h2>';
+
+    $pay_later = (string)($people[0]['Participant_Payment_Method'] ?? '');
+    if (isset(PAYMENT_METHODS[$pay_later])) {
+        $body .= '<p><b>Thank you! Your registration is saved, and you\'ve agreed to pay with '.$h(PAYMENT_METHODS[$pay_later]['name']).'. '
+                .'Your registration will be complete once the event organizers receive and confirm your payment.</b></p>';
+    }
+    if ($wait_list) {
+        $body .= '<h3>Payment Information</h3><p>If a spot opens up in the event, the organizers will reach out to you at this email address to discuss payment. '
+                .'There is no payment required to be on the waiting list.</p>';
+    } elseif ($payment_html !== '') {
+        // The page's yellow (#ffcc00) is hard to read on an email's white background
+        $body .= '<h3>Payment Information</h3>'.str_ireplace('#ffcc00', '#a07800', $payment_html);
+    }
+
+    foreach ($people as $person) {
+        $car = json_decode((string)$person['Participant_Car_Info'], true) ?: [];
+        if (!empty($person['Participant_Is_NSX'])) {
+            $car_text = trim(($car['car_year'] ?? '').' '.ucfirst($car['car_color'] ?? '').' NSX');
+        } else {
+            $car_text = trim(($car['car_year'] ?? '').' '.ucfirst($car['car_make'] ?? '').' '.ucfirst($car['car_model'] ?? ''));
+        }
+        $body .= '<h3 style="margin-top:24px;">'.$h($person['Participant_Name']).' - '.$h($person['Participant_Role']).'</h3>';
+        $body .= '<table style="border-collapse:collapse;">';
+        foreach ([
+            'Displayed Name' => $person['Participant_Display_Name'],
+            'Car'            => $car_text,
+            'Address'        => trim($person['Participant_Address'].', '.$person['Participant_City'].' '.$person['Participant_State'].' '.$person['Participant_Zip'], ', '),
+            'Email'          => $person['Participant_Email'],
+            'Cell'           => $person['Participant_Cell'],
+        ] as $label => $value) {
+            $body .= '<tr><td '.$cell.'><b>'.$h($label).'</b></td><td '.$cell.'>'.$h($value).'</td></tr>';
+        }
+        $body .= '</table>';
+
+        $choices = json_decode((string)$person['Participant_Events_Attending'], true) ?: [];
+        if ($choices) {
+            $body .= '<h4>Attendance Selections</h4><table style="border-collapse:collapse;">';
+            foreach ($choices as $key => $value) {
+                $body .= '<tr><td '.$cell.'>'.$h($attend_columns[$key] ?? $key).'</td><td '.$cell.'>'.$h($value).'</td></tr>';
+            }
+            $body .= '</table>';
+        }
+    }
+
+    $directory = (string)$event['EVENT_Directory'];
+    if (preg_match('/^[A-Za-z0-9_-]+$/', $directory)) {
+        $body .= '<p style="margin-top:24px;"><a href="'.$h(AbsoluteSiteURL('events/'.$directory.'/')).'">Visit the '.$h($event['EVENT_Name']).' home page</a></p>';
+    }
+    $body .= '<p style="font-size:12px;color:#777;margin-top:24px;">This is an automated message from NSXMeetup.com. Please don\'t reply to this email - '
+            .'contact general.information@nsxmeetup.com with any questions.</p>';
+    $body .= '</body></html>';
+
+    $subject = str_replace(["\r", "\n"], ' ', $title);
+    $headers = 'MIME-Version: 1.0'."\r\n"
+             .'From: NSX Meetup <no-reply@nsxmeetup.com>'."\r\n"
+             .'Reply-To: general.information@nsxmeetup.com'."\r\n"
+             .'Content-Type: text/html; charset=UTF-8'."\r\n"
+             .'X-Mailer: PHP/'.phpversion();
+    if (!mail($to, '=?UTF-8?B?'.base64_encode($subject).'?=', $body, $headers, '-fno-reply@nsxmeetup.com')) {
+        error_log('SendRegistrationConfirmationEmail: mail() failed for '.$to);
+    }
 }
 
 

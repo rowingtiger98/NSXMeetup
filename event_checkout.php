@@ -42,6 +42,19 @@ if ($event && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') 
     exit();
 }
 
+/* Complete Registration: the registrants agree to pay later with the chosen method (Venmo, PayPal).
+   It's recorded on them, and the page then shows the registration confirmation (emailing the payment
+   information that first time only). */
+if ($event && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'complete_registration') {
+    $method = $_POST['payment_method'] ?? '';
+    if (app_csrf_valid($_POST['csrf_token'] ?? null) && is_string($method) && PledgeablePaymentMethod($event, $method)) {
+        RecordCheckoutPaymentMethod($event, $method);
+        $_SESSION['checkout_confirmation_email'][(int)$event['EVENT_ID']] = true;
+    }
+    header('Location: event_checkout.php?event_id='.(int)$event['EVENT_ID']);
+    exit();
+}
+
 $event_name = $event ? $event['EVENT_Name'] : 'Event';
 $directory = $event ? (string)$event['EVENT_Directory'] : '';
 $home_link = preg_match('/^[A-Za-z0-9_-]+$/', $directory) ? 'events/'.$directory.'/' : 'index.php';
@@ -54,7 +67,7 @@ $checkout_ids = $event ? array_map('intval', $_SESSION['checkout_participants'][
 if ($checkout_ids) {
     $pdo = Create_SQL_PHP_DataObject(DB_NAME);
     $placeholders = implode(',', array_fill(0, count($checkout_ids), '?'));
-    $stmt = $pdo->prepare('SELECT p.Participant_ID, p.Participant_Name, p.Participant_Balance_Due, p.Participant_Balance_Paid, p.Participant_Events_Attending, r.REGTYPE_Name, r.REGTYPE_Cost
+    $stmt = $pdo->prepare('SELECT p.Participant_ID, p.Participant_Name, p.Participant_Balance_Due, p.Participant_Balance_Paid, p.Participant_Payment_Method, p.Participant_Events_Attending, r.REGTYPE_Name, r.REGTYPE_Cost
                            FROM nsx_meetup_participants p
                            LEFT JOIN nsx_meetup_registration_types r ON r.REGTYPE_ID = p.Participant_Registration_Type
                            WHERE p.Participant_ID IN ('.$placeholders.') AND p.Event_ID = ?
@@ -82,6 +95,120 @@ if ($checkout_ids) {
     }
 }
 $format_cents = function ($cents) { return '$'.number_format($cents / 100, 2); };
+
+/* After Complete Registration: every unpaid registrant has agreed to the same method */
+$pledged_method = null;
+$pledges = [];
+foreach ($registrants as $registrant) {
+    if (empty($registrant['Participant_Balance_Paid'])) {
+        $pledges[] = (string)$registrant['Participant_Payment_Method'];
+    }
+}
+$pledges = array_unique($pledges);
+if (count($pledges) === 1 && PledgeablePaymentMethod($event, $pledges[0])) {
+    $pledged_method = $pledges[0];
+}
+
+/* The registration confirmation, as the registration page shows it (BuildConfirmationPage in
+   GENERALFunctions.php) - only loaded on this GET, so its POST method dispatch has nothing to run */
+$confirmation = null;
+if ($pledged_method && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+    require_once __DIR__.'/GENERALFunctions.php';
+    $event_id_key = (int)$event['EVENT_ID'];
+    $send_email = !empty($_SESSION['checkout_confirmation_email'][$event_id_key]);
+    unset($_SESSION['checkout_confirmation_email'][$event_id_key]);
+    $confirmation = BuildConfirmationPage($checkout_ids[0], $checkout_ids[1] ?? '', $event_id_key, 'yes', 'no', 'no', $send_email);
+}
+
+/* ************************************************************************ */
+/* Function:    PledgeablePaymentMethod                                     */
+/* Description: True if $method is one registrants pay later (Venmo,        */
+/*              PayPal), the event has it turned on, and its account is     */
+/*              set.                                                        */
+/* ************************************************************************ */
+function PledgeablePaymentMethod($event, $method) {
+    return $event && isset(HANDLE_PAYMENT_METHODS[$method]) && isset(EnabledPaymentMethods($event)[$method])
+        && (string)$event[HANDLE_PAYMENT_METHODS[$method]['handle_column']] !== '';
+}
+
+/* ************************************************************************ */
+/* Function:    RecordCheckoutPaymentMethod                                 */
+/* Description: Records $method as the payment method of the unpaid         */
+/*              registrants saved from this browser session for the event.  */
+/* ************************************************************************ */
+function RecordCheckoutPaymentMethod(array $event, $method) {
+    $ids = array_map('intval', $_SESSION['checkout_participants'][(int)$event['EVENT_ID']] ?? []);
+    if (!$ids) {
+        return;
+    }
+    $pdo = Create_SQL_PHP_DataObject(DB_NAME);
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $pdo->prepare('UPDATE nsx_meetup_participants SET Participant_Payment_Method = ?
+                           WHERE Participant_ID IN ('.$placeholders.') AND Event_ID = ? AND COALESCE(Participant_Balance_Paid, 0) = 0');
+    try {
+        $stmt->execute(array_merge([$method], $ids, [(int)$event['EVENT_ID']]));
+    } catch (PDOException $e) {
+        error_log('RecordCheckoutPaymentMethod failed for event '.$event['EVENT_ID'].': '.$e->getMessage());
+    }
+}
+
+/* ************************************************************************ */
+/* Function:    RenderHandlePayment                                         */
+/* Description: The section for a HANDLE_PAYMENT_METHODS method (Venmo,     */
+/*              PayPal): the amount due, the event's account, the QR code   */
+/*              if one was uploaded, a suggested payment note (event and    */
+/*              registrant names) and the admins' instructions, ending in   */
+/*              an Open link to the account with the amount filled in (in   */
+/*              the app on a phone). With $with_complete, the Complete      */
+/*              Registration button records that they'll pay this way.      */
+/*              Admins mark the registration paid when the payment arrives. */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderHandlePayment($method, array $event, $total_due, array $registrants, $with_complete = true) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+    $info = HANDLE_PAYMENT_METHODS[$method];
+    $name = PAYMENT_METHODS[$method]['name'];
+    $handle = (string)$event[$info['handle_column']];
+    $account = $info['handle_prefix'].$handle;
+
+    $names = [];
+    foreach ($registrants as $registrant) {
+        if (empty($registrant['Participant_Balance_Paid'])) {
+            $names[] = $registrant['Participant_Name'];
+        }
+    }
+    $note = $event['EVENT_Name'].' - '.implode(', ', $names);
+
+    // The admins' instructions (HTML for PayPal, plain text for Venmo), or the default (plain text)
+    $instructions = trim((string)$event[$info['description_column']]);
+    if ($instructions === '') {
+        $instructions_html = nl2br($h($info['default_description']));
+    } else {
+        $instructions_html = $info['description_html'] ? $instructions : nl2br($h($instructions));
+    }
+
+    $output_html  = '<p>Send <b>$'.$h(number_format($total_due / 100, 2)).'</b> to <b>'.$h($account).'</b> on '.$h($name).'.</p>';
+    $qr_code = PaymentQRCodePath($event, $method);
+    if ($qr_code !== '') {
+        $output_html .= '<div class="checkout_handle_qr"><img src="'.$h($qr_code).'" alt="'.$h($name).' QR code for '.$h($account).'" /><p>Scan with your phone\'s camera or '.$h($info['app_name']).'</p></div>';
+    }
+    $output_html .= '<p class="checkout_handle_note_label">Payment note:</p>';
+    $output_html .= '<p class="checkout_handle_note">'.$h($note).'</p>';
+    $output_html .= '<div class="checkout_instructions">'.$instructions_html
+                  .'<p class="checkout_handle_link"><a href="'.$h(HandlePaymentLink($method, $handle, $total_due, $note)).'" target="_blank" rel="noopener">Open '.$h($name).' to send your payment</a></p></div>';
+
+    if ($with_complete) {
+        $output_html .= '<form method="post" action="event_checkout.php?event_id='.(int)$event['EVENT_ID'].'" class="checkout_complete_form">';
+        $output_html .= '<input type="hidden" name="action" value="complete_registration" />';
+        $output_html .= '<input type="hidden" name="payment_method" value="'.$h($method).'" />';
+        $output_html .= '<input type="hidden" name="csrf_token" value="'.$h(app_csrf_token()).'" />';
+        $output_html .= '<p class="checkout_agreement">By clicking <b>Complete Registration</b>, you agree to send <b>$'.$h(number_format($total_due / 100, 2)).'</b> to <b>'.$h($account).'</b> on '.$h($name).'. '
+                      .'Your registration is not complete until the event organizers receive and confirm your payment.</p>';
+        $output_html .= '<button type="submit" class="button primary fit">Complete Registration</button>';
+        $output_html .= '</form>';
+    }
+    return $output_html;
+}
 
 /* ************************************************************************ */
 /* Function:    RemoveUnpaidCheckoutParticipants                            */
@@ -170,6 +297,13 @@ function RemoveUnpaidCheckoutParticipants(array $event) {
                     <?php } elseif ($total_due <= 0) { ?>
                         <p>Thank you - there is nothing left to pay for this registration.</p>
 
+                    <?php } elseif ($confirmation) { ?>
+                        <!-- After Complete Registration: the registration confirmation -->
+                        <div id="event_registration_results_text"><?php echo $confirmation[0]; ?></div>
+                        <p class="checkout_pending">Thank you! Your registration is saved, and you've agreed to pay with <?php echo $h(PAYMENT_METHODS[$pledged_method]['name']); ?>.
+                        Your registration will be complete once the event organizers receive and confirm your payment.</p>
+                        <div id="event_registration_container"><?php echo $confirmation[1]; ?></div>
+
                     <?php } else { ?>
                         <div class="row gtr-uniform checkout_layout">
                             <div class="col-5 col-12-medium">
@@ -193,14 +327,13 @@ function RemoveUnpaidCheckoutParticipants(array $event) {
                                         <tr><td>Total Due</td><td class="checkout_amount"><?php echo $format_cents($total_due); ?></td></tr>
                                     </tfoot>
                                 </table>
+                                <?php if (!$pledged_method) { ?>
                                 <form method="post" action="event_checkout.php?event_id=<?php echo (int)$event['EVENT_ID']; ?>" class="checkout_change_form">
                                     <input type="hidden" name="action" value="change_registration" />
                                     <input type="hidden" name="csrf_token" value="<?php echo $h(app_csrf_token()); ?>" />
                                     <button type="submit" class="button small fit">Change Registration</button>
                                     <p class="checkout_change_note">Go back to the registration form with your choices filled in.</p>
                                 </form>
-                                <?php if (trim((string)$event['EVENT_Payment_Instructions']) !== '') { ?>
-                                    <div class="checkout_instructions"><?php echo $event['EVENT_Payment_Instructions']; /* HTML entered by the event's admins */ ?></div>
                                 <?php } ?>
                             </div>
                             <div class="col-7 col-12-medium">
@@ -208,10 +341,24 @@ function RemoveUnpaidCheckoutParticipants(array $event) {
                                 <?php if (!$payment_methods) { ?>
                                     <p>Payment options for this event haven't been set up yet. Please contact the event organizers.</p>
                                 <?php } ?>
+                                <?php
+                                // One payment method at a time: checking one opens its drawer and unchecks / closes the
+                                // others (SelectCheckoutPaymentMethod in eventcheckout.js). With only one, it starts open.
+                                $only_one = (count($payment_methods) === 1);
+                                ?>
                                 <?php foreach ($payment_methods as $method => $name) { ?>
-                                    <div id="checkout_payment_<?php echo $method; ?>" class="checkout_payment_method" payment_method="<?php echo $method; ?>">
-                                        <h4><?php echo $h($name); ?></h4>
-                                        <p>The <?php echo $h($name); ?> payment options will go here.</p>
+                                    <div id="checkout_payment_<?php echo $method; ?>" class="checkout_payment_method<?php echo $only_one ? ' selected' : ''; ?>" payment_method="<?php echo $method; ?>">
+                                        <div class="checkout_payment_header">
+                                            <input type="checkbox" id="checkout_payment_<?php echo $method; ?>_select" class="checkout_payment_select" drawer="checkout_payment_<?php echo $method; ?>_drawer" aria-controls="checkout_payment_<?php echo $method; ?>_drawer" aria-expanded="<?php echo $only_one ? 'true' : 'false'; ?>"<?php echo $only_one ? ' checked' : ''; ?>>
+                                            <label for="checkout_payment_<?php echo $method; ?>_select">Pay with <?php echo $h($name); ?></label>
+                                        </div>
+                                        <div id="checkout_payment_<?php echo $method; ?>_drawer" class="checkout_payment_drawer"<?php echo $only_one ? '' : ' style="display:none;"'; ?>>
+                                            <?php if (isset(HANDLE_PAYMENT_METHODS[$method]) && (string)$event[HANDLE_PAYMENT_METHODS[$method]['handle_column']] !== '') { ?>
+                                                <?php echo RenderHandlePayment($method, $event, $total_due, $registrants); ?>
+                                            <?php } else { ?>
+                                                <p>The <?php echo $h($name); ?> payment options will go here.</p>
+                                            <?php } ?>
+                                        </div>
                                     </div>
                                 <?php } ?>
                             </div>
@@ -222,6 +369,12 @@ function RemoveUnpaidCheckoutParticipants(array $event) {
 
 		<!-- Scripts -->
 			<script src="assets/js/jquery.min.js"></script>
+			<script src="assets/js/eventcheckout.js?v=<?php echo filemtime(__DIR__.'/assets/js/eventcheckout.js'); ?>"></script>
 			<?php if ($is_logged_in) echo app_idle_timer_script(); ?>
+			<script>
+				$(document).ready(function() {
+					$(".checkout_payment_select").on('change', SelectCheckoutPaymentMethod);
+				});
+			</script>
 	</body>
 </html>
