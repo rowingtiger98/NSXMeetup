@@ -1,6 +1,7 @@
 <?php
   require_once __DIR__ . '/databaseFunctions.php';
   require_once __DIR__ . '/eventAdmin.php';  // EventAdminAuthorize() - event admins only
+  require_once __DIR__ . '/registrantHistory.php';  // RenderRegistrantHistory()
 
   if(isset($_POST['method'])) {
     $_POST['method']();
@@ -120,6 +121,9 @@ function RenderParticipantInformation() {
         $output_html .= '    	</div>';
 		
 
+		// Riders and children have no car of their own - no generation / year / color questions
+		$is_passenger = in_array($row['Participant_Role'], ['riding', 'child'], true);
+		if (!$is_passenger) {
 		$car_information = (json_decode((string)$row['Participant_Car_Info'], true) ?: []) + ['car_year' => '', 'car_color' => '', 'car_make' => '', 'car_model' => ''];
 		if ($row['Participant_Is_NSX']) {
 			$generation_info = intval($car_information['car_year'] ?? 0) < 2017 ? 'First_Generation' : 'Second_Generation';
@@ -194,6 +198,7 @@ function RenderParticipantInformation() {
 			$output_html .= '		<div id="nsx_gen_response_container_driver1_other_year" class="col-2 col-12-xsmall generation_choice'.($row['Participant_Is_NSX']?'':' active').'">';
 			$output_html .= '			<input type="text" name="other_year_driver1" id="nsx_gen_response_driver1_other_year" value="'.$h($car_information['car_year'] ?? '').'" start_value="'.$h($car_information['car_year'] ?? '').'" database_key = "car_year" placeholder="Year" />';
 			$output_html .= '		</div>';
+		}
 
         $output_html .= '    </div>';
 		$output_html .= '</div>		';
@@ -202,6 +207,7 @@ function RenderParticipantInformation() {
 
 		$other_information = json_decode((string)$row['Participant_Events_Attending'], true) ?: [];
         $output_html .= RenderParticipantQuestionsAndAnswers($event_id, $other_information);
+        $output_html .= RenderRegistrantHistory($row['Participant_Reg_History'] ?? '');
 		
 		// $output_html .= '			    <div id="event_info_container" class="event_registration_sub_container active">';
 		// $output_html .= '				    <div class="event_registration_sub_container_header">';

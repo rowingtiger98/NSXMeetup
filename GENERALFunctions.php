@@ -768,7 +768,10 @@ function SendRegistrationConfirmationEmail(array $event, array $people, array $a
         if ($choices) {
             $body .= '<h4>Attendance Selections</h4><table style="border-collapse:collapse;">';
             foreach ($choices as $key => $value) {
-                $body .= '<tr><td '.$cell.'>'.$h($attend_columns[$key] ?? $key).'</td><td '.$cell.'>'.$h($value).'</td></tr>';
+                // The confirmation text is admin-written HTML (e.g. a green price span) - sent as plain text
+                $question = isset($attend_columns[$key]) ? html_entity_decode(strip_tags((string)$attend_columns[$key]), ENT_QUOTES, 'UTF-8') : $key;
+                $question = trim(preg_replace('/\s+/u', ' ', $question));
+                $body .= '<tr><td '.$cell.'>'.$h($question !== '' ? $question : $key).'</td><td '.$cell.'>'.$h($value).'</td></tr>';
             }
             $body .= '</table>';
         }

@@ -858,14 +858,17 @@ function UpdateParticipantInformation(event) {
 		street: $("#info_text_field_driver1_street").val(),
 		city: $("#info_text_field_driver1_city").val(),
 		state: $("#info_select_field_driver1_state").val(),
-		zip: $("#info_text_field_driver1_zip").val(),
-		car_generation: $("#nsx_gen_response_gen_selection_driver1").val()
+		zip: $("#info_text_field_driver1_zip").val()
 	};
+	// Riders and children have no car questions on the page - their car isn't sent
+	if ($("#nsx_gen_response_gen_selection_driver1").length) {
+		data.car_generation = $("#nsx_gen_response_gen_selection_driver1").val();
+	}
 	if (data.car_generation === 'Other') {
 		data.car_make = $("#nsx_gen_response_driver1_other_make").val();
 		data.car_model = $("#nsx_gen_response_driver1_other_model").val();
 		data.car_year = $("#nsx_gen_response_driver1_other_year").val();
-	} else {
+	} else if (data.car_generation) {
 		data.car_year = $("#nsx_gen_select_driver1_nsx_year").val();
 		data.car_color = $("#nsx_gen_select_driver1_nsx_color").val();
 	}

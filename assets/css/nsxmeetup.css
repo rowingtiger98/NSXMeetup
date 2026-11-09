@@ -1379,3 +1379,32 @@ input[type="checkbox"].payment_method_toggle:checked + label.payment_method_swit
 .registrant_saved_messages {
 	margin-bottom: 1.5em;
 }
+
+/* Registration History on the Edit Information page (registrantHistory.php) */
+#registrant_history_container {
+	margin-top: 2em;
+}
+.registrant_history_table td {
+	vertical-align: top;
+	font-size: 0.85em;
+}
+.registrant_history_when {
+	white-space: nowrap;
+}
+.registrant_history_changes {
+	margin: 0.4em 0 0 0;
+	padding-left: 1.25em;
+}
+.registrant_history_changes li {
+	margin: 0;
+}
+.registrant_history_from {
+	opacity: 0.6;
+}
+.registrant_history_to {
+	color: #ffcc00;
+}
+.registrant_history_empty {
+	font-size: 0.85em;
+	opacity: 0.8;
+}

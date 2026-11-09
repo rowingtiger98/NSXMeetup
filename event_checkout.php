@@ -15,6 +15,7 @@
 require_once __DIR__ . '/SessionBootstrap.php';
 require_once __DIR__ . '/databaseFunctions.php';
 require_once __DIR__ . '/paymentMethods.php';
+require_once __DIR__ . '/registrantHistory.php';
 app_session_start();
 
 $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
@@ -138,7 +139,8 @@ function PledgeablePaymentMethod($event, $method) {
 /* ************************************************************************ */
 /* Function:    RecordCheckoutPaymentMethod                                 */
 /* Description: Records $method as the payment method of the unpaid         */
-/*              registrants saved from this browser session for the event.  */
+/*              registrants saved from this browser session for the event,  */
+/*              noting it in each one's history.                            */
 /* ************************************************************************ */
 function RecordCheckoutPaymentMethod(array $event, $method) {
     $ids = array_map('intval', $_SESSION['checkout_participants'][(int)$event['EVENT_ID']] ?? []);
@@ -147,12 +149,23 @@ function RecordCheckoutPaymentMethod(array $event, $method) {
     }
     $pdo = Create_SQL_PHP_DataObject(DB_NAME);
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
-    $stmt = $pdo->prepare('UPDATE nsx_meetup_participants SET Participant_Payment_Method = ?
-                           WHERE Participant_ID IN ('.$placeholders.') AND Event_ID = ? AND COALESCE(Participant_Balance_Paid, 0) = 0');
+    $where = 'Participant_ID IN ('.$placeholders.') AND Event_ID = ? AND COALESCE(Participant_Balance_Paid, 0) = 0';
+    $params = array_merge($ids, [(int)$event['EVENT_ID']]);
     try {
-        $stmt->execute(array_merge([$method], $ids, [(int)$event['EVENT_ID']]));
+        $stmt = $pdo->prepare('SELECT Participant_ID, Participant_Payment_Method FROM nsx_meetup_participants WHERE '.$where);
+        $stmt->execute($params);
+        $previous = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        $pdo->prepare('UPDATE nsx_meetup_participants SET Participant_Payment_Method = ? WHERE '.$where)->execute(array_merge([$method], $params));
     } catch (PDOException $e) {
         error_log('RecordCheckoutPaymentMethod failed for event '.$event['EVENT_ID'].': '.$e->getMessage());
+        return;
+    }
+    $name = function ($m) { return (string)$m === '' ? '' : (PAYMENT_METHODS[$m]['name'] ?? $m); };
+    foreach ($previous as $participant_id => $old_method) {
+        $change = RegistrantHistoryChange('Paying With', $name($old_method), $name($method));
+        if ($change) {
+            AppendRegistrantHistory($pdo, $participant_id, 'Completed registration at checkout', [$change], 'Registrant');
+        }
     }
 }
 
