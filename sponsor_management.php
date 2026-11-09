@@ -14,6 +14,7 @@ const SPONSOR_METHODS = [
     'RenderAddNewSponsorshipLevelSection'             => 'admin',
     'RenderAddNewSponsorSection'                      => 'event_admin',
     'EnterNewSponsorIntoDatabase'                     => 'event_admin',
+    'UploadSponsorLogo'                               => 'event_admin',
     'EnterNewSponsorshipLevelIntoDatabase'            => 'admin',
 ];
 EndpointDispatch(__FILE__, SPONSOR_METHODS);
@@ -107,7 +108,7 @@ function RenderEditIndividualSponsorInformation() {
     }
     $sponsor_id = (int)$row['SPONSOR_ID'];
 
-	$output_html = '<div id="individual_sponsor_edit_container" sponsor_id="'.$sponsor_id.'" event_id="'.$event_id.'" class="row gtr-50">';
+	$output_html = '<div id="individual_sponsor_edit_container" sponsor_id="'.$sponsor_id.'" event_id="'.$event_id.'" csrf_token="'.$h(app_csrf_token()).'" class="row gtr-50">';
     $output_html .= '<div id="back_navigation_button"></div>';   
     $output_html .= '<div class="col-12 col-12-small">';
     $output_html .= '<p>This is the sponsor management interface. Here, you will be able to edit the properties of all the existing sponsors in the le Tour de Femme
@@ -170,9 +171,15 @@ function RenderEditIndividualSponsorInformation() {
     $output_html .= '</div>';
 
     $output_html .= '</div>';
-    // Sponsor Image Section
+    // Sponsor Logo - replaced as soon as a new one is chosen
     $output_html .= '<div class="col-6 col-6-medium col-12-small">';
-    $output_html .= '<p>Coming Soon, the ability to upload / change the sponsor logo.</p>';
+    $output_html .= '<h3>Sponsor Logo</h3>';
+    $output_html .= SponsorLogoInstructions('The new logo replaces the current one as soon as it uploads.');
+    $output_html .= '<div id="edit_sponsor_logo_preview" class="sponsor_logo_preview">'
+                   .(trim((string)$row['SPONSOR_Large_Logo']) !== '' ? '<img src="'.$h(SponsorLogoURL($row['SPONSOR_Large_Logo'])).'" alt="Current logo">' : '<p>This sponsor has no logo yet.</p>')
+                   .'</div>';
+    $output_html .= '<input type="file" id="edit_sponsor_logo" accept="image/jpeg,image/png,image/webp" style="margin-top:1em;">';
+    $output_html .= '<div id="edit_sponsor_logo_status" class="frontpage_upload_status"></div>';
     $output_html .= '</div>';
 
     /* Description Editor */
@@ -456,6 +463,107 @@ function RenderAddNewSponsorshipLevelSection() {
 }
 
 /* ************************************************************************ */
+/* Function:    SponsorLogoInstructions                                     */
+/* Description: The help text shown above a sponsor logo upload.            */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function SponsorLogoInstructions($when_saved) {
+    return '<p>Upload the sponsor\'s logo (JPEG, PNG or WebP, under '.(FRONTPAGE_IMAGE_MAX_BYTES / 1048576).' MB). Larger logos are scaled down to fit within '
+          .SPONSOR_LOGO_MAX_SIZE.' x '.SPONSOR_LOGO_MAX_SIZE.' pixels, keeping their shape. '.$when_saved.'</p>';
+}
+
+/* ************************************************************************ */
+/* Function:    CheckSponsorLogoUpload                                      */
+/* Description: Checks the posted sponsor_logo and makes sure the event's   */
+/*              sponsors folder exists. Ends the request with a 'Fail'      */
+/*              response if either isn't usable.                            */
+/* Returns:     null when no logo was posted, else the upload               */
+/*              (CheckFrontpageImageUpload) plus 'dir' - the site-relative  */
+/*              folder it goes in.                                          */
+/* ************************************************************************ */
+function CheckSponsorLogoUpload(array $event) {
+    if (($_FILES['sponsor_logo']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+    if (!function_exists('imagecreatetruecolor')) {
+        error_log('CheckSponsorLogoUpload: the GD extension is not available, so logos cannot be resized');
+        EventAdminRespond('Fail', ['Logo uploads are not available on this server (the PHP GD extension is missing).']);
+    }
+    $logo = CheckFrontpageImageUpload($_FILES['sponsor_logo']);
+    if ($logo['error'] !== '') {
+        EventAdminRespond('Fail', [$logo['error']]);
+    }
+    $logo_dir = EventSponsorLogoDirectory($event['EVENT_Directory']);
+    if ($logo_dir === '' || !is_dir(__DIR__.'/events/'.$event['EVENT_Directory'])) {
+        EventAdminRespond('Fail', ['This event\'s folder (events/'.$event['EVENT_Directory'].'/) could not be found, so the logo has nowhere to go.']);
+    }
+    if (!is_dir(__DIR__.'/'.$logo_dir) && !mkdir(__DIR__.'/'.$logo_dir, 0755, true)) {
+        error_log('CheckSponsorLogoUpload: could not create '.$logo_dir);
+        EventAdminRespond('Fail', ['The logo could not be saved. Please try again.']);
+    }
+    return $logo + ['dir' => $logo_dir];
+}
+
+/* ************************************************************************ */
+/* Function:    SaveSponsorLogo                                             */
+/* Description: Saves a checked logo (CheckSponsorLogoUpload) for a sponsor */
+/*              as sponsor_<id>_<date>_<time>, scaled to fit                */
+/*              SPONSOR_LOGO_MAX_SIZE square.                               */
+/* Returns:     the site-relative path, or '' on failure                    */
+/* ************************************************************************ */
+function SaveSponsorLogo(array $logo, $sponsor_id) {
+    $filename = SaveFrontpageImage($logo['tmp'], $logo['type'], __DIR__.'/'.$logo['dir'], 'sponsor_'.(int)$sponsor_id.'_'.date('Ymd_His'),
+                                   SPONSOR_LOGO_MAX_SIZE, SPONSOR_LOGO_MAX_SIZE);
+    return ($filename === '') ? '' : $logo['dir'].'/'.$filename;
+}
+
+/* ************************************************************************ */
+/* Function:    UploadSponsorLogo                                           */
+/* Description: Replaces an existing sponsor's logo (Edit Sponsor page).    */
+/*              The previous logo file is deleted when it was an earlier    */
+/*              upload for this sponsor - never a shared or older logo.     */
+/* Returns:     JSON ['Pass', logo URL] or ['Fail', [messages]]             */
+/* ************************************************************************ */
+function UploadSponsorLogo() {
+    list($pdo, $event) = EventAdminLoadEvent();
+    if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
+        EventAdminRespond('Fail', ['This page has expired. Reload the page and try again.']);
+    }
+    $sponsor = EventSponsor($pdo, $event['EVENT_ID'], $_POST['sponsor_id'] ?? 0);
+    if (!$sponsor) {
+        EventAdminRespond('Fail', ['That sponsor could not be found for this event.']);
+    }
+    $logo = CheckSponsorLogoUpload($event);
+    if ($logo === null) {
+        EventAdminRespond('Fail', ['Please choose a logo to upload.']);
+    }
+
+    $path = SaveSponsorLogo($logo, $sponsor['SPONSOR_ID']);
+    if ($path === '') {
+        error_log('UploadSponsorLogo: saving the logo failed for sponsor '.$sponsor['SPONSOR_ID']);
+        EventAdminRespond('Fail', ['The logo could not be saved. Please try again.']);
+    }
+    try {
+        $pdo->prepare('UPDATE nsx_meetup_event_sponsors SET SPONSOR_Large_Logo = ?, SPONSOR_Thumbnail_Logo = ? WHERE SPONSOR_ID = ?')
+            ->execute([$path, $path, (int)$sponsor['SPONSOR_ID']]);
+    } catch (PDOException $e) {
+        unlink(__DIR__.'/'.$path);
+        error_log('UploadSponsorLogo failed for sponsor '.$sponsor['SPONSOR_ID'].': '.$e->getMessage());
+        EventAdminRespond('Fail', ['The logo could not be saved. Please try again.']);
+    }
+
+    // Tidy up this sponsor's previous upload
+    $own_upload = '#^events/[A-Za-z0-9_-]+/images/sponsors/sponsor_'.(int)$sponsor['SPONSOR_ID'].'_\d{8}_\d{6}\.(jpg|png)$#';
+    foreach (array_unique([(string)$sponsor['SPONSOR_Large_Logo'], (string)$sponsor['SPONSOR_Thumbnail_Logo']]) as $previous) {
+        if ($previous !== $path && preg_match($own_upload, $previous) && is_file(__DIR__.'/'.$previous)) {
+            unlink(__DIR__.'/'.$previous);
+        }
+    }
+
+    EventAdminRespond('Pass', SponsorLogoURL($path));
+}
+
+/* ************************************************************************ */
 /* Function:    EventSponsor                                                */
 /* Description: A sponsor's row, only if it's one of $event_id's sponsors   */
 /*              (SPONSOR_Event_IDs is a comma-separated list).              */
@@ -552,8 +660,7 @@ function RenderAddNewSponsorSection() {
     /* Sponsor Logo */
     $output_html .= ' <div class="col-6 col-12-small">';
     $output_html .= '<h3>Sponsor Logo</h3>';
-    $output_html .= '<p>Upload the sponsor\'s logo (JPEG, PNG or WebP, under '.(FRONTPAGE_IMAGE_MAX_BYTES / 1048576).' MB). Larger logos are scaled down to fit within '
-                   .SPONSOR_LOGO_MAX_SIZE.' x '.SPONSOR_LOGO_MAX_SIZE.' pixels, keeping their shape. The logo is saved when you click Save New Sponsor.</p>';
+    $output_html .= SponsorLogoInstructions('The logo is saved when you click Save New Sponsor.');
     $output_html .= '<input type="file" id="new_sponsor_logo" accept="image/jpeg,image/png,image/webp">';
     $output_html .= '<div id="new_sponsor_logo_preview" class="sponsor_logo_preview"></div>';
     $output_html .= '</div>';
@@ -609,25 +716,7 @@ function EnterNewSponsorIntoDatabase() {
     $sponsor_division = $level['LEVEL_Logosize'];
 
     // The logo is optional - check it before anything is saved
-    $logo = null;
-    if (($_FILES['sponsor_logo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
-        if (!function_exists('imagecreatetruecolor')) {
-            error_log('EnterNewSponsorIntoDatabase: the GD extension is not available, so logos cannot be resized');
-            EventAdminRespond('Fail', ['Logo uploads are not available on this server (the PHP GD extension is missing).']);
-        }
-        $logo = CheckFrontpageImageUpload($_FILES['sponsor_logo']);
-        if ($logo['error'] !== '') {
-            EventAdminRespond('Fail', [$logo['error']]);
-        }
-        $logo_dir = EventSponsorLogoDirectory($event['EVENT_Directory']);
-        if ($logo_dir === '' || !is_dir(__DIR__.'/events/'.$event['EVENT_Directory'])) {
-            EventAdminRespond('Fail', ['This event\'s folder (events/'.$event['EVENT_Directory'].'/) could not be found, so the logo has nowhere to go.']);
-        }
-        if (!is_dir(__DIR__.'/'.$logo_dir) && !mkdir(__DIR__.'/'.$logo_dir, 0755, true)) {
-            error_log('EnterNewSponsorIntoDatabase: could not create '.$logo_dir);
-            EventAdminRespond('Fail', ['The logo could not be saved. Please try again.']);
-        }
-    }
+    $logo = CheckSponsorLogoUpload($event);
 
     $saved_logo = '';
     try {
@@ -648,14 +737,13 @@ function EnterNewSponsorIntoDatabase() {
         $sponsor_id = (int)$dbh->lastInsertId();
 
         if ($logo !== null) {
-            $filename = SaveFrontpageImage($logo['tmp'], $logo['type'], __DIR__.'/'.$logo_dir, 'sponsor_'.$sponsor_id.'_'.date('Ymd_His'),
-                                           SPONSOR_LOGO_MAX_SIZE, SPONSOR_LOGO_MAX_SIZE);
-            if ($filename === '') {
+            $path = SaveSponsorLogo($logo, $sponsor_id);
+            if ($path === '') {
                 throw new RuntimeException('saving the logo failed');
             }
-            $saved_logo = __DIR__.'/'.$logo_dir.'/'.$filename;
+            $saved_logo = __DIR__.'/'.$path;
             $dbh->prepare('UPDATE `nsx_meetup_event_sponsors` SET `SPONSOR_Large_Logo` = ?, `SPONSOR_Thumbnail_Logo` = ? WHERE `SPONSOR_ID` = ?')
-                ->execute([$logo_dir.'/'.$filename, $logo_dir.'/'.$filename, $sponsor_id]);
+                ->execute([$path, $path, $sponsor_id]);
         }
         $dbh->commit();
     } catch (Exception $e) {

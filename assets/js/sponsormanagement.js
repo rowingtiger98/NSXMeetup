@@ -59,7 +59,12 @@ function RenderEditSponsorInformation() {
           console.log(data);
           results = eval(data);
         //   $("#details_info").html(results[0]);
+          tinymce.remove();  // editors from a previous visit - their textareas are about to be replaced
           $("#main_content_container").html(results[0]);
+          RenderBackButton('backtoeditsponsors', event_id);
+          if (!document.getElementById('individual_sponsor_edit_container')) {
+            return;  // the sponsor couldn't be found - the page just says so
+          }
           
           // // Set the click handler for the submit changes button.
           tinymce.init({
@@ -97,6 +102,7 @@ function RenderEditSponsorInformation() {
           document.querySelector("[id='sponsor_edit_infodropdown_level']").onchange = ActivateSponsorInfoChangeButton;
           document.querySelector("[id='sponsor_edit_section_"+sponsor_id+"']").onchange = SetDescriptionSectionChangeFlag;
           document.querySelector("[id='save_changes_button']").onclick = SaveNewSponsorProperties;
+          document.querySelector("[id='edit_sponsor_logo']").onchange = UploadSponsorLogo;
           
         }
       });
@@ -149,6 +155,7 @@ function RenderAddNewSponsorInformation(event) {
         success: function(data) {
           console.log('rendering the add sponsor edit section');
           results = eval(data);
+          tinymce.remove();  // editors from a previous visit - their textareas are about to be replaced
           $("#main_content_container").html(results[0]);
           RenderBackButton('backtoeditsponsors', event_id);
 
@@ -304,6 +311,73 @@ function SaveNewSponsorToDatabase(event) {
             var reason = (xhr.status === 413 || logo) ? ' If the logo is large, try a smaller one.' : '';
             ShowUploadStatus(status, 'The sponsor could not be saved.' + reason + ' Please try again.', true);
             button.removeClass('disabled');
+        }
+    });
+}
+
+
+// -------------------------------------------------------------------------------------
+// Function: 	UploadSponsorLogo
+// Description: Uploads the logo chosen on the Edit Sponsor page. It replaces the
+//              sponsor's logo straight away, and the preview shows the saved logo.
+// -------------------------------------------------------------------------------------
+function UploadSponsorLogo() {
+    var input = this;
+    var file = input.files[0];
+    var status = $("#edit_sponsor_logo_status");
+    if (!file) {
+        return;
+    }
+    if (file.size > FRONTPAGE_IMAGE_MAX_BYTES) {
+        ShowUploadStatus(status, 'The logo is too large. Please choose one under 10 MB.', true);
+        input.value = '';
+        return;
+    }
+
+    var container = $("#individual_sponsor_edit_container");
+    var data = new FormData();
+    data.append('method', 'UploadSponsorLogo');
+    data.append('event_id', container.attr('event_id'));
+    data.append('sponsor_id', container.attr('sponsor_id'));
+    data.append('csrf_token', container.attr('csrf_token'));
+    data.append('sponsor_logo', file);
+
+    input.disabled = true;
+    ShowUploadProgress(status, 'Uploading...');
+    $.ajax({
+        url: 'sponsor_management.php',
+        type: 'POST',
+        dataType: 'json',
+        data: data,
+        processData: false,
+        contentType: false,
+        xhr: function() {
+            var xhr = $.ajaxSettings.xhr();
+            if (xhr.upload) {
+                xhr.upload.onprogress = function(progress) {
+                    if (progress.lengthComputable) {
+                        var percent = Math.round(progress.loaded / progress.total * 100);
+                        ShowUploadProgress(status, percent < 100 ? 'Uploading... ' + percent + '%' : 'Resizing and saving...');
+                    }
+                };
+            }
+            return xhr;
+        },
+        success: function(results) {
+            if (results[0] == 'Pass') {
+                $("#edit_sponsor_logo_preview").empty().append($('<img>').attr({src: results[1], alt: 'Current logo'}));
+                ShowUploadStatus(status, 'Logo saved.', false);
+            } else {
+                ShowUploadStatus(status, [].concat(results[1]).join(' '), true);
+            }
+        },
+        error: function(xhr, textStatus, error) {
+            console.log('(UploadSponsorLogo) failed:', xhr.status, textStatus, error, xhr.responseText);
+            ShowUploadStatus(status, 'The logo could not be uploaded. If it is large, try a smaller one.', true);
+        },
+        complete: function() {
+            input.disabled = false;
+            input.value = '';
         }
     });
 }
