@@ -701,7 +701,7 @@ function RenderCurrentSponsorContent($event_id, $result) {
             $output_html .= '<label for="active_sponsor_'.$row['SPONSOR_ID'].'_on">Yes</label>';
             $output_html .= '<input type="radio" id="active_sponsor_'.$row['SPONSOR_ID'].'_off" name="active_sponsor_radio_button_'.$row['SPONSOR_ID'].'" value="0" event_id='.$event_id.' sponsor_id='.$row['SPONSOR_ID'].' '.($row['SPONSOR_Active']?'':' checked').'>';
             $output_html .= '<label for="active_sponsor_'.$row['SPONSOR_ID'].'_off">No</label></td>';       
-            $output_html .=  '<td>'.$row['SPONSOR_Level'].'</td><td><a href="#" id="edit_sponsor_button" class="button small" sponsor_id='.$row['SPONSOR_ID'].'>Edit</a></td></tr>';
+            $output_html .=  '<td>'.$row['SPONSOR_Level'].'</td><td><a href="#" id="edit_sponsor_button" class="button small" event_id="'.(int)$event_id.'" sponsor_id="'.(int)$row['SPONSOR_ID'].'">Edit</a></td></tr>';
         }
     } 
 
@@ -1217,7 +1217,10 @@ function RenderBackButton() {
             break;            
         case 'backtoeditsponsorshiplevels':
             $output_html = '<a href="#" id="back_button_link" action="'.$action.'" event_id="'.$_POST['event_id'].'"class="button primary">Back to Sponsorship Levels</a>';
-            break;                          
+            break;
+        case 'backtoeditsponsors':
+            $output_html = '<a href="#" id="back_button_link" action="'.$action.'" event_id="'.(int)$_POST['event_id'].'" class="button primary">Back to Sponsor Information</a>';
+            break;
         default:
             $output_html = '<a href="#" id="back_button_link" action="default" class="button primary">Default Back Button</a>';
     }

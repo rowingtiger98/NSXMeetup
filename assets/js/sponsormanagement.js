@@ -47,12 +47,13 @@ function RenderEditSponsorInformation() {
   function RenderEditIndividualSponsorInformation(event) {
     console.log('Edit sponsor information button pressed for Sponsor ID = ' + $(this).attr('sponsor_id'));
     var sponsor_id = $(this).attr('sponsor_id');
+    var event_id = $(this).attr('event_id');
     var description_section = 'textarea#sponsor_edit_description_'+sponsor_id;
 
     $.ajax({
         url: 'sponsor_management.php',
         type: 'POST',
-        data: {method: 'RenderEditIndividualSponsorInformation', sponsor_id:sponsor_id},
+        data: {method: 'RenderEditIndividualSponsorInformation', sponsor_id:sponsor_id, event_id:event_id},
         success: function(data) {
           console.log('rendering the sponsor edit section for sponsor id = '+description_section);
           console.log(data);
@@ -144,11 +145,22 @@ function RenderAddNewSponsorInformation(event) {
     $.ajax({
         url: 'sponsor_management.php',
         type: 'POST',
-        data: {method: 'RenderAddNewSponsorSection'},
+        data: {method: 'RenderAddNewSponsorSection', event_id:event_id},
         success: function(data) {
           console.log('rendering the add sponsor edit section');
           results = eval(data);
           $("#main_content_container").html(results[0]);
+          RenderBackButton('backtoeditsponsors', event_id);
+
+          // No sponsorship levels yet - the page only explains that and links to the levels page
+          var levels_link = document.querySelector("[id='go_to_sponsorship_levels']");
+          if (levels_link) {
+            levels_link.onclick = function(click) {
+              click.preventDefault();
+              RenderSponsorshipManagementInterface(event_id);
+            };
+            return;
+          }
           
           // Set the click handler for the submit changes button.
           tinymce.init({
@@ -178,7 +190,8 @@ function RenderAddNewSponsorInformation(event) {
 
         //   document.querySelector("[id='sponsor_edit_infodropdown_level']").onchange = ActivateSponsorInfoChangeButton;
         //   document.querySelector("[id='sponsor_edit_section_"+sponsor_id+"']").onchange = SetDescriptionSectionChangeFlag;
-          // document.querySelector("[id='save_new_sponsor_information_botton']").onclick = SaveNewSponsorToDatabase;
+          document.querySelector("[id='new_sponsor_logo']").onchange = PreviewNewSponsorLogo;
+          document.querySelector("[id='save_new_sponsor_information_botton']").onclick = SaveNewSponsorToDatabase;
           
         }
       });
@@ -209,43 +222,90 @@ function RenderAddNewSponsorshipLevelInformation(event) {
 
 
 // -------------------------------------------------------------------------------------
-// Function: 	SaveNewSponsorToDatabase
-// Description: This function, when clicked, will save the new sponsor details to the 
-//              database (minus description information).
+// Function: 	PreviewNewSponsorLogo
+// Description: Shows the logo chosen on the Add New Sponsor page before it's saved.
 // -------------------------------------------------------------------------------------
-function SaveNewSponsorToDatabase() {
-    console.log('Save the new sponsor to the database');
-    var sponsor_name = $("#sponsor_edit_infobox_name").val();
-    var sponsor_weblink = $("#sponsor_edit_infobox_weblink").val();
-    var sponsor_level = document.getElementById("sponsor_edit_infodropdown_level");
-    var sponsor_active =  document.querySelector('input[name="active_sponsor_radio_button"]:checked').value;
-    var sponsor_description = tinymce.get("new_sponsor_edit_section").getContent()
+function PreviewNewSponsorLogo() {
+    var preview = $("#new_sponsor_logo_preview").empty();
+    $("#save_new_sponsor_status").removeClass('event_settings_error event_settings_success').text('');
+    var file = this.files[0];
+    if (!file) {
+        return;
+    }
+    if (file.size > FRONTPAGE_IMAGE_MAX_BYTES) {
+        ShowUploadStatus($("#save_new_sponsor_status"), 'The logo is too large. Please choose one under 10 MB.', true);
+        this.value = '';
+        return;
+    }
+    preview.append($('<img>').attr({src: URL.createObjectURL(file), alt: 'Logo preview'}));
+}
 
+// -------------------------------------------------------------------------------------
+// Function: 	SaveNewSponsorToDatabase
+// Description: This function, when clicked, will save the new sponsor (and its logo,
+//              if one was chosen) to the database, then return to the sponsor list.
+// -------------------------------------------------------------------------------------
+function SaveNewSponsorToDatabase(event) {
+    event.preventDefault();
+    var button = $(this);
+    if (button.hasClass('disabled')) {
+        return;
+    }
+    var container = $("#add_sponsor_container");
+    var event_id = container.attr('event_id');
+    var status = $("#save_new_sponsor_status");
+    var active = document.querySelector('input[name="active_sponsor_radio_button"]:checked');
+    var logo = document.getElementById("new_sponsor_logo").files[0];
 
-    console.log(sponsor_name + ' : ' + sponsor_weblink + ' : ' + sponsor_level.value + ' : ' + sponsor_active + ' : ' + sponsor_description);
-    
+    var data = new FormData();
+    data.append('method', 'EnterNewSponsorIntoDatabase');
+    data.append('event_id', event_id);
+    data.append('csrf_token', container.attr('csrf_token'));
+    data.append('sponsor_name', $("#sponsor_edit_infobox_name").val());
+    data.append('sponsor_weblink', $("#sponsor_edit_infobox_weblink").val());
+    data.append('sponsor_level', $("#sponsor_edit_infodropdown_level").val() || '');
+    data.append('sponsor_active', active ? active.value : '0');
+    data.append('sponsor_description', tinymce.get("new_sponsor_edit_section").getContent());
+    if (logo) {
+        data.append('sponsor_logo', logo);
+    }
+
+    button.addClass('disabled');
+    ShowUploadProgress(status, logo ? 'Uploading...' : 'Saving...');
     $.ajax({
         url: 'sponsor_management.php',
         type: 'POST',
-        data: {method: 'EnterNewSponsorIntoDatabase', sponsor_name:sponsor_name, sponsor_weblink:sponsor_weblink, sponsor_level:sponsor_level.value, sponsor_active:sponsor_active, sponsor_description:sponsor_description},
-        success: function(data) {
-          console.log(data);
-          results = eval(data);
-          if(results[0] === 'success') {
-            $("#save_status_section").html(results[1]);
-            document.querySelector('[id="edit_sponsor_information"]').onclick = RenderEditSponsorInformation;            
-            // $("#save_changes_button_status").html(results[1]);
-            // $("#sponsor_edit_infodropdown_level").attr('current_level', sponsor_level.value);
-            // $("#sponsor_edit_infobox_name").attr('current_value', sponsor_name);
-            // $("#sponsor_edit_infobox_weblink").attr('current_value', sponsor_weblink);
-
-          } else {
-            alert('The update failed: ' + results[1]);
-          }
-        //   $("#save_changes_button").addClass('disabled');
+        dataType: 'json',
+        data: data,
+        processData: false,
+        contentType: false,
+        xhr: function() {
+            var xhr = $.ajaxSettings.xhr();
+            if (logo && xhr.upload) {
+                xhr.upload.onprogress = function(progress) {
+                    if (progress.lengthComputable) {
+                        var percent = Math.round(progress.loaded / progress.total * 100);
+                        ShowUploadProgress(status, percent < 100 ? 'Uploading... ' + percent + '%' : 'Resizing and saving...');
+                    }
+                };
+            }
+            return xhr;
+        },
+        success: function(results) {
+            if (results[0] == 'Pass') {
+                RenderSponsorManagementInterface(event_id);
+            } else {
+                ShowUploadStatus(status, [].concat(results[1]).join(' '), true);
+                button.removeClass('disabled');
+            }
+        },
+        error: function(xhr, textStatus, error) {
+            console.log('(SaveNewSponsorToDatabase) failed:', xhr.status, textStatus, error, xhr.responseText);
+            var reason = (xhr.status === 413 || logo) ? ' If the logo is large, try a smaller one.' : '';
+            ShowUploadStatus(status, 'The sponsor could not be saved.' + reason + ' Please try again.', true);
+            button.removeClass('disabled');
         }
-      });    
-
+    });
 }
 
 
@@ -375,7 +435,7 @@ function SaveNewSponsorProperties() {
     $.ajax({
         url: 'sponsor_management.php',
         type: 'POST',
-        data: {method: 'UpdateSponsorDetails', sponsor_id:sponsor_id, sponsor_name:sponsor_name, sponsor_weblink:sponsor_weblink, sponsor_level:sponsor_level.value},
+        data: {method: 'UpdateSponsorDetails', event_id:$("#individual_sponsor_edit_container").attr('event_id'), sponsor_id:sponsor_id, sponsor_name:sponsor_name, sponsor_weblink:sponsor_weblink, sponsor_level:sponsor_level.value || ''},
         success: function(data) {
           console.log(data);
           results = eval(data);

@@ -1408,3 +1408,12 @@ input[type="checkbox"].payment_method_toggle:checked + label.payment_method_swit
 	font-size: 0.85em;
 	opacity: 0.8;
 }
+
+/* Add New Sponsor - logo preview (assets/js/sponsormanagement.js) */
+.sponsor_logo_preview img {
+    display: block;
+    max-width: 100%;
+    max-height: 300px;
+    margin-top: 1em;
+    border-radius: 4px;
+}

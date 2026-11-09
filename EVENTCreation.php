@@ -17,6 +17,7 @@
 require_once __DIR__ . '/SessionBootstrap.php';
 require_once __DIR__ . '/databaseFunctions.php';
 require_once __DIR__ . '/eventAdmin.php'; // CreateDefaultRegistrationType()
+require_once __DIR__ . '/eventImages.php'; // EventSponsorLogoDirectory()
 
 app_session_start();
 
@@ -183,7 +184,8 @@ function EnterNewEventToDatabase() {
 
 /* ************************************************************************ */
 /* Function:    CreateNewDirectoryPath                                      */
-/* Description: Creates events/<new_path>/ for an event that's already in   */
+/* Description: Creates events/<new_path>/, with its images/sponsors/      */
+/*              folder for sponsor logos, for an event that's already in    */
 /*              the database (EnterNewEventToDatabase runs first).          */
 /* Returns:     JSON ['pass', message] or ['fail', message]                 */
 /* ************************************************************************ */
@@ -205,7 +207,12 @@ function CreateNewDirectoryPath() {
         error_log('CreateNewDirectoryPath: could not create '.$directory_path);
         EventCreationFail('The folder events/'.$new_path.'/ could not be created.');
     }
+    $sponsor_path = __DIR__.'/'.EventSponsorLogoDirectory($new_path);
+    if (!is_dir($sponsor_path) && !mkdir($sponsor_path, 0755, true)) {
+        error_log('CreateNewDirectoryPath: could not create '.$sponsor_path);
+        EventCreationFail('The folder events/'.$new_path.'/ was created, but its images/sponsors/ folder could not be.');
+    }
 
     header('Content-Type: application/json');
-    echo json_encode(['pass', 'Created events/'.$new_path.'/']);
+    echo json_encode(['pass', 'Created events/'.$new_path.'/ and events/'.$new_path.'/images/sponsors/']);
 }

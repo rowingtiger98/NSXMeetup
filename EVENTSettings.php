@@ -22,8 +22,7 @@ app_session_start();
 const EVENT_SETTINGS_METHODS = ['RenderEditEventSettings', 'SaveEventSettings', 'UploadFrontpageImage', 'UploadPaymentQRCode', 'RemovePaymentQRCode'];
 
 const FRONTPAGE_IMAGE_MAX_HEIGHT = 450;           // uploads (front page image, payment QR codes) are scaled down to this height, width in proportion
-const FRONTPAGE_IMAGE_MAX_BYTES  = 10 * 1048576;  // 10 MB - keep in step with .user.ini and eventsettings.js
-const FRONTPAGE_IMAGE_MAX_PIXELS = 24000000;      // 24 megapixels - larger images need too much memory to resize
+// FRONTPAGE_IMAGE_MAX_BYTES / _MAX_PIXELS, CheckFrontpageImageUpload() and SaveFrontpageImage() are in eventImages.php
 
 if (isset($_POST['method']) && in_array($_POST['method'], EVENT_SETTINGS_METHODS, true)) {
     $_POST['method']();
@@ -707,114 +706,10 @@ function ReceiveEventImageUpload(array $event, $file_field, $basename) {
         EventAdminRespond('Fail', ['The image could not be saved. Please try again.']);
     }
 
-    $filename = SaveFrontpageImage($upload['tmp'], $upload['type'], $dir, $basename);
+    $filename = SaveFrontpageImage($upload['tmp'], $upload['type'], $dir, $basename, FRONTPAGE_IMAGE_MAX_HEIGHT);
     if ($filename === '') {
         error_log('ReceiveEventImageUpload: saving '.$file_field.' failed for event '.$event['EVENT_ID']);
         EventAdminRespond('Fail', ['The image could not be saved. Please try again.']);
     }
     return ['event_dir' => $event_dir, 'filename' => $filename];
 }
-
-/* ************************************************************************ */
-/* Function:    CheckFrontpageImageUpload                                   */
-/* Description: Checks an image upload from $_FILES. The file's contents    */
-/*              decide its type - the browser-supplied name and type are    */
-/*              ignored. (Adapted from ContactBook's check_book_photo_upload)*/
-/* Inputs:      $file - the $_FILES entry, or null.                         */
-/* Returns:     ['error' => string, 'tmp' => string, 'type' => IMAGETYPE_*] */
-/* ************************************************************************ */
-function CheckFrontpageImageUpload($file) {
-    $none = ['error' => '', 'tmp' => '', 'type' => 0];
-    $max_mb = FRONTPAGE_IMAGE_MAX_BYTES / 1048576;
-
-    if ($file === null || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-        return ['error' => 'Please choose an image to upload.'] + $none;
-    }
-    if (is_array($file['error'])) {
-        return ['error' => 'Please choose a single image.'] + $none;
-    }
-    if ($file['error'] === UPLOAD_ERR_INI_SIZE || $file['error'] === UPLOAD_ERR_FORM_SIZE
-        || $file['size'] > FRONTPAGE_IMAGE_MAX_BYTES) {
-        return ['error' => "The image is too large. Please choose one under {$max_mb} MB."] + $none;
-    }
-    if ($file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
-        error_log('CheckFrontpageImageUpload: upload failed with error code '.$file['error']);
-        return ['error' => 'The image could not be uploaded. Please try again.'] + $none;
-    }
-
-    $info = @getimagesize($file['tmp_name']);
-    if ($info === false || !in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)) {
-        return ['error' => 'The image must be a JPEG, PNG or WebP file.'] + $none;
-    }
-    if ($info[0] * $info[1] > FRONTPAGE_IMAGE_MAX_PIXELS) {
-        return ['error' => 'The image\'s dimensions are too large. Please choose a smaller image.'] + $none;
-    }
-
-    return ['error' => '', 'tmp' => $file['tmp_name'], 'type' => $info[2]];
-}
-
-/* ************************************************************************ */
-/* Function:    SaveFrontpageImage                                          */
-/* Description: Re-encodes an uploaded image into $dir as <$basename>.jpg   */
-/*              (or .png for PNGs, to keep transparency), scaled down to    */
-/*              FRONTPAGE_IMAGE_MAX_HEIGHT with the width kept in           */
-/*              proportion. Smaller images are not enlarged. Re-encoding    */
-/*              also turns phone photos the right way up, strips hidden     */
-/*              data such as GPS location, and drops anything that isn't    */
-/*              image data. (Adapted from ContactBook's save_book_photo)    */
-/* Inputs:      $tmp - uploaded temp file. $type - IMAGETYPE_*.             */
-/*              $dir - the full directory path to save in.                  */
-/*              $basename - the filename without extension.                 */
-/* Returns:     The saved filename, or '' on failure.                       */
-/* ************************************************************************ */
-function SaveFrontpageImage($tmp, $type, $dir, $basename) {
-    switch ($type) {
-        case IMAGETYPE_JPEG: $image = @imagecreatefromjpeg($tmp); break;
-        case IMAGETYPE_PNG:  $image = @imagecreatefrompng($tmp);  break;
-        case IMAGETYPE_WEBP: $image = @imagecreatefromwebp($tmp); break;
-        default:             $image = false;
-    }
-    if ($image === false) {
-        return '';
-    }
-
-    // Phones save photos sideways and record the rotation in EXIF - apply it.
-    if ($type === IMAGETYPE_JPEG && function_exists('exif_read_data')) {
-        $orientation = (@exif_read_data($tmp))['Orientation'] ?? 1;
-        if (in_array($orientation, [2, 4, 5, 7], true)) {
-            imageflip($image, IMG_FLIP_HORIZONTAL);
-        }
-        $angle = [3 => 180, 4 => 180, 5 => 270, 6 => 270, 7 => 90, 8 => 90][$orientation] ?? 0;
-        if ($angle !== 0) {
-            $rotated = imagerotate($image, $angle, 0);
-            imagedestroy($image);
-            $image = $rotated;
-        }
-    }
-
-    $width  = imagesx($image);
-    $height = imagesy($image);
-    if ($height > FRONTPAGE_IMAGE_MAX_HEIGHT) {
-        $new_height = FRONTPAGE_IMAGE_MAX_HEIGHT;
-        $new_width  = max(1, (int) round($width * FRONTPAGE_IMAGE_MAX_HEIGHT / $height));
-        $resized = imagecreatetruecolor($new_width, $new_height);
-        imagealphablending($resized, false);
-        imagesavealpha($resized, true);
-        imagecopyresampled($resized, $image, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
-        imagedestroy($image);
-        $image = $resized;
-    }
-
-    if ($type === IMAGETYPE_PNG) {
-        $filename = $basename.'.png';
-        imagesavealpha($image, true);
-        $saved = imagepng($image, $dir.'/'.$filename, 6);
-    } else {
-        $filename = $basename.'.jpg';
-        $saved = imagejpeg($image, $dir.'/'.$filename, 85);
-    }
-    imagedestroy($image);
-
-    return $saved ? $filename : '';
-}
-

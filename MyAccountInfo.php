@@ -62,9 +62,9 @@ if ($admin_rights == 'NOT SET') {
 			<script src="assets/js/account.js?v=<?php echo filemtime(__DIR__.'/assets/js/account.js'); ?>"></script>
             <script src="assets/js/render.js"></script>
 			<script src="assets/js/stupidtable.js"></script>
-            <script src="assets/js/sponsormanagement.js"></script>
+            <script src="assets/js/sponsormanagement.js?v=<?php echo filemtime(__DIR__.'/assets/js/sponsormanagement.js'); ?>"></script>
             <script src="assets/js/database_actions.js"></script>
-            <script src="assets/js/backbuttonfunctions.js"></script>
+            <script src="assets/js/backbuttonfunctions.js?v=<?php echo filemtime(__DIR__.'/assets/js/backbuttonfunctions.js'); ?>"></script>
             <script src="assets/js/eventsettings.js?v=<?php echo filemtime(__DIR__.'/assets/js/eventsettings.js'); ?>"></script>
             <script src="assets/js/regtypes.js?v=<?php echo filemtime(__DIR__.'/assets/js/regtypes.js'); ?>"></script>
             <script src="assets/js/tinymce/tinymce.min.js"></script>            
