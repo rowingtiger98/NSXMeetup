@@ -2,43 +2,31 @@
 require_once __DIR__ . '/eventImages.php';  // SponsorLogoURL()
 
 
+/* ************************************************************************ */
+/* Function:    NEWRenderSponsorInformation                                 */
+/* Description: Prints the active sponsors for an event (SPONSOR_Event_IDs  */
+/*              is a comma-separated list), or every active sponsor when    */
+/*              $event_id is 0. Logos come from SponsorLogoURL() - the      */
+/*              event's images/sponsors folder for uploaded logos.          */
+/* ************************************************************************ */
 function NEWRenderSponsorInformation($event_id) {
-
+    $event_id = (int)$event_id;
     $sponsors_to_display = Array();
     $title_counter = 0;
-    
-	/* ------------------------------------------------------------ */
-	/* Build an array of sponsors to display based on event_id      */
-	/* ------------------------------------------------------------ */
-    $conn = connectDB('kirbypar_nsx_meetup');
-    $query = sprintf("SELECT * from `nsx_meetup_event_sponsors` WHERE `Sponsor_Active` = 1 AND `SPONSOR_Event_IDs` = %s", $event_id);
-	// $query = "SELECT * from `nsx_meetup_event_sponsors` WHERE `Sponsor_Active` = 1";
-	$result = $conn->query($query);
-	if($result->num_rows > 0) {
-        if ($event_id <= 0) {
-            /* If no event ID is given, then display all the sponsors. */
-            while($row = $result->fetch_assoc()) {
-                $sponsors_to_display[] = $row;
-                if($row['SPONSOR_Level'] == 'Senna') {
-                    $title_counter++;
-                }
-            }
-        } else {
-            /* If a sponsor ID is given, then only get the sponsors that are for that ID */
-            while($row = $result->fetch_assoc()) {
-                $event_sponsored = explode(',', $row['SPONSOR_Event_IDs']);
-                if (in_array($event_id, $event_sponsored)) {
-                    $sponsors_to_display[] = $row;
-                    if($row['SPONSOR_Level'] == 'Senna') {
-                        $title_counter++;
-                    }
-                }
+
+    $pdo = Create_SQL_PHP_DataObject(DB_NAME);
+    $rows = $pdo->query('SELECT * FROM nsx_meetup_event_sponsors WHERE SPONSOR_Active = 1 ORDER BY SPONSOR_ID')->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as $row) {
+        $event_sponsored = array_map('trim', explode(',', (string)$row['SPONSOR_Event_IDs']));
+        if ($event_id <= 0 || in_array((string)$event_id, $event_sponsored, true)) {
+            $sponsors_to_display[] = $row;
+            if ($row['SPONSOR_Division'] == 'title') {
+                $title_counter++;
             }
         }
     }
 
     BuildSponsorHTMLSection($sponsors_to_display, $title_counter);
-    closeDB($conn);
 }
 
 function BuildSponsorHTMLSection($sponsors, $title_sponsors) {
@@ -77,7 +65,7 @@ function BuildSponsorHTMLSection($sponsors, $title_sponsors) {
                     if ($title_sponsor_class == 'title') {
                         $temp_html .= '<article class="box post '.strtolower($value['SPONSOR_Level']).'_sponsor_box">';
                         $temp_html .= '<div class="row gtr-0">';
-                        $temp_html .= '<div class="col-12 col-12-medium col-12-small title_sponsor_header">Senna Level Sponsor</div>';
+                        $temp_html .= '<div class="col-12 col-12-medium col-12-small title_sponsor_header">'.htmlspecialchars($value['SPONSOR_Level'], ENT_QUOTES).' Level Sponsor</div>';
                         $temp_html .= '<div class="col-4 col-12-medium col-12-small">';
                         $temp_html .= '<a href="'.$value['SPONSOR_Weblink'].'" class="image fit" target="_blank"><img src="'.htmlspecialchars(SponsorLogoURL($value['SPONSOR_Thumbnail_Logo']), ENT_QUOTES).'" alt="" /></a>';
                         $temp_html .= '</div>';

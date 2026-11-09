@@ -67,7 +67,7 @@ if ($admin_rights == 'NOT SET') {
             <script src="assets/js/backbuttonfunctions.js?v=<?php echo filemtime(__DIR__.'/assets/js/backbuttonfunctions.js'); ?>"></script>
             <script src="assets/js/eventsettings.js?v=<?php echo filemtime(__DIR__.'/assets/js/eventsettings.js'); ?>"></script>
             <script src="assets/js/regtypes.js?v=<?php echo filemtime(__DIR__.'/assets/js/regtypes.js'); ?>"></script>
-            <script src="assets/js/tinymce/tinymce.min.js"></script>            
+            <script src="https://cdn.jsdelivr.net/npm/tinymce@6.8.5/tinymce.min.js" referrerpolicy="origin"></script>            
 
 		<script>
 		  $( document ).ready(function() {

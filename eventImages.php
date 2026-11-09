@@ -12,6 +12,7 @@
 
 const SHARED_FRONTPAGE_IMAGE_DIR = 'assets/images/frontpage';  // relative to the site folder
 const SHARED_SPONSOR_LOGO_DIR    = 'assets/images/sponsors';   // older sponsor logos, stored by file name only
+const DEFAULT_SPONSOR_LOGO       = 'sponsor-coming-soon-front.jpg';  // in SHARED_SPONSOR_LOGO_DIR, for sponsors without a logo
 
 const FRONTPAGE_IMAGE_MAX_BYTES  = 10 * 1048576;  // 10 MB - keep in step with .user.ini and eventsettings.js
 const FRONTPAGE_IMAGE_MAX_PIXELS = 24000000;      // 24 megapixels - larger images need too much memory to resize
@@ -70,6 +71,7 @@ function EventSponsorLogoDirectory($directory) {
 /* Description: The URL of a sponsor logo. New logos are stored with their  */
 /*              site-relative path (events/<dir>/images/sponsors/...);      */
 /*              older ones are a file name in the shared sponsors folder.   */
+/*              No logo gives DEFAULT_SPONSOR_LOGO.                         */
 /* Inputs:      $logo - SPONSOR_Large_Logo or SPONSOR_Thumbnail_Logo.       */
 /* Returns:     string                                                      */
 /* ************************************************************************ */
@@ -78,7 +80,7 @@ function SponsorLogoURL($logo) {
     if (preg_match('#^events/[A-Za-z0-9_-]+/images/sponsors/[A-Za-z0-9_.-]+$#', $logo)) {
         $path = $logo;
     } else {
-        $path = SHARED_SPONSOR_LOGO_DIR.'/'.basename($logo);
+        $path = SHARED_SPONSOR_LOGO_DIR.'/'.(trim($logo) !== '' ? basename($logo) : DEFAULT_SPONSOR_LOGO);
     }
     return function_exists('app_url') ? app_url($path) : $path;
 }

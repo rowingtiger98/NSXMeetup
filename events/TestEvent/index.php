@@ -239,7 +239,7 @@ if(isset($_GET['event_id'])) {
 				<div id="welcome_letter" class="inner">
                     <div class="row gtr-uniform">
                     	<div class="col-12 col-12-small">
-							<span class="image fit"><img src="../../images/NSXCA-Logo-white.png"></span>
+							<span class="image fit"><img src="../../assets/images/NSXCA-Logo-white.png"></span>
 						</div>
 						<div class="col-12 col-12-small">
 							<a href="https://nsxca.org/product/nsxca-membership/" target="_blank" class="button fit" style="margin-bottom:1em;">JOIN THE NSX Club of America Today</a>

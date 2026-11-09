@@ -10,7 +10,6 @@ const SPONSOR_METHODS = [
     'UpdateSponsorshipLevelDetails'                   => 'admin',
     'UpdateSponsorshipActiveStatus'                   => 'admin',
     'UpdateSponsorshipLevelActiveStatus'              => 'admin',
-    'UpdateSponsorDescription'                        => 'admin',
     'RenderAddNewSponsorshipLevelSection'             => 'admin',
     'RenderAddNewSponsorSection'                      => 'event_admin',
     'EnterNewSponsorIntoDatabase'                     => 'event_admin',
@@ -160,16 +159,6 @@ function RenderEditIndividualSponsorInformation() {
 
 
     $output_html .= '</tbody></table>';
-
-    $output_html .= '<div class="row gtr-50">';
-    $output_html .= '   <div class="col-4 col-4-medium col-12-small">';
- 	$output_html .= '       <a href="#" id="save_changes_button" table="nsx_meetup_event_info" sponsor_id="'.$sponsor_id.'" class="button primary disabled small">Save Changes</a>';
-    $output_html .= '   </div>';
-    $output_html .= '   <div class="col-8 col-8-medium col-12-small">';
-    $output_html .= '       <span style="padding:auto;text-align:center;" id="save_changes_button_status"></span>';
-    $output_html .= '   </div>';    
-    $output_html .= '</div>';
-
     $output_html .= '</div>';
     // Sponsor Logo - replaced as soon as a new one is chosen
     $output_html .= '<div class="col-6 col-6-medium col-12-small">';
@@ -182,9 +171,18 @@ function RenderEditIndividualSponsorInformation() {
     $output_html .= '<div id="edit_sponsor_logo_status" class="frontpage_upload_status"></div>';
     $output_html .= '</div>';
 
-    /* Description Editor */
-    // $output_html .= '<textarea name="test_description" id="sponsor_edit_description_'.$row['SPONSOR_ID'].'" changes_made="no">'.$row['SPONSOR_Description'].'</textarea>';
-    $output_html .= '<textarea name="test_description" id="sponsor_edit_section_'.$sponsor_id.'" sponsor_id="'.$sponsor_id.'" changes_made="no">'.$h($row['SPONSOR_Description']).'</textarea>';
+    /* Description Editor - saved with the other details by Save Changes */
+    $output_html .= '<div class="col-12 col-12-small">';
+    $output_html .= '<h3>Sponsor Description</h3>';
+    $output_html .= '<p>The information you enter below will be used to describe the sponsor on the web site.</p>';
+    $output_html .= '<textarea name="test_description" id="sponsor_edit_section_'.$sponsor_id.'" sponsor_id="'.$sponsor_id.'">'.$h($row['SPONSOR_Description']).'</textarea>';
+    $output_html .= '</div>';
+    $output_html .= '</div>';
+
+    $output_html .= '<div style="display:inline-flex;align-items:center;gap:1em;margin-top:1.5em;">';
+ 	$output_html .= '<a href="#" id="save_changes_button" sponsor_id="'.$sponsor_id.'" class="button primary disabled">Save Changes</a>';
+    $output_html .= '<span id="save_changes_button_status"></span>';
+    $output_html .= '</div>';
 
     /* Start Building the HTML to edit the page */
 	$results[] = $output_html;
@@ -200,6 +198,7 @@ function RenderEditIndividualSponsorInformation() {
 /*              sponsor_name = Name of the sponsor.                         */
 /*              sponsor_weblink = The sponsors web page link.               */
 /*              sponsor_level = The level of the sponsor.                   */
+/*              sponsor_description = The description (when sent).          */
 /* Returns:     nothing                                        				*/
 /* ************************************************************************ */  
 function UpdateSponsorDetails() {
@@ -241,10 +240,11 @@ function UpdateSponsorDetails() {
         'sponsor_name' => $sponsor_name,
         'sponsor_weblink' => $sponsor_weblink,
         'sponsor_level' => $sponsor_level,
-        'sponsor_division' => $sponsor_division
+        'sponsor_division' => $sponsor_division,
+        'sponsor_description' => isset($_POST['sponsor_description']) ? (string)$_POST['sponsor_description'] : (string)$sponsor['SPONSOR_Description']
     ];
 
-    $sql = "UPDATE `nsx_meetup_event_sponsors` SET `SPONSOR_Name`=:sponsor_name, `SPONSOR_Weblink`=:sponsor_weblink, `SPONSOR_Level`=:sponsor_level, `SPONSOR_Division`=:sponsor_division WHERE SPONSOR_ID=:sponsor_id";
+    $sql = "UPDATE `nsx_meetup_event_sponsors` SET `SPONSOR_Name`=:sponsor_name, `SPONSOR_Weblink`=:sponsor_weblink, `SPONSOR_Level`=:sponsor_level, `SPONSOR_Division`=:sponsor_division, `SPONSOR_Description`=:sponsor_description WHERE SPONSOR_ID=:sponsor_id";
     try {
         $dbh->prepare($sql)->execute($data);
         $results = ['success', 'The details for '.htmlspecialchars($sponsor_name, ENT_QUOTES).' were updated successfully.'];
@@ -373,42 +373,6 @@ function UpdateSponsorshipLevelActiveStatus() {
     $results[] = $output_html;
 	echo json_encode($results); 
 } 
-
-/* ************************************************************************ */
-/* Function:    UpdateSponsorDescription                    				*/
-/* Description: This function will update the text entered to describe a    */
-/*              sponsor in the database.                                    */
-/* Inputs:      sponsor_id = The sponsor tp update.                         */
-/*              textdata = The data to update in text form.                 */
-/* Returns:     nothing                                        				*/
-/* ************************************************************************ */  
-function UpdateSponsorDescription() {
-    $sponsor_id = $_POST['sponsor_id'];
-    $textdata = $_POST['textdata'];
-    $dbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
-    $data = [
-        'textdata' => $textdata,
-        'sponsor_id' => $sponsor_id
-    ];
-
-    $sql = "UPDATE `nsx_meetup_event_sponsors` SET SPONSOR_Description=:textdata WHERE SPONSOR_ID=:sponsor_id";
-    $query = $dbh->prepare($sql);
-    try {
-        $dbh->beginTransaction();
-        $query->execute($data);    
-        $results[] = 'success';
-        $results[] = $query;
-        $dbh->commit();
-    } catch(PDOExecption $e) {
-        $dbh->rollback();
-        $results[] = 'fail';
-        $results[] = $e->getMessage();
-    }    
-
-    $results[] = $output_html;
-	echo json_encode($results); 
-}  
-
 
 /* ************************************************************************ */
 /* Function:    RenderAddNewSponsorshipLevelSection            				*/

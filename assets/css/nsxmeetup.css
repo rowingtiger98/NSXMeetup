@@ -1417,3 +1417,25 @@ input[type="checkbox"].payment_method_toggle:checked + label.payment_method_swit
     margin-top: 1em;
     border-radius: 4px;
 }
+
+/* TinyMCE editors (sponsor descriptions) - main.css makes every <button> white and
+   uppercase with !important, which turns the editor's toolbar and menu text white */
+.tox .tox-tbtn,
+.tox .tox-tbtn:hover,
+.tox .tox-tbtn:focus,
+.tox .tox-mbtn,
+.tox .tox-mbtn:hover,
+.tox .tox-mbtn:focus,
+.tox .tox-split-button,
+.tox .tox-split-button:hover,
+.tox .tox-button--secondary,
+.tox .tox-button--secondary:hover,
+.tox .tox-button--naked,
+.tox .tox-button--naked:hover {
+    color: #222f3e !important;
+}
+.tox button {
+    font-family: inherit;
+    letter-spacing: normal;
+    text-transform: none;
+}

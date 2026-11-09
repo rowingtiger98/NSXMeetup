@@ -59,7 +59,9 @@ function RenderEditSponsorInformation() {
           console.log(data);
           results = eval(data);
         //   $("#details_info").html(results[0]);
-          tinymce.remove();  // editors from a previous visit - their textareas are about to be replaced
+          if (window.tinymce) {
+            tinymce.remove();  // editors from a previous visit - their textareas are about to be replaced
+          }
           $("#main_content_container").html(results[0]);
           RenderBackButton('backtoeditsponsors', event_id);
           if (!document.getElementById('individual_sponsor_edit_container')) {
@@ -67,8 +69,9 @@ function RenderEditSponsorInformation() {
           }
           
           // // Set the click handler for the submit changes button.
-          tinymce.init({
+          window.tinymce && tinymce.init({  // without TinyMCE the description is a plain text box
             selector: "textarea#sponsor_edit_section_"+sponsor_id+"",
+            promotion: false,  // no Upgrade button
             inline: false,
             height: 500,
             width: '100%',
@@ -79,14 +82,17 @@ function RenderEditSponsorInformation() {
               '008000', 'Green',
               '0000FF', 'Blue'
             ],            
-            save_onsavecallback: function () { SaveSponsorDesciption(tinymce.get("sponsor_edit_section_"+sponsor_id+"").getContent());},
+            // Save Changes saves the description too - it lights up once the text changes
+            setup: function (editor) {
+              editor.on('input change undo redo SetContent', ActivateSponsorInfoChangeButton);
+            },
 
             plugins: [
               'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
               'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
-              'insertdatetime', 'media', 'table', 'help', 'wordcount', 'autoresize', 'save'
+              'insertdatetime', 'media', 'table', 'help', 'wordcount', 'autoresize'
             ],
-            toolbar: 'save | undo redo | blocks | ' +
+            toolbar: 'undo redo | blocks | ' +
             'bold italic backcolor | alignleft aligncenter ' +
             'alignright alignjustify | bullist numlist outdent indent | ' +
             'removeformat | help',
@@ -100,7 +106,7 @@ function RenderEditSponsorInformation() {
           }          
 
           document.querySelector("[id='sponsor_edit_infodropdown_level']").onchange = ActivateSponsorInfoChangeButton;
-          document.querySelector("[id='sponsor_edit_section_"+sponsor_id+"']").onchange = SetDescriptionSectionChangeFlag;
+          document.querySelector("[id='sponsor_edit_section_"+sponsor_id+"']").oninput = ActivateSponsorInfoChangeButton;  // plain text box when TinyMCE isn't loaded
           document.querySelector("[id='save_changes_button']").onclick = SaveNewSponsorProperties;
           document.querySelector("[id='edit_sponsor_logo']").onchange = UploadSponsorLogo;
           
@@ -155,7 +161,9 @@ function RenderAddNewSponsorInformation(event) {
         success: function(data) {
           console.log('rendering the add sponsor edit section');
           results = eval(data);
-          tinymce.remove();  // editors from a previous visit - their textareas are about to be replaced
+          if (window.tinymce) {
+            tinymce.remove();  // editors from a previous visit - their textareas are about to be replaced
+          }
           $("#main_content_container").html(results[0]);
           RenderBackButton('backtoeditsponsors', event_id);
 
@@ -170,8 +178,9 @@ function RenderAddNewSponsorInformation(event) {
           }
           
           // Set the click handler for the submit changes button.
-          tinymce.init({
+          window.tinymce && tinymce.init({  // without TinyMCE the description is a plain text box
             selector: "textarea#new_sponsor_edit_section",
+            promotion: false,  // no Upgrade button
             inline: false,
             height: 500,
             width: '100%',
@@ -272,7 +281,8 @@ function SaveNewSponsorToDatabase(event) {
     data.append('sponsor_weblink', $("#sponsor_edit_infobox_weblink").val());
     data.append('sponsor_level', $("#sponsor_edit_infodropdown_level").val() || '');
     data.append('sponsor_active', active ? active.value : '0');
-    data.append('sponsor_description', tinymce.get("new_sponsor_edit_section").getContent());
+    var editor = window.tinymce && tinymce.get("new_sponsor_edit_section");
+    data.append('sponsor_description', editor ? editor.getContent() : $("#new_sponsor_edit_section").val());
     if (logo) {
         data.append('sponsor_logo', logo);
     }
@@ -425,7 +435,7 @@ function SaveNewSponsorshipLevelToDatabase() {
 // -------------------------------------------------------------------------------------
 function ActivateSponsorInfoChangeButton() {
     console.log("Check Save Button")
-    $("#save_changes_button_status").html('');
+    ShowUploadStatus($("#save_changes_button_status"), '', false);
     var sponsorLevel = document.getElementById("sponsor_edit_infodropdown_level");
     var change_detected = false;
     $("[id^='sponsor_edit_infobox']").each(function() {
@@ -445,6 +455,11 @@ function ActivateSponsorInfoChangeButton() {
         $("#save_changes_button").removeClass('disabled');
         change_detected = true;        
     }
+
+    if (SponsorDescriptionChanged()) {
+        $("#save_changes_button").removeClass('disabled');
+        change_detected = true;
+    }
     
     if (!(change_detected)) {
         console.log('Adding Disabled Back')
@@ -453,6 +468,30 @@ function ActivateSponsorInfoChangeButton() {
     } else {
         console.log('HERE ONE');
     }
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	SponsorDescriptionTextarea / SponsorDescriptionEditor / SponsorDescriptionChanged
+// Description: The Edit Sponsor page's description - its TinyMCE editor (null when
+//              TinyMCE isn't loaded, and the description is a plain text box), and
+//              whether it has changed since it was loaded or last saved.
+// -------------------------------------------------------------------------------------
+function SponsorDescriptionTextarea() {
+    return document.getElementById("sponsor_edit_section_" + $("#individual_sponsor_edit_container").attr('sponsor_id'));
+}
+
+function SponsorDescriptionEditor() {
+    var textarea = SponsorDescriptionTextarea();
+    return (textarea && window.tinymce) ? tinymce.get(textarea.id) : null;
+}
+
+function SponsorDescriptionChanged() {
+    var editor = SponsorDescriptionEditor();
+    var textarea = SponsorDescriptionTextarea();
+    if (editor) {
+        return editor.isDirty();
+    }
+    return textarea ? textarea.value !== textarea.defaultValue : false;
 }
 
 // -------------------------------------------------------------------------------------
@@ -497,32 +536,44 @@ function ActivateSponsorshipLevelInfoChangeButton() {
 // Description: This function, when clicked, will save the new sponsor details to the 
 //              database (minus description information).
 // -------------------------------------------------------------------------------------
-function SaveNewSponsorProperties() {
+function SaveNewSponsorProperties(event) {
+    event.preventDefault();  // the button is a link to "#" - don't jump to the top of the page
+    if ($(this).hasClass('disabled')) {
+        return;
+    }
     console.log('Save the properties for sponsor ID = ' + $(this).attr('sponsor_id'));
     var sponsor_id = $(this).attr('sponsor_id');
     var sponsor_name = $("#sponsor_edit_infobox_name").val();
     var sponsor_weblink = $("#sponsor_edit_infobox_weblink").val();
     var sponsor_level = document.getElementById("sponsor_edit_infodropdown_level");
+    var editor = SponsorDescriptionEditor();
+    var textarea = SponsorDescriptionTextarea();
+    var sponsor_description = editor ? editor.getContent() : textarea.value;
 
     console.log(sponsor_id + ' : ' + sponsor_name + ' : ' + sponsor_weblink + ' : ' + sponsor_level.value);
     
     $.ajax({
         url: 'sponsor_management.php',
         type: 'POST',
-        data: {method: 'UpdateSponsorDetails', event_id:$("#individual_sponsor_edit_container").attr('event_id'), sponsor_id:sponsor_id, sponsor_name:sponsor_name, sponsor_weblink:sponsor_weblink, sponsor_level:sponsor_level.value || ''},
+        data: {method: 'UpdateSponsorDetails', event_id:$("#individual_sponsor_edit_container").attr('event_id'), sponsor_id:sponsor_id, sponsor_name:sponsor_name, sponsor_weblink:sponsor_weblink, sponsor_level:sponsor_level.value || '', sponsor_description:sponsor_description},
         success: function(data) {
           console.log(data);
           results = eval(data);
           if(results[0] === 'success') {
-            $("#save_changes_button_status").html(results[1]);
+            ShowUploadStatus($("#save_changes_button_status"), $('<div>').html(results[1]).text(), false);  // green
             $("#sponsor_edit_infodropdown_level").attr('current_level', sponsor_level.value);
             $("#sponsor_edit_infobox_name").attr('current_value', sponsor_name);
             $("#sponsor_edit_infobox_weblink").attr('current_value', sponsor_weblink);
+            if (editor) {
+              editor.setDirty(false);
+            } else {
+              textarea.defaultValue = sponsor_description;
+            }
 
+            $("#save_changes_button").addClass('disabled');
           } else {
-            alert('The update failed: ' + results[1]);
+            ShowUploadStatus($("#save_changes_button_status"), 'The update failed: ' + [].concat(results[1]).join(' '), true);  // red
           }
-          $("#save_changes_button").addClass('disabled');
         }
       });    
 
@@ -610,28 +661,6 @@ function HandleSponsorshipLevelActivityChange(event) {
         results = eval(data);
       }
     });    
-}
-
-function SetDescriptionSectionChangeFlag(event) {
-    console.log('A change was made to the description section');
-}
-
-function SaveSponsorDesciption(textdata) {
-    var sponsor_id = $("#individual_sponsor_edit_container").attr('sponsor_id');
-    console.log('Save Sponsor Description ' + textdata);    
-    $.ajax({
-        url: 'sponsor_management.php',
-        type: 'POST',
-        data: {method: 'UpdateSponsorDescription', sponsor_id:sponsor_id, textdata:textdata},
-        success: function(data) {
-          console.log(data)
-        //   results = eval(data);
-          //$("#details_info").html(results[0]);
-          
-          // // Set the click handler for the submit changes button.
-          // document.querySelector("[id='submit_changes_button']").onclick = SubmitChangesToDatabase;
-        }
-    }); 
 }
 
 function RonDoingStuff() {
