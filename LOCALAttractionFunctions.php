@@ -1,9 +1,15 @@
 <?php
   require_once __DIR__ . '/databaseFunctions.php';
 
-  if(isset($_POST['method'])) {
-    $_POST['method']();
-  }
+  require_once __DIR__ . '/endpointGuard.php';  // EndpointDispatch() - only the methods below, each for the callers it names
+  const LOCAL_ATTRACTION_METHODS = [
+      'RenderOpeningPageInformation' => 'public',
+      'BuildLocalAttractionSection'  => 'public',
+      'CreateNewLocalAttraction'     => 'event_admin',
+      'EnterNewAttractionCategory'   => 'event_admin',
+      'EnterNewAttractionDetails'    => 'admin',
+  ];
+  EndpointDispatch(__FILE__, LOCAL_ATTRACTION_METHODS);
 
 /* ************************************************************************ */
 /* Funciton:    RenderOpeningPageInformation                                 */
@@ -12,7 +18,7 @@
 /* Returns:     HTML                                        				*/
 /* ************************************************************************ */  
 function RenderOpeningPageInformation() {
-	$event_id = $_POST['event_id'];
+	$event_id = (int)($_POST['event_id'] ?? 0);  // also written into the page
   $editable = $_POST['editable'];
 	$results = array();	
 
@@ -39,8 +45,7 @@ function RenderOpeningPageInformation() {
   $output_html .= '<div id="local_attractions_menu" class="col-3 col-12-xsmall">';
 
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_attraction_categories` WHERE `Event_ID`= '%s' ORDER BY `Category_ID`", $event_id);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_attraction_categories` WHERE `Event_ID` = ? ORDER BY `Category_ID`", [(int)$event_id]);
 	if($result->num_rows > 0) {
         while($row = $result->fetch_assoc()) {
             if($opening_category == '') {
@@ -52,8 +57,7 @@ function RenderOpeningPageInformation() {
 
             if ($row['Category_Name'] == $opening_category) {
                 $category_container .= '<div id="local_attraction_container_'.$row['Category_Name'].'" class="local_attraction_container active" section_name="'.$row['Category_Name'].'">';
-                $attr_query = sprintf("SELECT * from `nsx_meetup_attractions` WHERE `Event_ID`= '%s' AND `Attraction_Category` = '%s'", $event_id, $row['Category_Name']);
-                $attr_result = $conn->query($attr_query);
+                $attr_result = PreparedQuery($conn, "SELECT * from `nsx_meetup_attractions` WHERE `Event_ID` = ? AND `Attraction_Category` = ?", [(int)$event_id, $row['Category_Name']]);
                 if($attr_result->num_rows > 0) {
                     while($attr_row = $attr_result->fetch_assoc()) {
                         $category_container .= BuildIndividualLocalAttaractionContainer($attr_row);
@@ -92,15 +96,15 @@ function RenderOpeningPageInformation() {
 /* Returns:     HTML                                        				        */
 /* ************************************************************************ */  
 function BuildLocalAttractionSection() {
-  $event_id = $_POST['event_id'];
-	$section_name = $_POST['section_name'];
+  $event_id = (int)($_POST['event_id'] ?? 0);
+	$section_name = (string)($_POST['section_name'] ?? '');
 	$results = array();	
   $output_html = '';
-  $output_html .= '<div id="local_attraction_container_'.$section_name.'" class="local_attraction_container active" section_name="'.$section_name.'">';
+  $section_attr = htmlspecialchars($section_name, ENT_QUOTES);
+  $output_html .= '<div id="local_attraction_container_'.$section_attr.'" class="local_attraction_container active" section_name="'.$section_attr.'">';
       
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_attractions` WHERE `Event_ID`= '%s' AND `Attraction_Category` = '%s'", $event_id, $section_name);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_attractions` WHERE `Event_ID` = ? AND `Attraction_Category` = ?", [$event_id, $section_name]);
 	if($result->num_rows > 0) {
         while($row = $result->fetch_assoc()) {
             $output_html .= BuildIndividualLocalAttaractionContainer($row);
@@ -223,8 +227,7 @@ function CreateNewLocalAttraction() {
   $output_html .= '<option value="" selected disabled hidden>Select the category</option>';
 
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_attraction_categories` WHERE `Event_ID`= '%s' ORDER BY `Category_ID`", $event_id);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_attraction_categories` WHERE `Event_ID` = ? ORDER BY `Category_ID`", [(int)$event_id]);
 	if($result->num_rows > 0) {
         while($row = $result->fetch_assoc()) {
           $output_html .= '<option value="'.$row['Category_Name'].'">'.$row['Category_Title'].'</option>';

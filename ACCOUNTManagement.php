@@ -3,9 +3,26 @@
   require_once __DIR__ . '/eventAdmin.php';       // EventAdminAuthorize() for the registrant list
   require_once __DIR__ . '/paymentMethods.php';   // PAYMENT_METHODS names
 
-  if(isset($_POST['method'])) {
-    $_POST['method']();
-  }
+  require_once __DIR__ . '/endpointGuard.php';  // EndpointDispatch() - only the methods below, each for the callers it names
+  const ACCOUNT_MANAGEMENT_METHODS = [
+      'ValidateResetCodeTimeframe'           => 'public',
+      'ResetUserPassword'                    => 'public',
+      'RenderBackButton'                     => 'public',
+      'UpdateUserAttendedEvents'             => 'registrant',
+      'RenderUserAccountInformation'         => 'self',
+      'RenderMyAccountAttending'             => 'self',
+      'RenderMyAccountManage'                => 'self',
+      'RenderManagementToolsSection'         => 'event_admin',
+      'NewRenderFindEditRegistration'        => 'event_admin',
+      'RenderEmailListGeneration'            => 'event_admin',
+      'RenderEditSponsorInformation'         => 'event_admin',
+      'RenderSponsorManagementInterface'     => 'event_admin',
+      'RenderSponsorshipManagementInterface' => 'event_admin',
+      'RenderSwapShopManagement'             => 'event_admin',
+      'RenderMyAccountOverLord'              => 'overlord',
+      'CreateEnterNewEventPage'              => 'overlord',
+  ];
+  EndpointDispatch(__FILE__, ACCOUNT_MANAGEMENT_METHODS);
 
 /* ************************************************************************ */
 /* Funciton:    ValidateResetCodeTimeframe                         		*/
@@ -18,8 +35,7 @@ function ValidateResetCodeTimeframe() {
 
     $results = array();
 	$conn = connectDB('kirbypar_nsx_meetup');
-    $query = sprintf('SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Password_Reset_ID` = "%s" ', $UUID); 
-	$result = $conn->query($query);
+    $result = PreparedQuery($conn, 'SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Password_Reset_ID` = ?', [is_string($UUID) ? $UUID : '']);
 	if($result->num_rows > 0) {
         $row = $result->fetch_assoc();      
         $ts1 = strtotime($row['NSX_Password_Reset_Timer']);
@@ -65,10 +81,15 @@ function ResetUserPassword() {
     $UUID = $_POST['UUID'];
     $results = array();
 	$conn = connectDB('kirbypar_nsx_meetup');
-    $query = sprintf('SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Password_Reset_ID` = "%s" ', $UUID); 
-	$result = $conn->query($query);
+    $result = PreparedQuery($conn, 'SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Password_Reset_ID` = ?', [is_string($UUID) ? $UUID : '']);
 	if($result->num_rows > 0) {
         $row = $result->fetch_assoc();
+        // The same one hour limit ValidateResetCodeTimeframe shows the form for
+        if (!is_string($password) || $password === '' || (time() - strtotime($row['NSX_Password_Reset_Timer'])) > 3600) {
+            closeDB($conn);
+            echo json_encode(['fail', 'This password reset link has expired. Request another link and try again.']);
+            return;
+        }
         $new_password = password_hash($password, PASSWORD_BCRYPT, ["cost" => 11]);
         $user_id = $row['NSX_User_ID'];
 
@@ -367,6 +388,22 @@ function  RenderManagementToolsSection () {
     $output_html .= '    <button id="admin_event_handler" action="find_edit_registration" class="button primary small fit" event_id="'.$event_id.'" collect_payment="'.$collect_payments.'">Click Here</button>';
     $output_html .= '</div>';
 
+    /* -- Add / Edit Sponsorship Levels -- */
+    $output_html .= '<div>';
+    $output_html .= '<span class="number"><span class="icon solid fa-layer-group"></span></span>';
+    $output_html .= '<h3>Add / Edit Sponsorship Levels</h3>';
+    $output_html .= '<p>In this section, you will be able to add a new sponsorship level or edit the properties of an existing level.</p>';
+    $output_html .= '<a href="#" id="admin_event_handler" action="sponsorship_level_management" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
+    $output_html .= '</div>';
+
+    /* -- Add / Edit Sponsor Information -- */
+    $output_html .= '<div>';
+    $output_html .= '<span class="number"><span class="icon solid fa-handshake"></span></span>';
+    $output_html .= '<h3>Add / Edit Sponsor Information</h3>';
+    $output_html .= '<p>In this section, you will be able to add a new sponsor or edit the properties of an existing sponsor.</p>';
+    $output_html .= '<a href="#" id="admin_event_handler" action="sponsor_management" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
+    $output_html .= '</div>';
+
     /* -- Attendees -- */
     // $output_html .= '<div>';
     // $output_html .= '<span class="number"><span class="icon solid fa-users"></span></span>';
@@ -432,22 +469,6 @@ function  RenderManagementToolsSection () {
     // $output_html .= '<button id="edit_sponsor_information" class="button primary small fit" event_name="'.$event_name.'" event_id="'.$event_id.'">Click Here</button>';
     // $output_html .= '</div>';  
 
-    /* -- Sponsor Managememt Section -- */
-    $output_html .= '<div>';
-    $output_html .= '<span class="number"><span class="icon solid fa-user"></span></span>';
-    $output_html .= '<h3>Add / Edit Sponsorship Levels</h3>';
-    $output_html .= '<p>In this section, you will be able to add a new sponsorship level or edit the properties of an existing levels.</p>';
-    $output_html .= '<a href="#" id="admin_event_handler" action="sponsorship_level_management" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
-    $output_html .= '</div>';      
-
-    /* -- Sponsor Managememt Section -- */
-    $output_html .= '<div>';
-    $output_html .= '<span class="number"><span class="icon solid fa-user"></span></span>';
-    $output_html .= '<h3>Add / Edit Sponsor Information</h3>';
-    $output_html .= '<p>In this NEW section, you will be able to add a new sponsor or edit the properties of an existing sponsor.</p>';
-    $output_html .= '<a href="#" id="admin_event_handler" action="sponsor_management" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
-    $output_html .= '</div>';
-
     /* -- Filler -- */
     // $output_html .= '<div>';
     // $output_html .= '<span class="number"><span class="icon solid fa-tag"></span></span>';
@@ -488,9 +509,7 @@ function RenderEditLocalAttraction() {
 /* ************************************************************************ */
 function RetrieveUserInformation($username) {
 	$conn = connectDB('kirbypar_nsx_meetup');
-    $query = sprintf("SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username`= '%s'", $username);
-    
-    $result = $conn->query($query);
+    $result = PreparedQuery($conn, "SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username` = ?", [(string)$username]);
     if($result->num_rows > 0) {
         $object = $result->fetch_object();
     } else {
@@ -508,7 +527,7 @@ function RetrieveUserInformation($username) {
 function  UpdateUserAttendedEvents() {
 	$driver1 = $_POST['driver1'];
 	$driver2 = $_POST['driver2'];
-    $event_id = $_POST['event_id'];
+    $event_id = (int)$_POST['event_id'];  // added to the account's list of events attended
 	$result = array();
     $status = 'fail';
     $message = '';
@@ -521,8 +540,7 @@ function  UpdateUserAttendedEvents() {
         $row = $result->fetch_assoc();
         $driver_1_email = $row['Participant_Email'];
 
-        $account_query = sprintf("SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username`='%s'", $driver_1_email);
-        $account_results = $conn->query($account_query);
+        $account_results = PreparedQuery($conn, "SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username` = ?", [$driver_1_email]);
         if($account_results->num_rows > 0) {
             try {
                 $account_row = $account_results->fetch_assoc();
@@ -561,8 +579,7 @@ function  UpdateUserAttendedEvents() {
             $row = $result->fetch_assoc();
             $driver_2_email = $row['Participant_Email'];
     
-            $account_query = sprintf("SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username`='%s'", $driver_2_email);
-            $account_results = $conn->query($account_query);
+            $account_results = PreparedQuery($conn, "SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username` = ?", [$driver_2_email]);
             if($account_results->num_rows > 0) {
                 try {
                     $account_row = $account_results->fetch_assoc();

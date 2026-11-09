@@ -3,9 +3,11 @@
   require_once __DIR__ . '/eventAdmin.php';  // EventAdminAuthorize() - event admins only
   require_once __DIR__ . '/registrantHistory.php';  // RenderRegistrantHistory()
 
-  if(isset($_POST['method'])) {
-    $_POST['method']();
-  }
+  require_once __DIR__ . '/endpointGuard.php';  // EndpointDispatch() - only the methods below, each for the callers it names
+  const PARTICIPANT_METHODS = [
+      'RenderParticipantInformation' => 'event_admin',
+  ];
+  EndpointDispatch(__FILE__, PARTICIPANT_METHODS);
 
 /* ************************************************************************ */
 /* Funciton:    RenderParticipantInformation                            	*/

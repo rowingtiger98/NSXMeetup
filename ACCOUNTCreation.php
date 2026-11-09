@@ -1,9 +1,12 @@
 <?php
   require_once __DIR__ . '/databaseFunctions.php';
 
-  if(isset($_POST['method'])) {
-    $_POST['method']();
-  }
+  require_once __DIR__ . '/endpointGuard.php';  // EndpointDispatch() - only the methods below, each for the callers it names
+  const ACCOUNT_CREATION_METHODS = [
+      'CheckForExistingUserAccount' => 'public',
+      'EnterAccountInformation'     => 'public',
+  ];
+  EndpointDispatch(__FILE__, ACCOUNT_CREATION_METHODS);
 
 /* ******************************************************************************************************** */
 /* Funciton:    CheckForExistingUserAccount                           	                                    */
@@ -13,7 +16,7 @@
 /* ******************************************************************************************************** */
 function CheckForExistingUserAccount() {
     $user_email = $_POST['email'];
-    print 'Checking for exsiting account for '.$user_email.'';
+    print 'Checking for exsiting account for '.htmlspecialchars((string)$user_email, ENT_QUOTES).'';
 }
 
 

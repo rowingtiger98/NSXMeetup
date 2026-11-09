@@ -3,9 +3,25 @@
     require_once __DIR__ . '/SessionBootstrap.php';
     require_once __DIR__ . '/paymentMethods.php';
 
-    if(isset($_POST['method'])) {
-        $_POST['method']();
-    }
+    require_once __DIR__ . '/endpointGuard.php';  // EndpointDispatch() - only the methods below, each for the callers it names
+    const GENERAL_METHODS = [
+        'GetSectionText'                 => 'public',
+        'RenderAgendaInformation'        => 'public',
+        'RenderAttendingInformation'     => 'public',
+        'RenderEventStatsContent'        => 'public',
+        'EnterDriverInformation'         => 'public',
+        'VerifyUniqueUsername'           => 'public',
+        'MailerFunction'                 => 'public',
+        'SendPasswordRecoveryLink'       => 'public',
+        'CreateConfirmationPage'         => 'registrant',
+        'DownloadParticipantInformation' => 'event_admin',
+        'CreateLanyardLabelsCSVFile'     => 'event_admin',
+        'CreatePhotoNumbersCSVFile'      => 'admin',
+        'RenderEditNewsContainer'        => 'admin',
+        'UpdateSectionTextInDatabase'    => 'admin',
+        'ShowHidePageSection'            => 'admin',
+    ];
+    EndpointDispatch(__FILE__, GENERAL_METHODS);
 
 /* ************************************************************************ */
 /* Funciton:    GetFullURL                                   				*/
@@ -43,10 +59,9 @@ function GetEventWorkingDirectory() {
 function VerifyUniqueUsername() {
 	$username = trim($_POST['username']);
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username`='%s'", $username);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username` = ?", [$username]);
 	if($result->num_rows > 0) {
-		print 'Fail - '.$username.' is already taken. Please enter a different user namee';
+		print 'Fail - '.htmlspecialchars($username, ENT_QUOTES).' is already taken. Please enter a different user namee';
 	} else {
 		print 'PASS';
 	}
@@ -60,8 +75,7 @@ function VerifyUniqueUsername() {
 /* ************************************************************************ */
 function GetEventInformationFromID($event_id) {
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_events` WHERE `EVENT_ID`='%s'", $event_id);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_events` WHERE `EVENT_ID` = ?", [(int)$event_id]);
 	if($result->num_rows > 0) {
 		$row = $result->fetch_assoc();
 	} else {
@@ -81,8 +95,7 @@ function GetEventInformationFromID($event_id) {
 function GetEventInformationFromDirectoryName($basename) {
     $event_id = 0;
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_events` WHERE `EVENT_Directory`='%s'", $basename);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_events` WHERE `EVENT_Directory` = ?", [(string)$basename]);
 	if($result->num_rows > 0) {
 		$row = $result->fetch_assoc();
 	} else {
@@ -170,8 +183,7 @@ function GetSectionText() {
 	$section_name = $_POST['section_name'];
 	$results = array();	
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_web_sections` WHERE `SECTION_Name`= '%s'", $section_name);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_web_sections` WHERE `SECTION_Name` = ?", [(string)$section_name]);
 	if($result->num_rows > 0) {
         $row = $result->fetch_assoc();
 		$results[] = $row['SECTION_Hide'];
@@ -196,8 +208,7 @@ function GetSectionText() {
 	
 	$output_html .= '<div id="driver_confirmation_container_driver1" class="driver_confirmation_container" driver="driver1">';	
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_web_sections` WHERE `SECTION_Name`= '%s'", $section_name);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_web_sections` WHERE `SECTION_Name` = ?", [(string)$section_name]);
 	if($result->num_rows > 0) {
         $row = $result->fetch_assoc();
 	  
@@ -314,8 +325,7 @@ function CreateConfirmationPageAttendColumnnsObject($event_id) {
 /* ************************************************************************ */
 function RenderPaymentInformation($driver1, $driver2, $event_id, $send_email = true) {
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_events` WHERE `Event_ID`= '%s'", $event_id);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_events` WHERE `Event_ID` = ?", [(int)$event_id]);
     $total_due = 0.00;
 	if($result->num_rows == 1) {
         $row = $result->fetch_assoc();
@@ -987,16 +997,15 @@ function EnterDriverInformation() {
 	// ---------------------------------------------- //
 	$conn = connectDB('kirbypar_nsx_meetup');
 	$safe_name = str_replace("'", "\'", $name);
-	$check_query = sprintf("SELECT * from `nsx_meetup_participants` WHERE `Participant_Name`='%s' AND `Participant_Email`='%s' AND `Event_ID`=%d", $safe_name, $email, $event_id);
-	$check_result = $conn->query($check_query);
+	// Names are saved with ' as \' (below), so the check looks for that form
+	$check_result = PreparedQuery($conn, "SELECT * from `nsx_meetup_participants` WHERE `Participant_Name` = ? AND `Participant_Email` = ? AND `Event_ID` = ?", [$safe_name, $email, (int)$event_id]);
 	if($check_result->num_rows > 0) {
         $results[] =  'duplicate';
-	    $results[] =  'It appears that '.$safe_name.' has already registered for this event using email address '.$email.'. If this is not correct, please contact us at general_information@nsxmeetup.com and we will resolve the issue.';
+	    $results[] =  'It appears that '.htmlspecialchars($name, ENT_QUOTES).' has already registered for this event using email address '.htmlspecialchars($email, ENT_QUOTES).'. If this is not correct, please contact us at general_information@nsxmeetup.com and we will resolve the issue.';
         closeDB($conn);
 	} else {
 
-		$event_query = sprintf("SELECT * from `nsx_meetup_events` WHERE `EVENT_ID`='%s'", $event_id);
-		$event_query_results = $conn->query($event_query);
+		$event_query_results = PreparedQuery($conn, "SELECT * from `nsx_meetup_events` WHERE `EVENT_ID` = ?", [(int)$event_id]);
 		$row = $event_query_results->fetch_assoc();
 		$current_participants = $row['EVENT_Participants'];
 				
@@ -1156,14 +1165,13 @@ function SendPasswordRecoveryLink() {
     $results = array();
 
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf('SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username` = "%s"', $email);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username` = ?", [(string)$email]);
 	if($result->num_rows > 0) {
         $UUID = guidv4(openssl_random_pseudo_bytes(16));
-		$sql_update = sprintf('UPDATE `nsx_meetup_user_accounts` SET `NSX_Password_Reset_ID`="%s",`NSX_Password_Reset_Timer`= now() WHERE `NSX_Username` = "%s"', $UUID, $email);
-        if (!(mysqli_query($conn, $sql_update))) {
+        if (!PreparedQuery($conn, "UPDATE `nsx_meetup_user_accounts` SET `NSX_Password_Reset_ID` = ?, `NSX_Password_Reset_Timer` = now() WHERE `NSX_Username` = ?", [$UUID, (string)$email])) {
+            error_log('SendPasswordRecoveryLink: could not save the reset code for '.$email.': '.$conn->error);
             $results[] =  "failed";
-            $results[] =  "Could not UPDATE the database with query = ".$sql_update."";       
+            $results[] =  "The password reset link could not be created. Please try again.";
         } else {
             $password_reset_link = sprintf("https://www.nsxmeetup.com/account_reset.php?resetid=%s", $UUID);
 
@@ -1260,15 +1268,15 @@ function SendPasswordRecoveryLink() {
 function RenderAttendingInformation() {
 	$event_id = $_POST['event_id'];
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_events` WHERE `EVENT_ID` = %s", $event_id);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_events` WHERE `EVENT_ID` = ?", [(int)$event_id]);
+	$registered_participants = '';
 	if($result->num_rows > 0) {
     	$row = $result->fetch_assoc();
 		$registered_participants = $row['EVENT_Participants'];
 	}	  
 
 	$output_html = '<table style="margin-top: 12rem;"><thead><tr><th>Name</th><th>State</th><th style="text-align:right;">Car</th></tr></thead><tbody>';
-	$parts_query = sprintf("SELECT * from `nsx_meetup_participants` WHERE `Participant_ID` IN  (%s)", $registered_participants);
+	$parts_query = "SELECT * from `nsx_meetup_participants` WHERE `Participant_ID` IN (".IntegerList($registered_participants).")";
 	$parts_result = $conn->query($parts_query);
 	if($parts_result->num_rows > 0) {
       while($parts_row = $parts_result->fetch_assoc()) {
@@ -1337,15 +1345,15 @@ function RenderAttendingInformation() {
 function RenderEventStatsContent() {
 	$event_id = $_POST['event_id'];
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_events` WHERE `EVENT_ID` = %s", $event_id);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_events` WHERE `EVENT_ID` = ?", [(int)$event_id]);
+	$registered_participants = '';
 	if($result->num_rows > 0) {
     	$row = $result->fetch_assoc();
 		$registered_participants = $row['EVENT_Participants'];
 	}	  
 
     $output_html = '<div style="display:inline;">';
-	$parts_query = sprintf("SELECT * from `nsx_meetup_participants` WHERE `Participant_ID` IN  (%s)", $registered_participants);
+	$parts_query = "SELECT * from `nsx_meetup_participants` WHERE `Participant_ID` IN (".IntegerList($registered_participants).")";
 	$parts_result = $conn->query($parts_query);
 	if($parts_result->num_rows > 0) {
       while($parts_row = $parts_result->fetch_assoc()) {
@@ -2081,8 +2089,7 @@ function ExtractSingleDayOfExperiences($event_id, $experiences_date) {
     // Build the event sections 
     $experiences = array();
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_experiences` WHERE `EVENT_ID` = %d AND `EXPERIENCE_Date` = '%s' ORDER BY `Experience_Start_Time`", $event_id, $experiences_date);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_experiences` WHERE `EVENT_ID` = ? AND `EXPERIENCE_Date` = ? ORDER BY `Experience_Start_Time`", [(int)$event_id, $experiences_date]);
 	if($result->num_rows > 0) {
         while($row =  $result->fetch_assoc()) {
             $experiences[] = $row;

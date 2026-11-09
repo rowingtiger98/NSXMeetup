@@ -1,9 +1,21 @@
 <?php
 require_once __DIR__ . '/databaseFunctions.php';
 
-if(isset($_POST['method'])) {
-    $_POST['method']();
-}
+require_once __DIR__ . '/endpointGuard.php';  // EndpointDispatch() - only the methods below, each for the callers it names
+const SPONSOR_METHODS = [
+    'RenderEditIndividualSponsorshipLevelInformation' => 'admin',
+    'RenderEditIndividualSponsorInformation'          => 'admin',
+    'UpdateSponsorDetails'                            => 'admin',
+    'UpdateSponsorshipLevelDetails'                   => 'admin',
+    'UpdateSponsorshipActiveStatus'                   => 'admin',
+    'UpdateSponsorshipLevelActiveStatus'              => 'admin',
+    'UpdateSponsorDescription'                        => 'admin',
+    'RenderAddNewSponsorshipLevelSection'             => 'admin',
+    'RenderAddNewSponsorSection'                      => 'admin',
+    'EnterNewSponsorIntoDatabase'                     => 'admin',
+    'EnterNewSponsorshipLevelIntoDatabase'            => 'admin',
+];
+EndpointDispatch(__FILE__, SPONSOR_METHODS);
 
 /* ************************************************************************ */
 /* Function:    RenderEditIndividualSponsorshipLevelInformation 			*/
