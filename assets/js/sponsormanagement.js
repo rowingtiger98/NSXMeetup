@@ -127,13 +127,14 @@ function RenderEditIndividualSponsorshipLevelInformation(event) {
   $.ajax({
       url: 'sponsor_management.php',
       type: 'POST',
-      data: {method: 'RenderEditIndividualSponsorshipLevelInformation', level_id:level_id},
+      data: {method: 'RenderEditIndividualSponsorshipLevelInformation', level_id:level_id, event_id:event_id},
       success: function(data) {
-        console.log(data);
         results = eval(data);
         $("#main_content_container").html(results[0]);
         RenderBackButton('backtoeditsponsorshiplevels', event_id);
-          console.log('HERE NOW');
+        if (!document.getElementById('individual_sponsorship_level_edit_container')) {
+          return;  // the level couldn't be found - the page just says so
+        }
           /* Click Handler for turning on and off a sponsor */
           var elms = document.querySelectorAll("input[id^='sponsorship_level_edit_infobox']");
           for(var i = 0; i < elms.length; i++) {
@@ -395,37 +396,42 @@ function UploadSponsorLogo() {
 
 // -------------------------------------------------------------------------------------
 // Function: 	SaveNewSponsorshipLevelToDatabase
-// Description: This function, when clicked, will save the new sponsorship level to the 
-//              database (minus description information).
+// Description: Saves the new sponsorship level, then returns to the levels list.
 // -------------------------------------------------------------------------------------
-function SaveNewSponsorshipLevelToDatabase() {
-    var event_id = $(this).attr('event_id');
-    console.log('(SaveNewSponsorshipLevelToDatabase) - Save the new sponsorship level to the database - EVENT ID = ' + event_id);
-    var sponsorship_type = $("#sponsorship_level_infobox_type").val();
-    var sponsorship_name = $("#sponsorship_level_infobox_name").val();
-    var sponsorship_amount = $("#sponsorship_level_infobox_amount").val();
-    var sponsorship_logosize = document.getElementById("sponsorship_level_info_dropdown_logosize");
-    var sponsorship_logosize_description = sponsorship_logosize.options[sponsorship_logosize.selectedIndex].text;
+function SaveNewSponsorshipLevelToDatabase(event) {
+    event.preventDefault();  // the button is a link to "#" - don't jump to the top of the page
+    var button = $(this);
+    if (button.hasClass('disabled')) {
+        return;
+    }
+    var container = $("#main_sponsorship_info_container");
+    var event_id = container.attr('event_id');
+    var status = $("#save_new_sponsorship_level_status");
+    var active = document.querySelector('input[name="active_sponsorship_level_radio_button"]:checked');
 
-    var sponsorship_active =  document.querySelector('input[name="active_sponsorship_level_radio_button"]:checked').value;
-    console.log(event_id + ' : ' + sponsorship_type + ' : ' + sponsorship_name + ' : ' + sponsorship_amount + ' : ' + sponsorship_active + ' : ' + sponsorship_logosize.value + ' : ' + sponsorship_logosize_description);
-    
+    button.addClass('disabled');
+    ShowUploadProgress(status, 'Saving...');
     $.ajax({
         url: 'sponsor_management.php',
         type: 'POST',
-        data: {method: 'EnterNewSponsorshipLevelIntoDatabase', event_id:event_id, sponsorship_type:sponsorship_type, sponsorship_name:sponsorship_name, sponsorship_amount:sponsorship_amount, sponsorship_active:sponsorship_active, sponsorship_logosize:sponsorship_logosize.value, sponsorship_logosize_description:sponsorship_logosize_description},
-        success: function(data) {
-          console.log(data);
-          results = eval(data);
-          if(results[0] === 'success') {
-            $("#main_sponsorship_info_container").html(results[1]);
-
-          } else {
-            alert('The update failed: ' + results[1]);
-          }
+        dataType: 'json',
+        data: {method: 'EnterNewSponsorshipLevelIntoDatabase', event_id:event_id, csrf_token:container.attr('csrf_token'),
+               sponsorship_name:$("#sponsorship_level_infobox_name").val(), sponsorship_amount:$("#sponsorship_level_infobox_amount").val(),
+               sponsorship_logosize:$("#sponsorship_level_info_dropdown_logosize").val() || '', sponsorship_active:active ? active.value : '1'},
+        success: function(results) {
+            if (results[0] == 'Pass') {
+                RenderSponsorshipManagementInterface(event_id);
+            } else {
+                ShowUploadStatus(status, [].concat(results[1]).join(' '), true);
+                button.removeClass('disabled');
+            }
+        },
+        error: function(xhr, textStatus, error) {
+            console.log('(SaveNewSponsorshipLevelToDatabase) failed:', xhr.status, textStatus, error, xhr.responseText);
+            ShowUploadStatus(status, 'The level could not be saved. Please try again.', true);
+            button.removeClass('disabled');
         }
-      });    
-
+    });
 }
 
 // -------------------------------------------------------------------------------------
@@ -501,7 +507,7 @@ function SponsorDescriptionChanged() {
 // -------------------------------------------------------------------------------------
 function ActivateSponsorshipLevelInfoChangeButton() {
   console.log("Check Save Button")
-  $("#save_changes_button_status").html('');
+  ShowUploadStatus($("#save_level_changes_status"), '', false);
   var sponsorshipLogosize = document.getElementById("sponsorship_level_info_dropdown_logosize");
   var change_detected = false;
   $("[id^='sponsorship_level_edit_infobox']").each(function() {
@@ -581,86 +587,99 @@ function SaveNewSponsorProperties(event) {
 
 // -------------------------------------------------------------------------------------
 // Function: 	SaveNewSponsorshipLevelProperties
-// Description: This function, when clicked, will save the new sponsorship level details 
-//              to the database.
+// Description: Saves the sponsorship level's name, amount and logo size (Edit
+//              Sponsorship Level page) and shows the result next to the button.
 // -------------------------------------------------------------------------------------
-function SaveNewSponsorshipLevelProperties() {
-  console.log('Save the new values for sponsorship level ID = ' + $(this).attr('level_id'));
-  var sponsorship_id = $(this).attr('level_id');
-  var sponsorship_name = $("#sponsorship_level_edit_infobox_name").val();
-  var sponsorship_amount = $("#sponsorship_level_edit_infobox_amount").val();
-  var sponsorship_logosize = document.getElementById("sponsorship_level_info_dropdown_logosize");
-  var sponsorship_logosize_description = sponsorship_logosize.options[sponsorship_logosize.selectedIndex].text;
+function SaveNewSponsorshipLevelProperties(event) {
+  event.preventDefault();  // the button is a link to "#" - don't jump to the top of the page
+  var button = $(this);
+  if (button.hasClass('disabled')) {
+    return;
+  }
+  var container = $("#individual_sponsorship_level_edit_container");
+  var status = $("#save_level_changes_status");
+  var name = $("#sponsorship_level_edit_infobox_name").val();
+  var amount = $("#sponsorship_level_edit_infobox_amount").val();
+  var logosize = $("#sponsorship_level_info_dropdown_logosize").val() || '';
 
-  console.log(sponsorship_id + ' : ' + sponsorship_name + ' : ' + sponsorship_amount + ' : ' + sponsorship_logosize.value + ' : ' + sponsorship_logosize_description);
-  
+  button.addClass('disabled');
+  ShowUploadProgress(status, 'Saving...');
   $.ajax({
       url: 'sponsor_management.php',
       type: 'POST',
-      data: {method: 'UpdateSponsorshipLevelDetails', sponsorship_id:sponsorship_id, sponsorship_name:sponsorship_name, sponsorship_amount:sponsorship_amount, sponsorship_logosize:sponsorship_logosize.value, sponsorship_logosize_description:sponsorship_logosize_description},
-      success: function(data) {
-        console.log(data);
-        results = eval(data);
-        if(results[0] === 'success') {
-          $("#individual_sponsorship_level_edit_container").html(results[1]);
+      dataType: 'json',
+      data: {method: 'UpdateSponsorshipLevelDetails', event_id:container.attr('event_id'), level_id:container.attr('level_id'), csrf_token:container.attr('csrf_token'),
+             sponsorship_name:name, sponsorship_amount:amount, sponsorship_logosize:logosize},
+      success: function(results) {
+        if (results[0] == 'Pass') {
+          ShowUploadStatus(status, results[1], false);  // green
+          $("#sponsorship_level_edit_infobox_name").attr('current_value', name);
+          $("#sponsorship_level_edit_infobox_amount").attr('current_value', amount);
+          $("#sponsorship_level_info_dropdown_logosize").attr('current_level', logosize);
         } else {
-          alert('The update failed: ' + results[1]);
-          $("#individual_sponsorship_level_edit_container").html(results[1]);
+          ShowUploadStatus(status, 'The update failed: ' + [].concat(results[1]).join(' '), true);  // red
+          button.removeClass('disabled');
         }
-        $("#save_level_changes_button").addClass('disabled');
+      },
+      error: function(xhr, textStatus, error) {
+        console.log('(SaveNewSponsorshipLevelProperties) failed:', xhr.status, textStatus, error, xhr.responseText);
+        ShowUploadStatus(status, 'The changes could not be saved. Please try again.', true);
+        button.removeClass('disabled');
       }
-    });    
-
+  });
 }
 
 // -------------------------------------------------------------------------------------
 // Function: 	HandleSponsorActivityChange
-// Description: This functionsets the active state of the selected sponsor.
+// Description: Sets the active state of the selected sponsor (Yes / No in the sponsor
+//              list). If it can't be saved, the buttons go back and the reason shows.
 // -------------------------------------------------------------------------------------
 function HandleSponsorActivityChange(event) {
-    var sponsor_id = $(this).attr('sponsor_id');
-    var sponsor_state = $(this).val();
-    var event_id = $(this).attr('event_id');
-
-    console.log('Change the state for sponsor = ',sponsor_id, 'for event = ',event_id);
-
-    
-    $.ajax({
-        url: 'sponsor_management.php',
-        type: 'POST',
-        data: {method: 'UpdateSponsorshipActiveStatus', sponsor_id:sponsor_id, sponsor_state:sponsor_state, event_id:event_id},
-        success: function(data) {
-          console.log('Set the sponsor ID = '+sponsor_id+' to the value = '+sponsor_state+'')
-          results = eval(data);
-          //$("#details_info").html(results[0]);
-          
-          // // Set the click handler for the submit changes button.
-          // document.querySelector("[id='submit_changes_button']").onclick = SubmitChangesToDatabase;
-        }
-      });    
+    var list = $("#sponsor_management_interface");
+    SaveActiveState(this, $("#sponsor_list_status"),
+        {method: 'UpdateSponsorshipActiveStatus', sponsor_id:$(this).attr('sponsor_id'), sponsor_state:$(this).val(),
+         event_id:list.attr('event_id'), csrf_token:list.attr('csrf_token')});
 }
 
 // -------------------------------------------------------------------------------------
 // Function: 	HandleSponsorshipLevelActivityChange
-// Description: This functionsets the active state of the selected sponsorship level.
+// Description: Sets the active state of the selected sponsorship level (Yes / No in
+//              the levels list).
 // -------------------------------------------------------------------------------------
 function HandleSponsorshipLevelActivityChange(event) {
-  var level_id = $(this).attr('level_id');
-  var sponsorship_state = $(this).val();
-  var event_id = $(this).attr('event_id');
+    var list = $("#sponsorship_level_management_interface");
+    SaveActiveState(this, $("#sponsorship_level_list_status"),
+        {method: 'UpdateSponsorshipLevelActiveStatus', level_id:$(this).attr('level_id'), sponsorship_state:$(this).val(),
+         event_id:list.attr('event_id'), csrf_token:list.attr('csrf_token')});
+}
 
-  console.log('Change the state for sponsor = ',level_id, 'for event = ',event_id);
-
-  
-  $.ajax({
-      url: 'sponsor_management.php',
-      type: 'POST',
-      data: {method: 'UpdateSponsorshipLevelActiveStatus', level_id:level_id, sponsorship_state:sponsorship_state, event_id:event_id},
-      success: function(data) {
-        console.log('Set the level ID = '+level_id+' to the value = '+sponsorship_state+'')
-        results = eval(data);
-      }
-    });    
+// -------------------------------------------------------------------------------------
+// Function: 	SaveActiveState
+// Description: Saves a Yes / No active button and shows the result in status. On a
+//              failure the other button of the pair is checked again.
+// -------------------------------------------------------------------------------------
+function SaveActiveState(radio, status, data) {
+    var other = $('input[name="' + radio.name + '"]').not(radio);
+    ShowUploadProgress(status, 'Saving...');
+    $.ajax({
+        url: 'sponsor_management.php',
+        type: 'POST',
+        dataType: 'json',
+        data: data,
+        success: function(results) {
+            if (results[0] == 'Pass') {
+                ShowUploadStatus(status, results[1], false);
+            } else {
+                other.prop('checked', true);
+                ShowUploadStatus(status, [].concat(results[1]).join(' '), true);
+            }
+        },
+        error: function(xhr, textStatus, error) {
+            console.log('(SaveActiveState) failed:', xhr.status, textStatus, error, xhr.responseText);
+            other.prop('checked', true);
+            ShowUploadStatus(status, 'The change could not be saved. Please try again.', true);
+        }
+    });
 }
 
 function RonDoingStuff() {

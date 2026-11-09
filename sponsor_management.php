@@ -2,89 +2,133 @@
 require_once __DIR__ . '/databaseFunctions.php';
 require_once __DIR__ . '/eventImages.php';  // EventSponsorLogoDirectory(), CheckFrontpageImageUpload(), SaveFrontpageImage()
 
+const SPONSOR_LOGO_SIZES = [  // LEVEL_Logosize => LEVEL_Logosize_Description; also the sponsor's SPONSOR_Division
+    'title'  => 'Page Width',
+    'large'  => '1/3 Page Width',
+    'medium' => '1/4 Page Width',
+    'small'  => '1/6 Page Width',
+];
+
 require_once __DIR__ . '/endpointGuard.php';  // EndpointDispatch() - only the methods below, each for the callers it names
 const SPONSOR_METHODS = [
-    'RenderEditIndividualSponsorshipLevelInformation' => 'admin',
+    'RenderEditIndividualSponsorshipLevelInformation' => 'event_admin',
     'RenderEditIndividualSponsorInformation'          => 'event_admin',
     'UpdateSponsorDetails'                            => 'event_admin',
-    'UpdateSponsorshipLevelDetails'                   => 'admin',
-    'UpdateSponsorshipActiveStatus'                   => 'admin',
-    'UpdateSponsorshipLevelActiveStatus'              => 'admin',
-    'RenderAddNewSponsorshipLevelSection'             => 'admin',
+    'UpdateSponsorshipLevelDetails'                   => 'event_admin',
+    'UpdateSponsorshipActiveStatus'                   => 'event_admin',
+    'UpdateSponsorshipLevelActiveStatus'              => 'event_admin',
+    'RenderAddNewSponsorshipLevelSection'             => 'event_admin',
     'RenderAddNewSponsorSection'                      => 'event_admin',
     'EnterNewSponsorIntoDatabase'                     => 'event_admin',
     'UploadSponsorLogo'                               => 'event_admin',
-    'EnterNewSponsorshipLevelIntoDatabase'            => 'admin',
+    'EnterNewSponsorshipLevelIntoDatabase'            => 'event_admin',
 ];
 EndpointDispatch(__FILE__, SPONSOR_METHODS);
 
 /* ************************************************************************ */
-/* Function:    RenderEditIndividualSponsorshipLevelInformation 			*/
-/* Description: This function will takes changed data and updates the table */
-/*              specified with the changred information.                    */
-/* Inputs:      table_name = The table to update.                           */
-/*              query_data = String of the JSON object containing the keys  */
-/*              to update and the corresponding values.                     */
-/* Returns:     string                                        				*/
-/* ************************************************************************ */  
+/* Function:    RenderEditIndividualSponsorshipLevelInformation             */
+/* Description: The Edit Sponsorship Level page for one of the posted       */
+/*              event's levels.                                             */
+/* Returns:     JSON [HTML]                                                 */
+/* ************************************************************************ */
 function RenderEditIndividualSponsorshipLevelInformation() {
-    $results = array();
-    $level_id = $_POST['level_id'];
+    $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES); };
+    $event_id = (int)$_POST['event_id'];
+    $row = EventSponsorshipLevel(Create_SQL_PHP_DataObject(DB_NAME), $event_id, $_POST['level_id'] ?? 0);
 
-	$link = connectDB('kirbypar_nsx_meetup');
-    $output_html = '<h2> Edit Sponsorship Level Information</h2>';  
-    $output_html .= '<p>This is the sponsorship level management interface. Here, you will be able to edit the properties of all the existing sponsorsship levels in the database. These properties include the basic things, such as name and web link information for a sponsor, to advanced details such as sposnorship level and logos.
-    Additionally, you will be able to set the active status of a current or past sponsorship levels. Only active levels are displayed on the web site.</p>';
-    $output_html .= '<div style="margin-bottom:1em;" id="back_navigation_button"></div>'; 
-    $output_html .= '<div id="individual_sponsorship_level_edit_container" level_id="'.$level_id.'" class="row gtr-50">';
+    $output_html = '<h2>Edit Sponsorship Level Information</h2>';
+    $output_html .= '<div style="margin-bottom:1em;" id="back_navigation_button"></div>';
+    if (!$row) {
+        echo json_encode([$output_html.'<p class="event_settings_error">That sponsorship level could not be found for this event.</p>']);
+        return;
+    }
+    $level_id = (int)$row['LEVEL_ID'];
 
-	$query = sprintf("SELECT * FROM `nsx_meetup_sponsorship_levels` WHERE `LEVEL_ID` = %d",$level_id);
-	$result = $link->query($query);
-    if ($result->num_rows > 0) {
-		$row = mysqli_fetch_assoc($result);
-	}
-
-    /* ---------------------------------------------------------------- */
-    /* Sponsorship Level Text Input information                         */
-    /* ---------------------------------------------------------------- */
-
+    $output_html .= '<p>Change the level\'s name, amount and logo size. Sponsors at this level are updated to match when you save.</p>';
+    $output_html .= '<div id="individual_sponsorship_level_edit_container" level_id="'.$level_id.'" event_id="'.$event_id.'" csrf_token="'.$h(app_csrf_token()).'" class="row gtr-50">';
+    $output_html .= '<div class="col-12 col-12-small">';
     $output_html .= '<table>';
-    /* Sponsorship Level Name */
-    $output_html .= '<tr><td class="sponsorship_level_edit_name">Sponsorship Level Name</td><td><input type="text" id="sponsorship_level_edit_infobox_name" db_key="LEVEL_Name" current_value="'.$row['LEVEL_Name'].'" value="'.$row['LEVEL_Name'].'" /></td><tr>';
-
-    /* Sponsorship Level Amount */
-    $output_html .= '<tr><td class="sponsorship_level_edit_amount">Sponsorship Level Amount</td><td><input type="text" id="sponsorship_level_edit_infobox_amount" db_key="LEVEL_Amount" current_value="'.$row['LEVEL_Amount'].'" value="'.$row['LEVEL_Amount'].'" /></td><tr>';
-
-    /* Sponsorship Logo Size */
-    $output_html .= '<tr><td class="sponsorship_level_edit_logosize">Sponsorship Level Logosize</td>';
-    $output_html .= '<td>';
-    $output_html .= '<select name="sponsorship_logosize_dropdown" id="sponsorship_level_info_dropdown_logosize" current_level="'.$row['LEVEL_Logosize'].'">';
-    $output_html .= '   <option value="title" '.($row['LEVEL_Logosize'] == "title"?" selected":"").'>Page Width</option>';
-    $output_html .= '   <option value="large" '.($row['LEVEL_Logosize'] == "large"?" selected":"").'>1/3 Page Width</option>';
-    $output_html .= '   <option value="medium" '.($row['LEVEL_Logosize'] == "medium"?" selected":"").'>1/4 Page Width</option>';
-    $output_html .= '   <option value="small" '.($row['LEVEL_Logosize'] == "small"?" selected":"").'>1/6 Page Width</option>';
-    $output_html .= '</select>';
-    $output_html .= '</td></tr>';   
-
-
+    $output_html .= '<tr><td class="sponsorship_level_edit_name">Sponsorship Level Name</td><td><input type="text" id="sponsorship_level_edit_infobox_name" db_key="LEVEL_Name" maxlength="64" current_value="'.$h($row['LEVEL_Name']).'" value="'.$h($row['LEVEL_Name']).'" /></td></tr>';
+    $output_html .= '<tr><td class="sponsorship_level_edit_amount">Sponsorship Level Amount ($)</td><td><input type="text" id="sponsorship_level_edit_infobox_amount" db_key="LEVEL_Amount" inputmode="numeric" current_value="'.$h($row['LEVEL_Amount']).'" value="'.$h($row['LEVEL_Amount']).'" /></td></tr>';
+    $output_html .= '<tr><td class="sponsorship_level_edit_logosize">Sponsorship Level Logo Size</td><td>';
+    $output_html .= '<select name="sponsorship_logosize_dropdown" id="sponsorship_level_info_dropdown_logosize" current_level="'.$h($row['LEVEL_Logosize']).'">'.SponsorLogoSizeOptions($row['LEVEL_Logosize']).'</select>';
+    $output_html .= '</td></tr>';
     $output_html .= '</table>';
-
-    $output_html .= '<div class="col-12 col-12-small"><a href="#" id="save_level_changes_button" class="button primary disabled" level_id="'.$level_id.'">Save Changes</a></div>';
-    // $output_html .= '<div class="row gtr-50">';
-    // $output_html .= '   <div class="col-4 col-4-medium col-12-small">';
- 	// $output_html .= '       <a href="#" id="save_level_changes_button" table="nsx_meetup_event_info" level_id="'.$level_id.'" class="button primary disabled small">Save Changes</a>';
-    // $output_html .= '   </div>';
-    // $output_html .= '   <div class="col-8 col-8-medium col-12-small">';
-    // $output_html .= '       <span style="padding:auto;text-align:center;" id="save_changes_button_status"></span>';
-    // $output_html .= '   </div>';    
-    // $output_html .= '</div>';
-
+    $output_html .= '</div>';
     $output_html .= '</div>';
 
-	$results[] = $output_html;
-	echo json_encode($results);           
+    $output_html .= '<div style="display:inline-flex;align-items:center;gap:1em;">';
+    $output_html .= '<a href="#" id="save_level_changes_button" class="button primary disabled" level_id="'.$level_id.'">Save Changes</a>';
+    $output_html .= '<span id="save_level_changes_status"></span>';
+    $output_html .= '</div>';
+
+    echo json_encode([$output_html]);
 }
 
+/* ************************************************************************ */
+/* Function:    EventSponsorshipLevel                                       */
+/* Description: A sponsorship level's row, only if it belongs to $event_id. */
+/* Returns:     array, or null                                              */
+/* ************************************************************************ */
+function EventSponsorshipLevel(PDO $pdo, $event_id, $level_id) {
+    $stmt = $pdo->prepare('SELECT * FROM nsx_meetup_sponsorship_levels WHERE LEVEL_ID = ? AND EVENT_ID = ?');
+    $stmt->execute([(int)$level_id, (int)$event_id]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+/* ************************************************************************ */
+/* Function:    SponsorLogoSizeOptions                                      */
+/* Description: The <option>s for a level's logo size dropdown.             */
+/* Inputs:      $selected - the current LEVEL_Logosize, or '' for none.     */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function SponsorLogoSizeOptions($selected) {
+    $html = isset(SPONSOR_LOGO_SIZES[$selected]) ? '' : '<option value="" selected disabled hidden>Select a Logo Size</option>';
+    foreach (SPONSOR_LOGO_SIZES as $value => $label) {
+        $html .= '<option value="'.$value.'"'.($value === $selected ? ' selected' : '').'>'.$label.'</option>';
+    }
+    return $html;
+}
+
+/* ************************************************************************ */
+/* Function:    CheckSponsorshipLevelFields                                 */
+/* Description: Checks a posted level name, amount and logo size. A name    */
+/*              may not repeat another of the event's levels (sponsors are  */
+/*              matched to their level by name). Ends the request with a    */
+/*              'Fail' response listing every problem.                      */
+/* Inputs:      $except_level_id - the level being edited (0 when adding).  */
+/* Returns:     ['name' => string, 'amount' => string, 'logosize' => string]*/
+/* ************************************************************************ */
+function CheckSponsorshipLevelFields(PDO $pdo, $event_id, $except_level_id) {
+    $name = trim((string)($_POST['sponsorship_name'] ?? ''));
+    $amount = str_replace([',', '$', ' '], '', (string)($_POST['sponsorship_amount'] ?? ''));
+    $amount = preg_replace('/\.0*$/', '', $amount);  // 500.00 -> 500
+    $logosize = (string)($_POST['sponsorship_logosize'] ?? '');
+
+    $errors = [];
+    if ($name === '' || mb_strlen($name) > 64) {
+        $errors[] = 'Please enter a level name of up to 64 characters.';
+    } else {
+        $stmt = $pdo->prepare('SELECT LEVEL_ID, LEVEL_Name FROM nsx_meetup_sponsorship_levels WHERE EVENT_ID = ?');
+        $stmt->execute([(int)$event_id]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $other) {
+            if ((int)$other['LEVEL_ID'] !== (int)$except_level_id && mb_strtolower(trim($other['LEVEL_Name'])) === mb_strtolower($name)) {
+                $errors[] = 'This event already has a level named "'.$name.'".';
+            }
+        }
+    }
+    if (!preg_match('/^\d{1,9}$/', $amount)) {
+        $errors[] = 'Please enter the level amount in whole dollars (for example 500).';
+    }
+    if (!isset(SPONSOR_LOGO_SIZES[$logosize])) {
+        $errors[] = 'Please select a logo size.';
+    }
+    if ($errors) {
+        EventAdminRespond('Fail', $errors);
+    }
+    return ['name' => $name, 'amount' => (string)(int)$amount, 'logosize' => $logosize];
+}
 
 /* ************************************************************************ */
 /* Function:    RenderEditIndividualSponsorInformation         				*/
@@ -256,174 +300,129 @@ function UpdateSponsorDetails() {
 }  
 
 /* ************************************************************************ */
-/* Function:    UpdateSponsorshipLevelDetails                           				*/
-/* Description: This function will update the sponsor details of Name,      */
-/*              weblink and sponsor level                     .             */
-/* Inputs:      sponsor_id = The sponsor tp update.                         */
-/*              sponsor_name = Name of the sponsor.                         */
-/*              sponsor_weblink = The sponsors web page link.               */
-/*              sponsor_level = The level of the sponsor.                   */
-/* Returns:     nothing                                        				*/
-/* ************************************************************************ */  
+/* Function:    UpdateSponsorshipLevelDetails                               */
+/* Description: Saves a level's name, amount and logo size. The event's     */
+/*              sponsors at this level get the new name and logo size, so   */
+/*              they stay at it.                                            */
+/* Returns:     JSON ['Pass', message] or ['Fail', [messages]]              */
+/* ************************************************************************ */
 function UpdateSponsorshipLevelDetails() {
-    $sponsorship_id = $_POST['sponsorship_id'];
-    $sponsorship_name = $_POST['sponsorship_name'];
-    $sponsorship_amount = $_POST['sponsorship_amount'];
-    $sponsorship_logosize = $_POST['sponsorship_logosize'];
-    $sponsorship_logosize_description = $_POST['sponsorship_logosize_description'];
+    list($pdo, $event) = EventAdminLoadEvent();
+    if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
+        EventAdminRespond('Fail', ['This page has expired. Reload the page and try again.']);
+    }
+    $level = EventSponsorshipLevel($pdo, $event['EVENT_ID'], $_POST['level_id'] ?? 0);
+    if (!$level) {
+        EventAdminRespond('Fail', ['That sponsorship level could not be found for this event.']);
+    }
+    $fields = CheckSponsorshipLevelFields($pdo, $event['EVENT_ID'], $level['LEVEL_ID']);
 
-    $dbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
-
-    $data = [
-        'sponsorship_id' => $sponsorship_id,
-        'sponsorship_name' => $sponsorship_name,
-        'sponsorship_amount' => $sponsorship_amount,
-        'sponsorship_logosize' => $sponsorship_logosize,
-        'sponsorship_logosize_description' => $sponsorship_logosize_description
-    ];
-
-    $sql = "UPDATE `nsx_meetup_sponsorship_levels` SET `LEVEL_Name`=:sponsorship_name, `LEVEL_Amount`=:sponsorship_amount, `LEVEL_Logosize`=:sponsorship_logosize, `LEVEL_Logosize_Description`=:sponsorship_logosize_description WHERE LEVEL_ID=:sponsorship_id";
-    $query = $dbh->prepare($sql);
     try {
-        $dbh->beginTransaction();
-        // $sth->execute();
-        $query->execute($data);    
-        $results[] = 'success';
-        $results[] = 'The details for '.$sponsorship_name.' were updated successfully.';
-        $dbh->commit();
-    } catch(PDOExecption $e) {
-        $dbh->rollback();
-        $results[] = 'fail';
-        $results[] = $e->getMessage();
-    }    
+        $pdo->beginTransaction();
+        $pdo->prepare('UPDATE nsx_meetup_sponsorship_levels SET LEVEL_Name = ?, LEVEL_Amount = ?, LEVEL_Logosize = ?, LEVEL_Logosize_Description = ? WHERE LEVEL_ID = ?')
+            ->execute([$fields['name'], $fields['amount'], $fields['logosize'], SPONSOR_LOGO_SIZES[$fields['logosize']], (int)$level['LEVEL_ID']]);
 
-    $results[] = $output_html;
-	echo json_encode($results); 
-}  
+        $sponsors = $pdo->prepare('SELECT SPONSOR_ID, SPONSOR_Event_IDs FROM nsx_meetup_event_sponsors WHERE SPONSOR_Level = ?');
+        $sponsors->execute([$level['LEVEL_Name']]);
+        $update = $pdo->prepare('UPDATE nsx_meetup_event_sponsors SET SPONSOR_Level = ?, SPONSOR_Division = ? WHERE SPONSOR_ID = ?');
+        foreach ($sponsors->fetchAll(PDO::FETCH_ASSOC) as $sponsor) {
+            if (in_array((string)(int)$event['EVENT_ID'], array_map('trim', explode(',', (string)$sponsor['SPONSOR_Event_IDs'])), true)) {
+                $update->execute([$fields['name'], $fields['logosize'], (int)$sponsor['SPONSOR_ID']]);
+            }
+        }
+        $pdo->commit();
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('UpdateSponsorshipLevelDetails failed for level '.$level['LEVEL_ID'].': '.$e->getMessage());
+        EventAdminRespond('Fail', ['The changes could not be saved. Please try again.']);
+    }
 
+    EventAdminRespond('Pass', 'The details for '.$fields['name'].' were updated successfully.');
+}
 
 /* ************************************************************************ */
-/* Function:    UpdateSponsorshipActiveStatus                				*/
-/* Description: This function will simple changes the value of the active   */
-/*              state of a sponsor based upon the radio button.             */
-/* Inputs:      sponsor_id = The sponsor tp update.                         */
-/*              sponsor_state = 1 = Active : 0 = Not Active                 */
-/* Returns:     nothing                                        				*/
-/* ************************************************************************ */  
+/* Function:    UpdateSponsorshipActiveStatus                               */
+/* Description: Turns one of the event's sponsors on or off (the Yes / No   */
+/*              buttons in the sponsor list).                               */
+/* Returns:     JSON ['Pass', message] or ['Fail', [messages]]              */
+/* ************************************************************************ */
 function UpdateSponsorshipActiveStatus() {
-    $sponsor_id = $_POST['sponsor_id'];
-    $sponsor_state = $_POST['sponsor_state'];
-    $event_id = $_POST['event_id'];
-    $dbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
-    $data = [
-        'sponsor_state' => $sponsor_state,
-        'sponsor_id' => $sponsor_id,
-        'event_id' => $event_id
-    ];
-
-    $sql = "UPDATE `nsx_meetup_event_sponsors` SET SPONSOR_Active=:sponsor_state WHERE SPONSOR_ID=:sponsor_id AND SPONSOR_Event_IDs=:event_id";
-    $query = $dbh->prepare($sql);
-    try {
-        $dbh->beginTransaction();
-        $query->execute($data);    
-        $results[] = 'success';
-        $dbh->commit();
-    } catch(PDOExecption $e) {
-        $dbh->rollback();
-        $results[] = 'fail';
-        $results[] = $e->getMessage();
-    }    
-
-    $results[] = $output_html;
-	echo json_encode($results); 
-}    
+    list($pdo, $event) = EventAdminLoadEvent();
+    if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
+        EventAdminRespond('Fail', ['This page has expired. Reload the page and try again.']);
+    }
+    $sponsor = EventSponsor($pdo, $event['EVENT_ID'], $_POST['sponsor_id'] ?? 0);
+    if (!$sponsor) {
+        EventAdminRespond('Fail', ['That sponsor could not be found for this event.']);
+    }
+    $active = (($_POST['sponsor_state'] ?? '') === '1') ? 1 : 0;
+    $pdo->prepare('UPDATE nsx_meetup_event_sponsors SET SPONSOR_Active = ? WHERE SPONSOR_ID = ?')->execute([$active, (int)$sponsor['SPONSOR_ID']]);
+    EventAdminRespond('Pass', $sponsor['SPONSOR_Name'].($active ? ' is now active.' : ' is now inactive.'));
+}
 
 /* ************************************************************************ */
-/* Function:    UpdateSponsorshipLevelActiveStatus                		    */
-/* Description: This function will simple changes the value of the active   */
-/*              state of a sponsorship level based upon the radio button.   */
-/* Inputs:      level_id = The sponsorship level to update.                 */
-/*              sponsorship_state = 1 = Active : 0 = Not Active             */
-/* Returns:     nothing                                        				*/
-/* ************************************************************************ */  
+/* Function:    UpdateSponsorshipLevelActiveStatus                          */
+/* Description: Turns one of the event's sponsorship levels on or off (the  */
+/*              Yes / No buttons in the levels list). Only active levels    */
+/*              can be given to sponsors.                                   */
+/* Returns:     JSON ['Pass', message] or ['Fail', [messages]]              */
+/* ************************************************************************ */
 function UpdateSponsorshipLevelActiveStatus() {
-    $level_id = $_POST['level_id'];
-    $sponsorship_state = $_POST['sponsorship_state'];
-    $event_id = $_POST['event_id'];
-    $dbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
-    $data = [
-        'sponsorship_state' => $sponsorship_state,
-        'level_id' => $level_id,
-        'event_id' => $event_id
-    ];
-
-    $sql = "UPDATE `nsx_meetup_sponsorship_levels` SET LEVEL_Active=:sponsorship_state WHERE LEVEL_ID=:level_id AND EVENT_ID=:event_id";
-    $query = $dbh->prepare($sql);
-    try {
-        $dbh->beginTransaction();
-        $query->execute($data);    
-        $results[] = 'success';
-        $dbh->commit();
-    } catch(PDOExecption $e) {
-        $dbh->rollback();
-        $results[] = 'fail';
-        $results[] = $e->getMessage();
-    }    
-
-    $results[] = $output_html;
-	echo json_encode($results); 
-} 
+    list($pdo, $event) = EventAdminLoadEvent();
+    if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
+        EventAdminRespond('Fail', ['This page has expired. Reload the page and try again.']);
+    }
+    $level = EventSponsorshipLevel($pdo, $event['EVENT_ID'], $_POST['level_id'] ?? 0);
+    if (!$level) {
+        EventAdminRespond('Fail', ['That sponsorship level could not be found for this event.']);
+    }
+    $active = (($_POST['sponsorship_state'] ?? '') === '1') ? 1 : 0;
+    $pdo->prepare('UPDATE nsx_meetup_sponsorship_levels SET LEVEL_Active = ? WHERE LEVEL_ID = ?')->execute([$active, (int)$level['LEVEL_ID']]);
+    EventAdminRespond('Pass', $level['LEVEL_Name'].($active ? ' is now active.' : ' is now inactive.'));
+}
 
 /* ************************************************************************ */
-/* Function:    RenderAddNewSponsorshipLevelSection            				*/
-/* Description: This function will return the form needed to enter a new    */
-/*              sponsorship level into the database.                        */
-/* Returns:     HTML                                        				*/
+/* Function:    RenderAddNewSponsorshipLevelSection                         */
+/* Description: The Create Sponsorship Level form for the posted event.     */
+/* Returns:     JSON [HTML]                                                 */
 /* ************************************************************************ */
 function RenderAddNewSponsorshipLevelSection() {
-    $results = array();
-    $event_id = $_POST['event_id'];
-	
+    $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES); };
+    $event_id = (int)$_POST['event_id'];
+
 	$output_html = '<div id="add_sponsorship_level_container">';
-    $output_html .= '<h2> Create Sponsorship Levels</h2><p>This section allows you to add a new sponsorship level to the database. Levels can be edited and set to active / inactive at any time. Enter the 
-    required information below and click save to add the sponsor to the database.</p></div>';
+    $output_html .= '<h2>Create Sponsorship Level</h2><p>This section allows you to add a new sponsorship level for this event. Levels can be edited and set to active / inactive at any time. Enter the 
+    required information below and click Save New Level. Only active levels can be given to sponsors.</p></div>';
     $output_html .= '<div style="margin-bottom:1em;" id="back_navigation_button"></div>';
 
-    $output_html .= '<div id="main_sponsorship_info_container" class="row gtr gtr-uniform">';
+    $output_html .= '<div id="main_sponsorship_info_container" class="row gtr gtr-uniform" event_id="'.$event_id.'" csrf_token="'.$h(app_csrf_token()).'">';
     $output_html .= '   <div class="col-6 col-6-medium col-12-small">';
- 	$output_html .= '       <input type="text" id="sponsorship_level_infobox_type" db_key="LEVEL_Type" value="Corporate" readonly hidden />';
-    $output_html .= '   </div>';
-    $output_html .= '   <div class="col-6 col-6-medium col-12-small">';
-    $output_html .= '       <input type="text" id="sponsorship_level_infobox_name" db_key="LEVEL_Name" value="" placeholder="Enter the Level Name"/>';
+    $output_html .= '       <input type="text" id="sponsorship_level_infobox_name" db_key="LEVEL_Name" maxlength="64" value="" placeholder="Enter the Level Name"/>';
     $output_html .= '   </div>';  
     $output_html .= '   <div class="col-3 col-3-medium col-12-small">';
-    $output_html .= '       <input type="text" id="sponsorship_level_infobox_amount" db_key="LEVEL_Amount" value="" placeholder="Enter the Level Amount"/>';
+    $output_html .= '       <input type="text" id="sponsorship_level_infobox_amount" db_key="LEVEL_Amount" inputmode="numeric" value="" placeholder="Level Amount ($)"/>';
     $output_html .= '   </div>';
     $output_html .= '   <div class="col-3 col-3-medium col-12-small">';
-    $output_html .= '       <select name="sponsorship_logosize_dropdown" id="sponsorship_level_info_dropdown_logosize">';
-    $output_html .= '           <option value="none" selected disabled hidden>Select a Logo Size</option>';
-    $output_html .= '           <option value="title">Page Width</option>';
-    $output_html .= '           <option value="large">1/3 Page Width</option>';
-    $output_html .= '           <option value="medium">1/4 Page Width</option>';
-    $output_html .= '           <option value="small">1/6 Page Width</option>';
-    $output_html .= '       </select>';
+    $output_html .= '       <select name="sponsorship_logosize_dropdown" id="sponsorship_level_info_dropdown_logosize">'.SponsorLogoSizeOptions('').'</select>';
     $output_html .= '   </div>';        
     $output_html .= '   <div class="col-2 col-2-medium col-6-small">';
     $output_html .= '       Active Level: ';
     $output_html .= '   </div>';
     $output_html .= '   <div class="col-3 col-3-medium col-6-small">';      
-    $output_html .= '       <input type="radio" id="active_sponsorship_level_on" name="active_sponsorship_level_radio_button" value="1">';
+    $output_html .= '       <input type="radio" id="active_sponsorship_level_on" name="active_sponsorship_level_radio_button" value="1" checked>';
     $output_html .= '       <label for="active_sponsorship_level_on">Yes</label>';
     $output_html .= '       <input type="radio" id="active_sponsoship_level_off" name="active_sponsorship_level_radio_button" value="0">';
     $output_html .= '       <label for="active_sponsoship_level_off">No</label>';
     $output_html .= '   </div>';     
-    $output_html .= '   <div class="col-12 col-12-medium col-12-small">';
-    $output_html .= '       <a href="#" id="save_new_sponsorship_level_botton" event_id="'.$event_id.'" class="button primary" style="margin-top:1.5em;">Save New Level</a>';
-    $output_html .= '   </div>'; 
     $output_html .= '</div>';     
+    $output_html .= '<div style="display:inline-flex;align-items:center;gap:1em;margin-top:1.5em;">';
+    $output_html .= '   <a href="#" id="save_new_sponsorship_level_botton" class="button primary">Save New Level</a>';
+    $output_html .= '   <span id="save_new_sponsorship_level_status"></span>';
+    $output_html .= '</div>';
 
-    $results[] = $output_html;
-	echo json_encode($results);     
+    echo json_encode([$output_html]);
 }
 
 /* ************************************************************************ */
@@ -725,47 +724,26 @@ function EnterNewSponsorIntoDatabase() {
 }
 
 /* ************************************************************************ */
-/* Funciton:    EnterNewSponsorshipLevelIntoDatabase                   	    */
-/* Description: This function creates the sponsorship level for the         */
-/*              database. If successful, return success.                    */
-/* Returns:     Nothing                                        			    */
+/* Function:    EnterNewSponsorshipLevelIntoDatabase                        */
+/* Description: Adds a sponsorship level to the posted event.               */
+/* Returns:     JSON ['Pass', message] or ['Fail', [messages]]              */
 /* ************************************************************************ */
 function EnterNewSponsorshipLevelIntoDatabase() {
-    $event_id = $_POST['event_id'];
-    $sponsorship_type = $_POST['sponsorship_type'];
-    $sponsorship_name = $_POST['sponsorship_name'];
-    $sponsorship_amount = $_POST['sponsorship_amount'];
-    $sponsorship_active = intval($_POST['sponsorship_active']);
-    $sponsorship_logosize = $_POST['sponsorship_logosize'];
-    $sponsorship_logosize_description = $_POST['sponsorship_logosize_description'];
-
+    list($pdo, $event) = EventAdminLoadEvent();
+    if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
+        EventAdminRespond('Fail', ['This page has expired. Reload the page and try again.']);
+    }
+    $fields = CheckSponsorshipLevelFields($pdo, $event['EVENT_ID'], 0);
+    $active = (($_POST['sponsorship_active'] ?? '1') === '0') ? 0 : 1;
 
     try {
-      $dbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
-      $insert_query = "INSERT INTO `nsx_meetup_sponsorship_levels` 
-      (`EVENT_ID`,`LEVEL_Active`,`LEVEL_Type`, `LEVEL_Name`,`LEVEL_Amount`,`LEVEL_Logosize`,`LEVEL_Logosize_Description`)
-       VALUES (:event_id,:sponsorship_active,'corporate',:sponsorship_name,:sponsorship_amount,:sponsorship_logosize,:sponsorship_logosize_description)";
-      $sth = $dbh->prepare($insert_query);
-
-      $sth->bindParam(':event_id', $event_id);
-      $sth->bindParam(':sponsorship_active', $sponsorship_active);
-      $sth->bindParam(':sponsorship_name', $sponsorship_name);
-      $sth->bindParam(':sponsorship_amount', $sponsorship_amount);
-      $sth->bindParam(':sponsorship_logosize', $sponsorship_logosize);
-      $sth->bindParam(':sponsorship_logosize_description', $sponsorship_logosize_description);
-      $dbh->beginTransaction();
-      $sth->execute();
-      $results[] = 'success';
-      $results[] = '<span style="color:#ffcc00;">New Sponsor Entered Successfully</span>';
-      $dbh->commit();
-      
-    } 
-    catch ( PDOExecption $e ) {
-      $results[] = 'failed';
-      $results[] = $e->getMessage();
-      throw $e;
+        $pdo->prepare("INSERT INTO nsx_meetup_sponsorship_levels (EVENT_ID, LEVEL_Active, LEVEL_Type, LEVEL_Name, LEVEL_Amount, LEVEL_Logosize, LEVEL_Logosize_Description) VALUES (?, ?, 'corporate', ?, ?, ?, ?)")
+            ->execute([(int)$event['EVENT_ID'], $active, $fields['name'], $fields['amount'], $fields['logosize'], SPONSOR_LOGO_SIZES[$fields['logosize']]]);
+    } catch (PDOException $e) {
+        error_log('EnterNewSponsorshipLevelIntoDatabase failed for event '.$event['EVENT_ID'].': '.$e->getMessage());
+        EventAdminRespond('Fail', ['The level could not be saved. Please try again.']);
     }
-      echo json_encode($results);  
-  }
+    EventAdminRespond('Pass', 'New sponsorship level saved.');
+}
 
 ?>
