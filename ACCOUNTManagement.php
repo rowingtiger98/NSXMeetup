@@ -22,7 +22,7 @@
       'RenderMyAccountOverLord'              => 'overlord',
       'CreateEnterNewEventPage'              => 'overlord',
   ];
-  EndpointDispatch(__FILE__, ACCOUNT_MANAGEMENT_METHODS);
+  EndpointDispatch(__FILE__, ACCOUNT_MANAGEMENT_METHODS, ['UpdateUserAttendedEvents']);
 
 /* ************************************************************************ */
 /* Funciton:    ValidateResetCodeTimeframe                         		*/

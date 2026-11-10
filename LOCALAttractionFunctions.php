@@ -9,7 +9,7 @@
       'EnterNewAttractionCategory'   => 'event_admin',
       'EnterNewAttractionDetails'    => 'admin',
   ];
-  EndpointDispatch(__FILE__, LOCAL_ATTRACTION_METHODS);
+  EndpointDispatch(__FILE__, LOCAL_ATTRACTION_METHODS, ['EnterNewAttractionCategory', 'EnterNewAttractionDetails']);
 
 /* ************************************************************************ */
 /* Funciton:    RenderOpeningPageInformation                                 */

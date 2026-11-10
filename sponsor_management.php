@@ -23,7 +23,9 @@ const SPONSOR_METHODS = [
     'UploadSponsorLogo'                               => 'event_admin',
     'EnterNewSponsorshipLevelIntoDatabase'            => 'event_admin',
 ];
-EndpointDispatch(__FILE__, SPONSOR_METHODS);
+EndpointDispatch(__FILE__, SPONSOR_METHODS, [  // the others that save check the token themselves
+    'UpdateSponsorDetails',
+]);
 
 /* ************************************************************************ */
 /* Function:    RenderEditIndividualSponsorshipLevelInformation             */

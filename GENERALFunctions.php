@@ -21,7 +21,7 @@
         'UpdateSectionTextInDatabase'    => 'admin',
         'ShowHidePageSection'            => 'admin',
     ];
-    EndpointDispatch(__FILE__, GENERAL_METHODS);
+    EndpointDispatch(__FILE__, GENERAL_METHODS, ['UpdateSectionTextInDatabase', 'ShowHidePageSection']);
 
 /* ************************************************************************ */
 /* Funciton:    GetFullURL                                   				*/

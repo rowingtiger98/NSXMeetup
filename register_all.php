@@ -39,6 +39,7 @@ if(isset($_SESSION['login_user'])){
 		<title><?php echo $event_data['EVENT_Name']; ?> Registration</title>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+		<meta name="csrf-token" content="<?php echo htmlspecialchars(app_csrf_token(), ENT_QUOTES); ?>" />  <!-- read by assets/js/csrf.js -->
 		<meta name="description" content="" />
 		<meta name="keywords" content="" />
 		<link rel="stylesheet" href="assets/css/main.css" />
@@ -136,6 +137,7 @@ if(isset($_SESSION['login_user'])){
 
 		<!-- Scripts -->
 			<script src="assets/js/jquery.min.js"></script>
+			<script src="assets/js/csrf.js?v=<?php echo filemtime(__DIR__.'/assets/js/csrf.js'); ?>"></script>
 			<script src="assets/js/browser.min.js"></script>
 			<script src="assets/js/breakpoints.min.js"></script>
 			<script src="assets/js/jquery.dropotron.min.js"></script>

@@ -18,7 +18,10 @@
 /*    'admin'       - any logged-in admin or overlord          */
 /*    'overlord'    - an overlord                              */
 /*                                                             */
-/*  Any other posted method name is refused.                   */
+/*  Any other posted method name is refused. Methods that      */
+/*  change data can also be listed as needing the session's    */
+/*  CSRF token (sent by assets/js/csrf.js from the page's      */
+/*  csrf-token meta tag).                                      */
 /*                                                             */
 /*-------------------------------------------------------------*/
 require_once __DIR__ . '/eventAdmin.php';  // SessionBootstrap, databaseFunctions, EventAdminAuthorize(), EventAdminRespond()
@@ -28,9 +31,10 @@ require_once __DIR__ . '/eventAdmin.php';  // SessionBootstrap, databaseFunction
 /* Description: Calls the posted method if it's in $methods and the caller  */
 /*              is allowed to. Only acts when $file is the script that was  */
 /*              requested - not when it's included by another page.         */
-/* Inputs:      $file - the endpoint's __FILE__, $methods - name => level.  */
+/* Inputs:      $file - the endpoint's __FILE__, $methods - name => level,  */
+/*              $csrf_methods - the methods that must carry csrf_token.     */
 /* ************************************************************************ */
-function EndpointDispatch($file, array $methods) {
+function EndpointDispatch($file, array $methods, array $csrf_methods = []) {
     if (!isset($_POST['method']) || realpath($_SERVER['SCRIPT_FILENAME'] ?? '') !== realpath($file)) {
         return;
     }
@@ -41,6 +45,12 @@ function EndpointDispatch($file, array $methods) {
         exit();
     }
     EndpointAuthorize($methods[$method]);
+    if (in_array($method, $csrf_methods, true)) {
+        app_session_start();
+        if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
+            EventAdminRespond('Fail', ['This page has expired. Reload the page and try again.']);
+        }
+    }
     $method();
 }
 
