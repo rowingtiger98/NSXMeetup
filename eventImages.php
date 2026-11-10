@@ -67,6 +67,40 @@ function EventSponsorLogoDirectory($directory) {
 }
 
 /* ************************************************************************ */
+/* Function:    EventExperienceBannerDirectory                              */
+/* Description: The site-relative agenda event banner folder for an event, */
+/*              e.g. events/TestEvent/images/experiences.                   */
+/* Inputs:      $directory - the event's EVENT_Directory.                   */
+/* Returns:     string, or '' if the directory name isn't usable.           */
+/* ************************************************************************ */
+function EventExperienceBannerDirectory($directory) {
+    $event_dir = EventImagesDirectory($directory);
+    return ($event_dir === '') ? '' : $event_dir.'/experiences';
+}
+
+/* ************************************************************************ */
+/* Function:    ExperienceBannerURL                                         */
+/* Description: The URL of a agenda event's banner. Uploaded banners are   */
+/*              stored with their site-relative path                        */
+/*              (events/<dir>/images/experiences/...); older ones are a     */
+/*              file name in assets/images/.                                */
+/* Inputs:      $banner - EXPERIENCE_Banner_Image.                          */
+/* Returns:     string, or '' when there's no banner                        */
+/* ************************************************************************ */
+function ExperienceBannerURL($banner) {
+    $banner = trim((string)$banner);
+    if ($banner === '') {
+        return '';
+    }
+    if (preg_match('#^events/[A-Za-z0-9_-]+/images/experiences/[A-Za-z0-9_.-]+$#', $banner)) {
+        $path = $banner;
+    } else {
+        $path = 'assets/images/'.basename($banner);
+    }
+    return function_exists('app_url') ? app_url($path) : $path;
+}
+
+/* ************************************************************************ */
 /* Function:    SponsorLogoURL                                              */
 /* Description: The URL of a sponsor logo. New logos are stored with their  */
 /*              site-relative path (events/<dir>/images/sponsors/...);      */

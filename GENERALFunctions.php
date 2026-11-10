@@ -2,6 +2,7 @@
     require_once __DIR__ . '/databaseFunctions.php';
     require_once __DIR__ . '/SessionBootstrap.php';
     require_once __DIR__ . '/paymentMethods.php';
+    require_once __DIR__ . '/eventImages.php';  // ExperienceBannerURL()
 
     require_once __DIR__ . '/endpointGuard.php';  // EndpointDispatch() - only the methods below, each for the callers it names
     const GENERAL_METHODS = [
@@ -2089,7 +2090,7 @@ function ExtractSingleDayOfExperiences($event_id, $experiences_date) {
     // Build the event sections 
     $experiences = array();
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_experiences` WHERE `EVENT_ID` = ? AND `EXPERIENCE_Date` = ? ORDER BY `Experience_Start_Time`", [(int)$event_id, $experiences_date]);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_experiences` WHERE `EVENT_ID` = ? AND `EXPERIENCE_Date` = ? AND `EXPERIENCE_Display` = 1 ORDER BY `Experience_Start_Time`", [(int)$event_id, $experiences_date]);
 	if($result->num_rows > 0) {
         while($row =  $result->fetch_assoc()) {
             $experiences[] = $row;
@@ -2105,7 +2106,10 @@ function ExtractSingleDayOfExperiences($event_id, $experiences_date) {
 /* ************************************************************************ */
 function RenderEachDailyEventSection($section) {
 	$output_html = '<div id="individual_event_child_container_'.$section['EXPERIENCE_Name'].'" class="individual_event_child_container">';
-	$output_html .= '<span class="image fit" style="margin-bottom:0.5em;"><img src="assets/images/'.$section['EXPERIENCE_Banner_Image'].'"></span>';
+	$banner_url = ExperienceBannerURL($section['EXPERIENCE_Banner_Image']);
+	if ($banner_url !== '') {
+		$output_html .= '<span class="image fit" style="margin-bottom:0.5em;"><img src="'.htmlspecialchars($banner_url, ENT_QUOTES).'"></span>';
+	}
 	$output_html .= '<h2 style="color:#ffcc00;">'.$section['EXPERIENCE_Title'].'</h2>';
 	$output_html .= '<p>'.$section['EXPERIENCE_Description'].'</p>';
 	$output_html .= '<table style="color:#FFFFFF;"><tbody>';

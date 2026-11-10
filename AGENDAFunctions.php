@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/databaseFunctions.php';  // PreparedQuery()
+require_once __DIR__ . '/eventImages.php';  // ExperienceBannerURL()
 
 /* ************************************************************************ */
 /* Funciton:    NEWRenderAgendaInformation                               	*/
@@ -95,8 +97,7 @@ function NEWExtractSingleDayOfExperiences($event_id, $experiences_date) {
     // Build the event sections 
     $experiences = array();
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_experiences` WHERE `EVENT_ID` = %d AND `EXPERIENCE_Date` = '%s' ORDER BY `Experience_Start_Time`", $event_id, $experiences_date);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_experiences` WHERE `EVENT_ID` = ? AND `EXPERIENCE_Date` = ? AND `EXPERIENCE_Display` = 1 ORDER BY `Experience_Start_Time`", [(int)$event_id, $experiences_date]);
 	if($result->num_rows > 0) {
         while($row =  $result->fetch_assoc()) {
             $experiences[] = $row;
@@ -112,7 +113,10 @@ function NEWExtractSingleDayOfExperiences($event_id, $experiences_date) {
 /* ************************************************************************ */
 function NEWRenderEachDailyEventSection($section) {
 	$output_html = '<div id="individual_event_child_container_'.$section['EXPERIENCE_Name'].'" class="individual_event_child_container">';
-	$output_html .= '<span class="image fit" style="margin-bottom:0.5em;"><img src="assets/images/'.$section['EXPERIENCE_Banner_Image'].'"></span>';
+	$banner_url = ExperienceBannerURL($section['EXPERIENCE_Banner_Image']);
+	if ($banner_url !== '') {
+		$output_html .= '<span class="image fit" style="margin-bottom:0.5em;"><img src="'.htmlspecialchars($banner_url, ENT_QUOTES).'"></span>';
+	}
 	$output_html .= '<h2 style="color:#ffcc00;">'.$section['EXPERIENCE_Title'].'</h2>';
 	$output_html .= '<p>'.$section['EXPERIENCE_Description'].'</p>';
 	$output_html .= '<table style="color:#FFFFFF;"><tbody>';

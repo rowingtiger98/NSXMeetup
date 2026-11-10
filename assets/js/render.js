@@ -517,7 +517,7 @@ function DisplayDailyEventInformation() {
 	$('[id^="individual_event_child_container_"]').each(function() {
 		$(this).removeClass('active');
 	});		
-	$('[id^="individual_event_child_container_'+event_name+'"]').addClass('active');
+	$(document.getElementById('individual_event_child_container_'+event_name)).addClass('active');  // exact id - "golf" mustn't also match "golf-2"
 }
 
 // -------------------------------------------------------------------------------------

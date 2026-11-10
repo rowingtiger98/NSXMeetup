@@ -388,6 +388,14 @@ function  RenderManagementToolsSection () {
     $output_html .= '    <button id="admin_event_handler" action="find_edit_registration" class="button primary small fit" event_id="'.$event_id.'" collect_payment="'.$collect_payments.'">Click Here</button>';
     $output_html .= '</div>';
 
+    /* -- Add / Edit Agenda Events -- */
+    $output_html .= '<div>';
+    $output_html .= '    <span class="number"><span class="icon solid fa-calendar-alt"></span></span>';
+    $output_html .= '    <h3>Add / Edit Agenda Events</h3>';
+    $output_html .= '    <p>Add, edit, hide or delete the events on the event\'s agenda - golf, dinners, drives - with their times, location, contact details and banner image.</p>';
+    $output_html .= '    <a href="#" id="admin_event_handler" action="edit_weekend_events" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
+    $output_html .= '</div>';
+
     /* -- Add / Edit Sponsorship Levels -- */
     $output_html .= '<div>';
     $output_html .= '<span class="number"><span class="icon solid fa-layer-group"></span></span>';

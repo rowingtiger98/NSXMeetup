@@ -89,6 +89,11 @@ function HandleAccountManagementActionClick(event) {
         var event_id = $(this).attr('event_id');
 		RenderRegistrationTypes(event_id);
     }
+
+	else if (action === 'edit_weekend_events' ){
+        var event_id = $(this).attr('event_id');
+		RenderWeekendEvents(event_id);
+    }
 }
 
 // -------------------------------------------------------------------------------------
