@@ -209,7 +209,7 @@ function SaveExperienceBanner(array $banner, $experience_id) {
 
 /* ************************************************************************ */
 /* Function:    DeleteExperienceBanner                                      */
-/* Description: Deletes a agenda event's banner file - only an upload made */
+/* Description: Deletes an agenda event's banner file - only an upload made */
 /*              by this tool for that agenda event, never a shared image.  */
 /* ************************************************************************ */
 function DeleteExperienceBanner($path, $experience_id) {
@@ -402,7 +402,7 @@ function RenderWeekendEvents() {
 
 /* ************************************************************************ */
 /* Function:    AddWeekendEvent                                             */
-/* Description: Adds a agenda event (and its banner, if one was posted) to */
+/* Description: Adds an agenda event (and its banner, if one was posted) to */
 /*              the posted event.                                           */
 /* Returns:     JSON ['Pass', list HTML] or ['Fail', [messages]]            */
 /* ************************************************************************ */

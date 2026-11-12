@@ -102,22 +102,27 @@ function EnabledPaymentMethods(array $event) {
 
 /* ************************************************************************ */
 /* Function:    PrepayOptions                                               */
-/* Description: The event's pre-pay options: the active yes/no questions    */
+/* Description: The event's pre-pay options: the active questions          */
 /*              (nsx_meetup_event_questions) that add their amount to the   */
-/*              registrant's total when checked.                            */
+/*              registrant's total - a yes/no question when it's checked,   */
+/*              a drop-down when any of its choices is picked.              */
 /* Inputs:      $pdo - PHP Data Object, $event_id - the event's id.         */
-/* Returns:     array - QUESTION_Label => ['description', 'cents']          */
+/* Returns:     array - QUESTION_Label => ['description', 'cents', 'type',  */
+/*              'choices' (a drop-down's key => text)]                      */
 /* ************************************************************************ */
 function PrepayOptions(PDO $pdo, $event_id) {
-    $stmt = $pdo->prepare("SELECT QUESTION_Label, QUESTION_Description, QUESTION_Amount FROM nsx_meetup_event_questions
-                           WHERE EVENT_ID = ? AND QUESTION_Active = 1 AND QUESTION_Add_To_Basket = 1 AND QUESTION_Type = 'BOOLEAN'
+    $stmt = $pdo->prepare("SELECT QUESTION_Label, QUESTION_Description, QUESTION_Amount, QUESTION_Type, QUESTION_Select_Choices FROM nsx_meetup_event_questions
+                           WHERE EVENT_ID = ? AND QUESTION_Active = 1 AND QUESTION_Add_To_Basket = 1 AND QUESTION_Type IN ('BOOLEAN', 'SELECT')
                            ORDER BY QUESTION_Order_Number");
     $stmt->execute([(int)$event_id]);
     $options = [];
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $choices = ($row['QUESTION_Type'] === 'SELECT') ? json_decode((string)$row['QUESTION_Select_Choices'], true) : null;
         $options[$row['QUESTION_Label']] = [
             'description' => ($row['QUESTION_Description'] ?? '') !== '' ? $row['QUESTION_Description'] : $row['QUESTION_Label'],
             'cents'       => (int)round((float)$row['QUESTION_Amount'] * 100),
+            'type'        => $row['QUESTION_Type'],
+            'choices'     => is_array($choices) ? $choices : [],
         ];
     }
     return $options;
@@ -125,17 +130,32 @@ function PrepayOptions(PDO $pdo, $event_id) {
 
 /* ************************************************************************ */
 /* Function:    ChosenPrepayOptions                                         */
-/* Description: The pre-pay options a registrant checked.                   */
+/* Description: The pre-pay options a registrant chose: yes/no questions    */
+/*              answered 'yes', and drop-downs answered with one of their   */
+/*              choices (stored as the choice's key, or by older            */
+/*              registrations as its text). A drop-down's description gets  */
+/*              the choice added, e.g. "Event T-Shirt (Large)".             */
 /* Inputs:      $options - from PrepayOptions(), $choices - the registrant's */
-/*              answers: label => 'yes' / 'no' (as posted by the            */
-/*              registration form, or decoded from                         */
+/*              answers: label => 'yes' / 'no' / a choice's key (as posted  */
+/*              by the registration form, or decoded from                  */
 /*              Participant_Events_Attending).                              */
-/* Returns:     array - label => ['description', 'cents']                   */
+/* Returns:     array - label => ['description', 'cents', ...]              */
 /* ************************************************************************ */
 function ChosenPrepayOptions(array $options, $choices) {
     $chosen = [];
     foreach ($options as $label => $option) {
-        if (is_array($choices) && ($choices[$label] ?? '') === 'yes') {
+        $answer = (is_array($choices) && is_scalar($choices[$label] ?? null)) ? (string)$choices[$label] : '';
+        if (($option['type'] ?? 'BOOLEAN') === 'SELECT') {
+            $choice_text = null;
+            foreach ($option['choices'] as $key => $text) {
+                if ($answer !== '' && ($answer === (string)$key || $answer === (string)$text)) {
+                    $choice_text = (string)$text;
+                }
+            }
+            if ($choice_text !== null) {
+                $chosen[$label] = ['description' => $option['description'].' ('.$choice_text.')'] + $option;
+            }
+        } elseif ($answer === 'yes') {
             $chosen[$label] = $option;
         }
     }

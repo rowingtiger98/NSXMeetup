@@ -426,7 +426,7 @@ function RenderParticipantQuestionsAndAnswers ($event_id, $current_selections) {
                     $output_html .= '<tr>';
                     $output_html .= '    <td>'.$row['QUESTION_Instruction_Text'].'</td>';
                     $output_html .= '    <td id="column_driver1" class="table_driver active">';
-                    $output_html .= '        <input type="checkbox" accounting="'.($row['QUESTION_Add_To_Basket']?"yes":"no").'" cost="'.$row['QUESTION_Amount'].'" id="info_checkbox_field_driver1_'.$row['QUESTION_Label'].'" driver="driver1" key="'.$row['QUESTION_Label'].'" start_value="'.htmlspecialchars($answer, ENT_QUOTES).'" name=""driver1_'.$row['QUESTION_Label'].'" '.$is_checked.'>';
+                    $output_html .= '        <input type="checkbox" accounting="'.($row['QUESTION_Add_To_Basket']?"yes":"no").'" cost="'.$row['QUESTION_Amount'].'" id="info_checkbox_field_driver1_'.$row['QUESTION_Label'].'" driver="driver1" key="'.$row['QUESTION_Label'].'" start_value="'.htmlspecialchars($answer, ENT_QUOTES).'" name="driver1_'.$row['QUESTION_Label'].'" desc="'.htmlspecialchars((string)$row['QUESTION_Description'], ENT_QUOTES).'"'.$is_checked.'>';
                     $output_html .= '        <label for="info_checkbox_field_driver1_'.$row['QUESTION_Label'].'"></label>';
                     $output_html .= '    </td>';
                     $output_html .= '</tr>    ';
@@ -455,18 +455,18 @@ function RenderParticipantQuestionsAndAnswers ($event_id, $current_selections) {
 /* ************************************************************************ */
 function RenderEditSelectQuestion($data, $current_selections) {
 
-    $choices = json_decode($data['QUESTION_Select_Choices'], true);
+    $choices = json_decode((string)$data['QUESTION_Select_Choices'], true) ?: [];
     $output_html  = '<tr>';
     $output_html .= '    <td>'.$data['QUESTION_Instruction_Text'].'</td>';
 
     /* Driver One */
     $output_html .= '    <td id="question_driver1" class="table_driver active">';
-    $output_html .= '        <select id="info_question_select_field_driver1_'.$data['QUESTION_Label'].'" driver="driver1" key="'.$data['QUESTION_Label'].'" name="driver1_'.$data['QUESTION_Label'].'" start_value="'.htmlspecialchars((string)($current_selections[$data['QUESTION_Label']] ?? ''), ENT_QUOTES).'" desc=""'.$data['QUESTION_Description'].'">';
-    $output_html .= '            <option value="" disabled >'.$data['QUESTION_Select_Default_Text'].'</option>';
+    $output_html .= '        <select id="info_question_select_field_driver1_'.$data['QUESTION_Label'].'" accounting="'.($data['QUESTION_Add_To_Basket']?"yes":"no").'" cost="'.(float)$data['QUESTION_Amount'].'" driver="driver1" key="'.$data['QUESTION_Label'].'" name="driver1_'.$data['QUESTION_Label'].'" start_value="'.htmlspecialchars((string)($current_selections[$data['QUESTION_Label']] ?? ''), ENT_QUOTES).'" desc="'.htmlspecialchars((string)$data['QUESTION_Description'], ENT_QUOTES).'">';
+    $output_html .= '            <option value="" disabled >'.htmlspecialchars((string)$data['QUESTION_Select_Default_Text'], ENT_QUOTES).'</option>';
     foreach($choices as $key => $value) {
         $current = (string)($current_selections[$data['QUESTION_Label']] ?? '');
         $selected_text = ((string)$key === $current || $value === $current) ? " selected" : "";  // stored as the key (older ones as the text)
-        $output_html .= '<option value="'.$key.'"'.$selected_text.'>'.$value.'</option>';
+        $output_html .= '<option value="'.htmlspecialchars((string)$key, ENT_QUOTES).'"'.$selected_text.'>'.htmlspecialchars((string)$value, ENT_QUOTES).'</option>';
     }
     $output_html .= '        </select>';
     $output_html .= '    </td>';

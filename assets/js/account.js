@@ -94,6 +94,11 @@ function HandleAccountManagementActionClick(event) {
         var event_id = $(this).attr('event_id');
 		RenderWeekendEvents(event_id);
     }
+
+	else if (action === 'edit_form_questions' ){
+        var event_id = $(this).attr('event_id');
+		RenderEventQuestions(event_id);
+    }
 }
 
 // -------------------------------------------------------------------------------------
@@ -821,6 +826,7 @@ function RenderEditParticipantInformation() {
 		// Balance preview: registration type and the pre-pay option boxes
 		$("#edit_registration_type").on('change', UpdateEditBalancePreview);
 		$('[id^="info_checkbox_field_driver1_"]').on('change', UpdateEditBalancePreview);
+		$('[id^="info_question_select_field_driver1_"]').on('change', UpdateEditBalancePreview);
 		UpdateEditBalancePreview();
         // RenderBackButton('backtofindeditregistration', event_id);
 		document.querySelector('[id="back_button_link"]').onclick = HandleBackButtonClick;
@@ -922,8 +928,8 @@ function ShowEditParticipantMessages(messages, is_error) {
 // -------------------------------------------------------------------------------------
 // Function: 	UpdateEditBalancePreview
 // Description: On the Edit Information page, shows what the balance will become: the
-//              chosen registration type's cost plus the checked pre-pay options (the
-//              boxes with accounting="yes"), as SaveRegistrant works it out. Without a
+//              chosen registration type's cost plus the pre-pay options chosen (boxes
+//              and drop-downs with accounting="yes"), as SaveRegistrant works it out. Without a
 //              registration type the balance isn't recalculated.
 // -------------------------------------------------------------------------------------
 function UpdateEditBalancePreview() {
@@ -943,6 +949,12 @@ function UpdateEditBalancePreview() {
 	var balance = parseInt(type_cost, 10) || 0;
 	$('[id^="info_checkbox_field_driver1_"][accounting="yes"]').each(function() {
 		if (this.checked) {
+			balance += Math.round((parseFloat($(this).attr('cost')) || 0) * 100);
+		}
+	});
+	// A charged drop-down adds its amount when any choice is picked
+	$('[id^="info_question_select_field_driver1_"][accounting="yes"]').each(function() {
+		if ($(this).val()) {
 			balance += Math.round((parseFloat($(this).attr('cost')) || 0) * 100);
 		}
 	});

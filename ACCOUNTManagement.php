@@ -396,6 +396,14 @@ function  RenderManagementToolsSection () {
     $output_html .= '    <a href="#" id="admin_event_handler" action="edit_weekend_events" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
     $output_html .= '</div>';
 
+    /* -- Add / Edit Registration Form Questions -- */
+    $output_html .= '<div>';
+    $output_html .= '    <span class="number"><span class="icon solid fa-clipboard-list"></span></span>';
+    $output_html .= '    <h3>Add / Edit Registration Form Questions</h3>';
+    $output_html .= '    <p>Add, edit, reorder, hide or delete the yes/no and drop-down questions on the registration form, including options that add a charge.</p>';
+    $output_html .= '    <a href="#" id="admin_event_handler" action="edit_form_questions" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
+    $output_html .= '</div>';
+
     /* -- Add / Edit Sponsorship Levels -- */
     $output_html .= '<div>';
     $output_html .= '<span class="number"><span class="icon solid fa-layer-group"></span></span>';

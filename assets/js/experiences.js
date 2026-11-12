@@ -111,7 +111,7 @@ function PreviewWeekendEventBanner() {
     preview.empty().append($('<img>').attr({src: URL.createObjectURL(file), alt: 'Banner preview'}));
 }
 
-// Empties the Add form after a agenda event is added, keeping Show ticked.
+// Empties the Add form after an agenda event is added, keeping Show ticked.
 function ClearWeekendEventForm(item) {
     item.find('[experience_field]').not(':checkbox').val('');
     item.find(':checkbox[experience_field]').prop('checked', true);

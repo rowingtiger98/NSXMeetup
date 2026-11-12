@@ -70,6 +70,7 @@ if ($admin_rights == 'NOT SET') {
             <script src="assets/js/eventsettings.js?v=<?php echo filemtime(__DIR__.'/assets/js/eventsettings.js'); ?>"></script>
             <script src="assets/js/regtypes.js?v=<?php echo filemtime(__DIR__.'/assets/js/regtypes.js'); ?>"></script>
             <script src="assets/js/experiences.js?v=<?php echo filemtime(__DIR__.'/assets/js/experiences.js'); ?>"></script>
+            <script src="assets/js/questions.js?v=<?php echo filemtime(__DIR__.'/assets/js/questions.js'); ?>"></script>
             <script src="https://cdn.jsdelivr.net/npm/tinymce@6.8.5/tinymce.min.js" referrerpolicy="origin"></script>            
 
 		<script>

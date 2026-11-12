@@ -1055,6 +1055,59 @@ span.attr_more_info_field {
     margin-top: 0.5em;
 }
 
+/* Registration form questions tool (assets/js/questions.js) - otherwise styled by the regtype_* and experience_* rules above */
+#question_tool input[type="checkbox"] + label {
+    margin-bottom: 0;
+}
+
+.question_preview {
+    font-size: 0.85em;
+    opacity: 0.8;
+}
+
+.question_order_buttons {
+    white-space: nowrap;
+}
+
+    .question_order_buttons .button {
+        padding: 0 0.75em;
+        margin: 0 0.25em 0.25em 0;
+    }
+
+.question_choice_row {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    margin-bottom: 0.5em;
+}
+
+    .question_choice_row input[type="text"] {
+        flex: 1 1 auto;
+    }
+
+    .question_choice_row .button,
+    .question_choice_picked {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    /* Line up with the input: no .regtype_item .button top margin, same height */
+    .question_choice_row input[type="text"],
+    .question_choice_row .button {
+        margin: 0;
+    }
+
+    .question_choice_row .button {
+        height: 2.5rem;
+        line-height: 2.5rem;
+    }
+
+    .question_choice_picked {
+        font-size: 0.8em;
+        opacity: 0.8;
+        min-width: 6em;
+    }
+
 /* Registration type drop downs on the registration form (QUESTIONFunctions.php) */
 .regtype_choice_description {
     font-size: 0.8em;

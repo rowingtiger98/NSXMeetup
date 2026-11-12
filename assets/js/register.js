@@ -903,6 +903,7 @@ function AddAdditionalGuestToRegistration() {
 /* -------------------------------------------------------------------------------------------------------- */
 function InitRegistrationTypeSelection() {
 	$('.regtype_select').on('change', ReactToRegistrationTypeSelection);
+	$('select[id^="info_question_select_field_"][accounting="yes"]').on('change', ReactToQuestionSelectChoice);
 	if ($("#regtype_select_driver2").length) {
 		$("#info_field_driver1_additional_guest").attr('cost', $("#cost_driver2").attr('cost'));
 	}
@@ -921,6 +922,28 @@ function InitRegistrationTypeSelection() {
 	}, true);
 
 	UpdateCheckoutButtonState();
+}
+
+/* -------------------------------------------------------------------------------------------------------- */
+/* Function:	ReactToQuestionSelectChoice																	*/
+/* Description:	A charged drop-down question (accounting="yes") adds its one amount to the registrant's cart	*/
+/*				when any choice is picked, whichever it is - as ChosenPrepayOptions (paymentMethods.php)	*/
+/*				works out the balance. The cart item is per registrant, so one registrant's choice doesn't	*/
+/*				replace the other's.																		*/
+/* -------------------------------------------------------------------------------------------------------- */
+function ReactToQuestionSelectChoice() {
+	if ($("#event_info_container").attr('collect_payments') !== 'yes' || typeof shopping_cart_actions !== 'function') {
+		return;
+	}
+	var driver = $(this).attr('driver');
+	var item_id = $(this).attr('key') + '_' + driver;
+	var cents = Math.round((parseFloat($(this).attr('cost')) || 0) * 100);
+
+	shopping_cart_actions(item_id, 0, '', driver, 'remove');
+	if ($(this).val()) {
+		shopping_cart_actions(item_id, cents, $(this).attr('desc') + ' (' + $(this).find('option:selected').text() + ')', driver, 'add');
+	}
+	update_driver_totals(driver);
 }
 
 /* -------------------------------------------------------------------------------------------------------- */
