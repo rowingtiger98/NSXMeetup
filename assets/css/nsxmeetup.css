@@ -615,6 +615,11 @@ li.local_attraction_link:hover {
     color: #ffcc00;
 }
 
+/* Admin tool: the Add New Attraction button sits on its own above the categories */
+#local_attraction_add_button {
+    margin-bottom: 0.75em;
+}
+
 .local_attraction_container {
     display: none;
     border: 1px solid #ffffff;

@@ -8,8 +8,10 @@
       'CreateNewLocalAttraction'     => 'event_admin',
       'EnterNewAttractionCategory'   => 'event_admin',
       'EnterNewAttractionDetails'    => 'admin',
+      'SaveLocalAttraction'          => 'event_admin',
+      'DeleteLocalAttraction'        => 'event_admin',
   ];
-  EndpointDispatch(__FILE__, LOCAL_ATTRACTION_METHODS, ['EnterNewAttractionCategory', 'EnterNewAttractionDetails']);
+  EndpointDispatch(__FILE__, LOCAL_ATTRACTION_METHODS, ['EnterNewAttractionCategory', 'EnterNewAttractionDetails', 'SaveLocalAttraction', 'DeleteLocalAttraction']);
 
 /* ************************************************************************ */
 /* Funciton:    RenderOpeningPageInformation                                 */
@@ -23,12 +25,14 @@ function RenderOpeningPageInformation() {
 	$results = array();	
 
   if ($editable == 'true') {
-    $category_links  = '<ul id="local_attractions_category_menu"><li id="local_attraction_link_create_new" class="local_attraction_link" event_id="'.$event_id.'" section_name="create"><i class="icon fa-plus-square" style="padding-right:0.25em;"></i>Add New Attraction</li>';
+    $category_links  = '<a href="#" id="local_attraction_add_button" class="button primary small fit" event_id="'.$event_id.'"><i class="icon fa-plus-square" style="padding-right:0.25em;"></i>Add New Attraction</a>';
+    $category_links .= '<ul id="local_attractions_category_menu">';
   } else {
     $category_links = '<ul id="local_attractions_category_menu">';
   }
   $opening_category = '';
   $category_container = '';
+  $editable_attr = ($editable == 'true') ? ' editable="true"' : '';  // the admin tool shows a table with Edit buttons
   
   $output_html = '<div id="local_attractions_continer" class="weekend_agenda_container">';
 
@@ -55,13 +59,17 @@ function RenderOpeningPageInformation() {
         while($row = $result->fetch_assoc()) {
             if($opening_category == '') {
                 $opening_category = $row['Category_Name'];
-                $category_links .= '<li id="local_attraction_link_'.$row['Category_Name'].'" class="local_attraction_link active" event_id="'.$event_id.'" section_name="'.$row['Category_Name'].'">'.$row['Category_Title'].'</li>';
+                $category_links .= '<li id="local_attraction_link_'.$row['Category_Name'].'" class="local_attraction_link active" event_id="'.$event_id.'"'.$editable_attr.' section_name="'.$row['Category_Name'].'">'.$row['Category_Title'].'</li>';
             } else {            
-                $category_links .= '<li id="local_attraction_link_'.$row['Category_Name'].'" class="local_attraction_link" event_id="'.$event_id.'" section_name="'.$row['Category_Name'].'">'.$row['Category_Title'].'</li>';
+                $category_links .= '<li id="local_attraction_link_'.$row['Category_Name'].'" class="local_attraction_link" event_id="'.$event_id.'"'.$editable_attr.' section_name="'.$row['Category_Name'].'">'.$row['Category_Title'].'</li>';
             }
 
             if ($row['Category_Name'] == $opening_category) {
                 $category_container .= '<div id="local_attraction_container_'.$row['Category_Name'].'" class="local_attraction_container active" section_name="'.$row['Category_Name'].'">';
+                if ($editable == 'true') {
+                    $category_container .= LocalAttractionTable($conn, $event_id, $row['Category_Name']).'</div> ';
+                    continue;
+                }
                 $attr_result = PreparedQuery($conn, "SELECT * from `nsx_meetup_attractions` WHERE `Event_ID` = ? AND `Attraction_Category` = ?", [(int)$event_id, $row['Category_Name']]);
                 if($attr_result->num_rows > 0) {
                     while($attr_row = $attr_result->fetch_assoc()) {
@@ -109,6 +117,12 @@ function BuildLocalAttractionSection() {
   $output_html .= '<div id="local_attraction_container_'.$section_attr.'" class="local_attraction_container active" section_name="'.$section_attr.'">';
       
 	$conn = connectDB('kirbypar_nsx_meetup');
+  if (($_POST['editable'] ?? '') === 'true') {
+    $output_html .= LocalAttractionTable($conn, $event_id, $section_name).'</div> ';
+    closeDB($conn);
+    echo json_encode([$output_html]);
+    return;
+  }
 	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_attractions` WHERE `Event_ID` = ? AND `Attraction_Category` = ?", [$event_id, $section_name]);
 	if($result->num_rows > 0) {
         while($row = $result->fetch_assoc()) {
@@ -122,6 +136,48 @@ function BuildLocalAttractionSection() {
 	closeDB($conn);
     $results[] = $output_html;
 	echo json_encode($results);		  	
+}
+
+/* ************************************************************************ */
+/* Function:    LocalAttractionTable                                        */
+/* Description: The admin tool's view of a category: a table with a row    */
+/*              per attraction of the event in it, each with Edit and       */
+/*              Delete.                                                     */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function LocalAttractionTable($conn, $event_id, $category) {
+  $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+  $result = PreparedQuery($conn, "SELECT * from `nsx_meetup_attractions` WHERE `Event_ID` = ? AND `Attraction_Category` = ? ORDER BY `Attraction_Name`", [(int)$event_id, (string)$category]);
+  if (!$result || $result->num_rows == 0) {
+    return '<p>This event has no attractions in this category yet. Click Add New Attraction to add one.</p>';
+  }
+
+  $output_html  = '<p id="local_attraction_list_message" class="event_settings_error" style="display:none;"></p>';
+  $output_html .= '<div class="table-wrapper">';
+  $output_html .= '<table class="regtype_table">';
+  $output_html .= '<thead><tr><th>Name</th><th>Address</th><th>Phone</th><th>Links</th><th></th></tr></thead>';
+  $output_html .= '<tbody>';
+  while ($row = $result->fetch_assoc()) {
+    $city_line = trim($row['Attraction_City'].($row['Attraction_State'] != '' ? ', '.$row['Attraction_State'] : '').' '.$row['Attraction_Zip']);
+    $links = [];
+    $web = trim((string)$row['Attraction_Web']);
+    if ($web !== '') {
+      $links[] = '<a href="'.$h($web).'" target="_blank" rel="noopener">Web Site</a>';
+    }
+    if (AttractionReservationLink($row['Attraction_Hotel_Reservation_Link'] ?? '') !== '') {
+      $links[] = '<a href="'.$h(AttractionReservationLink($row['Attraction_Hotel_Reservation_Link'])).'" target="_blank" rel="noopener">Reservations</a>';
+    }
+    $output_html .= '<tr>';
+    $output_html .= '   <td>'.$h($row['Attraction_Name']).'</td>';
+    $output_html .= '   <td>'.$h($row['Attraction_Street_Address']).($city_line !== '' ? '<br>'.$h($city_line) : '').'</td>';
+    $output_html .= '   <td>'.$h($row['Attraction_Phone']).'</td>';
+    $output_html .= '   <td>'.implode('<br>', $links).'</td>';
+    $output_html .= '   <td class="regtype_actions"><a href="#" class="button small local_attraction_edit_button" event_id="'.(int)$event_id.'" attraction_id="'.(int)$row['Attraction_ID'].'">Edit</a>'
+                   .' <a href="#" class="button small local_attraction_delete_button" event_id="'.(int)$event_id.'" attraction_id="'.(int)$row['Attraction_ID'].'">Delete</a></td>';
+    $output_html .= '</tr>';
+  }
+  $output_html .= '</tbody></table></div>';
+  return $output_html;
 }
 
 /* ************************************************************************ */
@@ -226,8 +282,8 @@ function FormatIndividualAttractionInformation($row) {
     $output_html .= ' <label class="attr_more_info_lable" for="attr_addr_'.$row['Attraction_ID'].'">Distance from Hotel</label><span class="attr_more_info_field" name="attr_addr_'.$row['Attraction_ID'].'">'.$row['Attraction_Distance'].'</span>';
   }
 
-  if ($row['Attraction_Google_Map_Link	'] != '') {
-    $output_html .= ' <label class="attr_more_info_lable" for="attr_addr_'.$row['Attraction_ID'].'">Google Maps</label><span class="attr_more_info_field" name="attr_addr_'.$row['Attraction_ID'].'">'.$row['Attraction_Google_Map_Link	'].'</span>';
+  if (($row['Attraction_Google_Map_Link'] ?? '') != '') {
+    $output_html .= ' <label class="attr_more_info_lable" for="attr_addr_'.$row['Attraction_ID'].'">Google Maps</label><span class="attr_more_info_field" name="attr_addr_'.$row['Attraction_ID'].'">'.$row['Attraction_Google_Map_Link'].'</span>';
   }
   $output_html .= ' </div>';
   $output_html .= '</div>';
@@ -244,23 +300,39 @@ function FormatIndividualAttractionInformation($row) {
 /* Returns:     HTML                                        				        */
 /* ************************************************************************ */ 
 function CreateNewLocalAttraction() {
-  $event_id = $_POST['event_id'];
-  $section_name = $_POST['section_name'];
+  $event_id = (int)($_POST['event_id'] ?? 0);
+  $attraction_id = (int)($_POST['attraction_id'] ?? 0);  // set when editing an attraction
   $results = array();	
+
+	$conn = connectDB('kirbypar_nsx_meetup');
+  $attraction = [];
+  if ($attraction_id > 0) {
+    $result = PreparedQuery($conn, "SELECT * from `nsx_meetup_attractions` WHERE `Attraction_ID` = ? AND `Event_ID` = ?", [$attraction_id, $event_id]);
+    $attraction = $result ? ($result->fetch_assoc() ?: []) : [];
+    if (!$attraction) {
+      closeDB($conn);
+      echo json_encode(['<p class="event_settings_error">That attraction could not be found. It may have been deleted.</p>']);
+      return;
+    }
+  }
+  // The attraction's saved value for a form field, escaped ('' when adding)
+  $val = function ($column) use ($attraction) { return htmlspecialchars((string)($attraction[$column] ?? ''), ENT_QUOTES); };
+
   $output_html = '';
   $output_html .= '<div id="local_attraction_container_create" class="local_attraction_container active" event_id="'.$event_id.'" section_name="create">';
+  $output_html .= '<h3>'.($attraction ? 'Edit '.$val('Attraction_Name') : 'Add a New Attraction').'</h3>';
   $output_html .= '<div class="row gtr-25 gtr-uniform">';
 
   //Get the list of categories
   $output_html .= '<div class="col-6 col-12-xsmall">';  
   $output_html .= '<select name="new_local_attraction_category" id="new_local_attraction_category" style="color:rgba(255, 255, 255, 0.7)";>';
-  $output_html .= '<option value="" selected disabled hidden>Select the category</option>';
+  $output_html .= '<option value=""'.($attraction ? '' : ' selected').' disabled hidden>Select the category</option>';
 
-	$conn = connectDB('kirbypar_nsx_meetup');
 	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_attraction_categories` ORDER BY `Category_ID`");
 	if($result->num_rows > 0) {
         while($row = $result->fetch_assoc()) {
-          $output_html .= '<option value="'.$row['Category_Name'].'">'.$row['Category_Title'].'</option>';
+          $selected = ($attraction && $row['Category_Name'] === $attraction['Attraction_Category']) ? ' selected' : '';
+          $output_html .= '<option value="'.$row['Category_Name'].'"'.$selected.'>'.$row['Category_Title'].'</option>';
         }
         $output_html .= '<option value="new">New Category</option>';
 	} else {
@@ -272,33 +344,33 @@ function CreateNewLocalAttraction() {
   $output_html .= '<input id="new_category_name_container" class="new_category_name_container" type="text" placeholder="Enter the New Category Name"></input>'; 
   $output_html .= '</div>';  
 $output_html .= '<div class="col-8 col-12-xsmall">';
-$output_html .= '<input type="text" name="name" id="info_text_field_attraction_name" value="" placeholder="Name" />';
+$output_html .= '<input type="text" name="name" id="info_text_field_attraction_name" value="'.$val('Attraction_Name').'" placeholder="Name" />';
 $output_html .= '</div>';
 $output_html .= '<div class="col-4 col-12-xsmall">';
-$output_html .= '<input type="text" name="distance" id="info_text_field_attraction_distance" value="" placeholder="Distance To Event Site" />';
+$output_html .= '<input type="text" name="distance" id="info_text_field_attraction_distance" value="'.$val('Attraction_Distance').'" placeholder="Distance To Event Site" />';
 $output_html .= '</div>';
 $output_html .= '<div class="col-4 col-12-xsmall">';
-$output_html .= '<input type="text" name="website" id="info_text_field_attraction_website" value="" placeholder="Web Site" />';
+$output_html .= '<input type="text" name="website" id="info_text_field_attraction_website" value="'.$val('Attraction_Web').'" placeholder="Web Site" />';
 $output_html .= '</div>';
 $output_html .= '<div class="col-4 col-12-xsmall">';
-$output_html .= '<input type="text" name="email" id="info_text_field_attraction_email" value="" autocomplete="off" placeholder="Email Address" />';
+$output_html .= '<input type="text" name="email" id="info_text_field_attraction_email" value="'.$val('Attraction_Email').'" autocomplete="off" placeholder="Email Address" />';
 $output_html .= '</div>';
 $output_html .= '<div class="col-4 col-12-xsmall">';
-$output_html .= '<input type="text" name="phone" id="info_text_field_attraction_phone" value="" placeholder="Phone Number" />';
+$output_html .= '<input type="text" name="phone" id="info_text_field_attraction_phone" value="'.$val('Attraction_Phone').'" placeholder="Phone Number" />';
 $output_html .= '</div>';
 $output_html .= '<div id="info_text_field_attraction_reservation_link_container" class="col-12 col-12-xsmall" style="display:none;">';  // shown for a hotel category (render.js)
-$output_html .= '<input type="url" name="reservation_link" id="info_text_field_attraction_reservation_link" value="" maxlength="2048" placeholder="Hotel Reservation Link (the link the hotel gave you for the event\'s room block)" />';
+$output_html .= '<input type="url" name="reservation_link" id="info_text_field_attraction_reservation_link" value="'.$val('Attraction_Hotel_Reservation_Link').'" maxlength="2048" placeholder="Hotel Reservation Link (the link the hotel gave you for the event\'s room block)" />';
 $output_html .= '<p id="info_text_field_attraction_reservation_link_message" class="event_settings_error" style="display:none;"></p>';
 $output_html .= '</div>';
 $output_html .= '<div class="col-5 col-12-xsmall">';
-$output_html .= '<input type="text" name="street" id="info_text_field_attraction_street" value="" placeholder="Street Address" />';
+$output_html .= '<input type="text" name="street" id="info_text_field_attraction_street" value="'.$val('Attraction_Street_Address').'" placeholder="Street Address" />';
 $output_html .= '</div>';
 $output_html .= '<div class="col-3 col-12-xsmall">';
-$output_html .= '<input type="text" name="city" id="info_text_field_attraction_city" value="" placeholder="City" />';
+$output_html .= '<input type="text" name="city" id="info_text_field_attraction_city" value="'.$val('Attraction_City').'" placeholder="City" />';
 $output_html .= '</div>';
 $output_html .= '<div class="col-2 col-12-xsmall">';
 $output_html .= '<select name="state" id="info_select_field_attraction_state" style="color:rgba(255, 255, 255, 0.7)";>';
-$output_html .= '    <option value="" selected disabled hidden>State</option>';
+$output_html .= '    <option value=""'.($attraction ? '' : ' selected').' disabled hidden>State</option>';
 $output_html .= '    <option value="AL">AL</option>';
 $output_html .= '    <option value="AK">AK</option>';
 $output_html .= '    <option value="AZ">AZ</option>';
@@ -353,22 +425,28 @@ $output_html .= '    <option value="WY">WY</option>';
 $output_html .= '</select>';								
 $output_html .= '</div>';
 $output_html .= '<div class="col-2 col-12-xsmall">';
-$output_html .= '<input type="text" name="zip" id="info_text_field_attraction_zip" value="" placeholder="Zip" />';
+$output_html .= '<input type="text" name="zip" id="info_text_field_attraction_zip" value="'.$val('Attraction_Zip').'" placeholder="Zip" />';
 $output_html .= '</div>';
 $output_html .= '<div class="col-12 col-12-xsmall">';
 $output_html .= '<label for="info_text_field_attraction_description">Attraction Description</label>';
-$output_html .= '<textarea id="info_text_field_attraction_description" name="info_text_field_attraction_description" rows="4" placeholder="Describe the attraction" ></textarea>';
+$output_html .= '<textarea id="info_text_field_attraction_description" name="info_text_field_attraction_description" rows="4" placeholder="Describe the attraction" >'.$val('Attraction_Description').'</textarea>';
 $output_html .= '</div>';
 $output_html .= '<div class="col-12 col-12-xsmall">';
 $output_html .= '<label for="info_text_field_attraction_additional">Additional Information</label>';
-$output_html .= '<textarea id="info_text_field_attraction_additional" name="info_text_field_attraction_additional" rows="3" placeholder="Add any other additional information that might be helpful." ></textarea>';
+$output_html .= '<textarea id="info_text_field_attraction_additional" name="info_text_field_attraction_additional" rows="3" placeholder="Add any other additional information that might be helpful." >'.$val('Attraction_Additional_Info').'</textarea>';
 $output_html .= '</div>';
 $output_html .= '<div class="col-12 col-12-xsmall">';
 $output_html .= '<label for="info_text_field_attraction_pakring">Parking</label>';
-$output_html .= '<textarea id="info_text_field_attraction_parking" name="info_text_field_attraction_pakring" rows="3" placeholder="If there is anything about you need to share about parking at this attraction, do so here." ></textarea>';
+$output_html .= '<textarea id="info_text_field_attraction_parking" name="info_text_field_attraction_pakring" rows="3" placeholder="If there is anything about you need to share about parking at this attraction, do so here." >'.$val('Attraction_Parking').'</textarea>';
 $output_html .= '</div>';
 $output_html .= '<div class="col-12 col-12-xsmall">';
-$output_html .= '<a href="#" id="submit_new_local_attraction_button" event_id="'.$event_id.'" class="button primary fit">Add New Attaraction</a>';
+$output_html .= '<p id="local_attraction_form_message" class="event_settings_error" style="display:none;"></p>';
+$output_html .= '</div>';
+$output_html .= '<div class="col-6 col-12-xsmall">';
+$output_html .= '<a href="#" id="submit_new_local_attraction_button" event_id="'.$event_id.'" attraction_id="'.($attraction ? $attraction_id : '').'" class="button primary fit">'.($attraction ? 'Save Changes' : 'Add Attraction').'</a>';
+$output_html .= '</div>';
+$output_html .= '<div class="col-6 col-12-xsmall">';
+$output_html .= '<a href="#" id="cancel_local_attraction_button" class="button fit">Cancel</a>';
 $output_html .= '</div>';
 
 
@@ -378,6 +456,11 @@ $output_html .= '</div>';
     
   $output_html .= '</div> ';  
   $output_html .= "</div>";  
+  if ($attraction && $attraction['Attraction_State'] != '') {
+    // Select the attraction's state in the list above
+    $state_option = '<option value="'.$val('Attraction_State').'">';
+    $output_html = str_replace($state_option, '<option value="'.$val('Attraction_State').'" selected>', $output_html);
+  }
   $results[] = $output_html;
   closeDB($conn);
 	echo json_encode($results);	
@@ -429,14 +512,8 @@ function EnterNewAttractionDetails() {
   $results = array();
   $attraction_data = json_decode($_POST['attraction_data'], true);
 
-  // Only an http(s) address is saved, since it becomes a link on the event's page
-  $reservation_link = trim((string)($attraction_data['reservation_link'] ?? ''));
-  if ($reservation_link !== '' && AttractionReservationLink($reservation_link) === '') {
-    echo json_encode(['fail', 'The hotel reservation link must be a web address starting with http:// or https://']);
-    return;
-  }
-  if (strlen($reservation_link) > 2048) {
-    echo json_encode(['fail', 'The hotel reservation link is too long (2048 characters at most).']);
+  $reservation_link = PostedAttractionReservationLink($attraction_data);
+  if ($reservation_link === false) {
     return;
   }
 
@@ -477,5 +554,95 @@ function EnterNewAttractionDetails() {
   echo json_encode($results);
 
 }
+/* ************************************************************************ */
+/* Function:    PostedAttractionReservationLink                             */
+/* Description: The posted hotel reservation link, checked. Only an http(s) */
+/*              address is saved, since it becomes a link on the event's    */
+/*              page.                                                       */
+/* Returns:     string, or false after echoing a 'fail' response            */
+/* ************************************************************************ */
+function PostedAttractionReservationLink($attraction_data) {
+  $reservation_link = trim((string)($attraction_data['reservation_link'] ?? ''));
+  if ($reservation_link !== '' && AttractionReservationLink($reservation_link) === '') {
+    echo json_encode(['fail', 'The hotel reservation link must be a web address starting with http:// or https://']);
+    return false;
+  }
+  if (strlen($reservation_link) > 2048) {
+    echo json_encode(['fail', 'The hotel reservation link is too long (2048 characters at most).']);
+    return false;
+  }
+  return $reservation_link;
+}
+
+/* ************************************************************************ */
+/* Function:    SaveLocalAttraction                                         */
+/* Description: Saves changes to one of the posted event's attractions.     */
+/* Returns:     JSON ['success', id] or ['fail', message]                   */
+/* ************************************************************************ */
+function SaveLocalAttraction() {
+  $event_id = (int)($_POST['event_id'] ?? 0);
+  $attraction_data = json_decode((string)($_POST['attraction_data'] ?? ''), true);
+  if (!is_array($attraction_data)) {
+    echo json_encode(['fail', 'The attraction could not be read. Please try again.']);
+    return;
+  }
+  $attraction_id = (int)($attraction_data['attraction_id'] ?? 0);
+  $name = trim((string)($attraction_data['name'] ?? ''));
+  $category = trim((string)($attraction_data['category'] ?? ''));
+  if ($name === '' || $category === '') {
+    echo json_encode(['fail', 'Every attraction needs a name and a category.']);
+    return;
+  }
+  $reservation_link = PostedAttractionReservationLink($attraction_data);
+  if ($reservation_link === false) {
+    return;
+  }
+
+  $dbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
+  $sth = $dbh->prepare("SELECT COUNT(*) FROM `nsx_meetup_attractions` WHERE `Attraction_ID` = ? AND `Event_ID` = ?");
+  $sth->execute([$attraction_id, $event_id]);
+  if (!$sth->fetchColumn()) {
+    echo json_encode(['fail', 'That attraction could not be found. It may have been deleted.']);
+    return;
+  }
+
+  $field = function ($key) use ($attraction_data) { return trim((string)($attraction_data[$key] ?? '')); };
+  $sth = $dbh->prepare("UPDATE `nsx_meetup_attractions` SET `Attraction_Name` = ?, `Attraction_Street_Address` = ?, `Attraction_City` = ?, `Attraction_State` = ?, `Attraction_Zip` = ?, `Attraction_Phone` = ?, `Attraction_Email` = ?, `Attraction_Web` = ?, `Attraction_Category` = ?, `Attraction_Description` = ?, `Attraction_Additional_Info` = ?, `Attraction_Parking` = ?, `Attraction_Distance` = ?, `Attraction_Hotel_Reservation_Link` = ? WHERE `Attraction_ID` = ? AND `Event_ID` = ?");
+  try {
+    $sth->execute([$name, $field('street'), $field('city'), $field('state'), $field('zip'), $field('phone'), $field('email'), $field('web'), $category,
+                   $field('description'), $field('additional'), $field('parking'), $field('distance'), $reservation_link, $attraction_id, $event_id]);
+  } catch (PDOException $e) {
+    error_log('SaveLocalAttraction: '.$e->getMessage());
+    echo json_encode(['fail', 'The attraction could not be saved. Please try again.']);
+    return;
+  }
+  echo json_encode(['success', $attraction_id]);
+}
+
+/* ************************************************************************ */
+/* Function:    DeleteLocalAttraction                                       */
+/* Description: Deletes one of the posted event's attractions.              */
+/* Returns:     JSON ['success', id] or ['fail', message]                   */
+/* ************************************************************************ */
+function DeleteLocalAttraction() {
+  $event_id = (int)($_POST['event_id'] ?? 0);
+  $attraction_id = (int)($_POST['attraction_id'] ?? 0);
+
+  $dbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
+  try {
+    $sth = $dbh->prepare("DELETE FROM `nsx_meetup_attractions` WHERE `Attraction_ID` = ? AND `Event_ID` = ?");
+    $sth->execute([$attraction_id, $event_id]);
+  } catch (PDOException $e) {
+    error_log('DeleteLocalAttraction: '.$e->getMessage());
+    echo json_encode(['fail', 'The attraction could not be deleted. Please try again.']);
+    return;
+  }
+  if ($sth->rowCount() == 0) {
+    echo json_encode(['fail', 'That attraction could not be found. It may already have been deleted.']);
+    return;
+  }
+  echo json_encode(['success', $attraction_id]);
+}
+
 // DATABASE FUNCTIONS moved to databaseFunctions.php (required at the top of this file).
 ?>

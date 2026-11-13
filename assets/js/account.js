@@ -1013,7 +1013,17 @@ function RenderEditLocalAttraction(event) {
 		  var elms = document.querySelectorAll('[id^="local_attraction_link_"]');
 		  for (i = 0; i < elms.length; i++) {
 			  elms[i].onclick = ReactToMenuLinkSelection;
-		  }  
+		  }
+		  $("#local_attraction_add_button").on('click', function(e) {
+			  e.preventDefault();
+			  OpenLocalAttractionForm(event_id, '');
+		  });
+		  // Delegated, so the Edit buttons keep working after a category's table is redrawn
+		  $("#local_attractions_content").on('click', '.local_attraction_edit_button', function(e) {
+			  e.preventDefault();
+			  OpenLocalAttractionForm(event_id, $(this).attr('attraction_id'));
+		  });
+		  $("#local_attractions_content").on('click', '.local_attraction_delete_button', DeleteLocalAttraction);
 		  var carLmt = 300;
 		  // Text to show when text is collapsed
 		  var readMoreTxt = " ...read more";
