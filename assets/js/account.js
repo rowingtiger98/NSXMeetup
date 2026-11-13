@@ -1007,7 +1007,8 @@ function RenderEditLocalAttraction(event) {
         data: {method: 'RenderOpeningPageInformation', event_id:event_id, editable:true},
         success: function(data) {
           results = eval(data);
-          $("#details_info").html(results[0]);
+          $("#main_content_container").html(results[0]);
+          RenderBackButton('backtomaineventtoolset', event_id);
 		  
 		  var elms = document.querySelectorAll('[id^="local_attraction_link_"]');
 		  for (i = 0; i < elms.length; i++) {

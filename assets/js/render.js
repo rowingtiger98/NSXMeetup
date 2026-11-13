@@ -117,6 +117,7 @@ function ReactToMenuLinkSelection(event) {
           $("#local_attractions_content").html(html_code);
           // new_local_attraction_category
           document.querySelector('[id="new_local_attraction_category"]').onchange = ReactToNewAttractionCartegorySection;
+          document.querySelector('[id="new_category_name_container"]').oninput = ShowAttractionReservationLink;
           document.querySelector('[id="submit_new_local_attraction_button"]').onclick = SubmitNewLocalAttraction;     
         }
       });      
@@ -192,6 +193,17 @@ async function SubmitNewLocalAttraction(event) {
   attraction_data['parking'] = document.getElementById("info_text_field_attraction_parking").value;
   attraction_data['additional'] = document.getElementById("info_text_field_attraction_additional").value;
   attraction_data['distance'] = $("#info_text_field_attraction_distance").val();
+  // A link typed for a hotel isn't saved if the category was then changed to something else
+  attraction_data['reservation_link'] = $("#info_text_field_attraction_reservation_link_container").is(':visible')
+      ? $.trim($("#info_text_field_attraction_reservation_link").val() || '') : '';
+
+  // The reservation link becomes a button on the event's page, so it has to be a web address
+  var link_message = $("#info_text_field_attraction_reservation_link_message");
+  if (attraction_data['reservation_link'] !== '' && !/^https?:\/\/\S+$/i.test(attraction_data['reservation_link'])) {
+    link_message.text('The hotel reservation link must be a web address starting with http:// or https://').show();
+    return;
+  }
+  link_message.hide();
 
 
   if (attraction_data['category'] == 'new') {
@@ -394,7 +406,19 @@ function ReactToNewAttractionCartegorySection(event) {
   } else {
     $("#new_category_name_container").removeClass('active');
   }
+  ShowAttractionReservationLink();
+}
 
+// -------------------------------------------------------------------------------------
+// Function: 	ShowAttractionReservationLink
+// Description: Shows the Hotel Reservation Link box only when the chosen category (or
+//              the name typed for a new one) is a hotel category, i.e. has "hotel" in it.
+// -------------------------------------------------------------------------------------
+function ShowAttractionReservationLink() {
+  var select = $("#new_local_attraction_category");
+  var category = (select.val() == 'new') ? $("#new_category_name_container").val()
+                                          : (select.val() || '') + ' ' + select.find('option:selected').text();
+  $("#info_text_field_attraction_reservation_link_container").toggle(/hotel/i.test(category));
 }
 
 // -------------------------------------------------------------------------------------

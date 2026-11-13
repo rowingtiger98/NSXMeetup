@@ -404,6 +404,14 @@ function  RenderManagementToolsSection () {
     $output_html .= '    <a href="#" id="admin_event_handler" action="edit_form_questions" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
     $output_html .= '</div>';
 
+    /* -- Add / Edit Hotels and Local Attractions -- */
+    $output_html .= '<div>';
+    $output_html .= '<span class="number"><span class="icon solid fa-hotel"></span></span>';
+    $output_html .= '<h3>Add / Edit Hotels and Local Attractions</h3>';
+    $output_html .= '<p>Add, edit or delete the hotels and local attractions listed on the event\'s page.</p>';
+    $output_html .= '<a href="#" id="render_local_attractions" class="button primary small fit" event_id="'.$event_id.'" editable="true">Click Here</a>';
+    $output_html .= '</div>';
+
     /* -- Add / Edit Sponsorship Levels -- */
     $output_html .= '<div>';
     $output_html .= '<span class="number"><span class="icon solid fa-layer-group"></span></span>';
@@ -459,14 +467,6 @@ function  RenderManagementToolsSection () {
     $output_html .= '<h3>Generate EMail List</h3>';
     $output_html .= '<p>Click here to generate an comma separated list of all the registrants that you can easily copy to clipboard or cut and past into your favorite email application.</p>';
     $output_html .= '<a href="#" id="admin_event_handler" action="email_list_generation" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
-    $output_html .= '</div>';
-
-    /* -- News Container -- */
-    $output_html .= '<div>';
-    $output_html .= '<span class="number"><span class="icon solid fa-bullhorn"></span></span>';
-    $output_html .= '<h3>Edit / Add / Delete Local Attractions</h3>';
-    $output_html .= '<p>Edit the content of the news section or remove it all together.</p>';
-    $output_html .= '<a href="#" id="render_local_attractions" class="button primary small fit" event_id="'.$event_id.'" editable="true">Click Here</a>';
     $output_html .= '</div>';
 
     /* -- Swap Shop -- */

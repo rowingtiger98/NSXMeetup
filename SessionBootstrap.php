@@ -104,11 +104,12 @@ function app_login_return_url(): string
 
 /**
  * URL of a file in the site's top folder (where this file lives), e.g.
- * app_url('MyAccountInfo.php') gives "/luna/MyAccountInfo.php" when the site is
- * hosted at kirbypark.net/luna/. Use it for links in shared headers, which are
- * included from pages in subfolders (events/<dir>/) as well as the top folder.
- * The site's URL path is worked out from the running script, so it follows the
- * site wherever it's hosted. Falls back to the plain relative path if it can't be.
+ * app_url('MyAccountInfo.php') gives "/MyAccountInfo.php" when the site is
+ * hosted at nsxmeetup.com (or "/sub/MyAccountInfo.php" in a subfolder). Use it
+ * for links in shared headers, which are included from pages in subfolders
+ * (events/<dir>/) as well as the top folder. The site's URL path is worked out
+ * from the running script, so it follows the site wherever it's hosted. Falls
+ * back to the plain relative path if it can't be.
  */
 function app_url(string $path): string
 {

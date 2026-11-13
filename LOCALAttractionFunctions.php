@@ -33,7 +33,12 @@ function RenderOpeningPageInformation() {
   $output_html = '<div id="local_attractions_continer" class="weekend_agenda_container">';
 
   if($editable == 'true') {
-
+    $output_html .= '<h2>Add / Edit Hotels and Local Attractions</h2>';
+    $output_html .= '<div style="margin-bottom:1em;" id="back_navigation_button"></div>';
+    $output_html .= '<p>Use this page to list the hotels and local attractions shown on the event\'s Local Attractions page: places to stay, restaurants,
+      NSX related and non-NSX related things to see and do, and resources like Urgent Care and Mechanics. Each attraction can include its address, phone,
+      email, website, distance, parking and a description. Attractions are grouped into categories, which are shared by all events. Pick a category
+      on the left to see this event\'s attractions in it, or click Add New Attraction to add one, choosing New Category if none of the existing ones fit.</p>';
   } else {
     $output_html = '<div id="local_attractions_continer" class="weekend_agenda_container">';
     $output_html .= 	'<h1 class="major">Local Attrations</h1><p>Listed below are different things to see and do, both NSX related and non-NSX related,
@@ -45,7 +50,7 @@ function RenderOpeningPageInformation() {
   $output_html .= '<div id="local_attractions_menu" class="col-3 col-12-xsmall">';
 
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_attraction_categories` WHERE `Event_ID` = ? ORDER BY `Category_ID`", [(int)$event_id]);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_attraction_categories` ORDER BY `Category_ID`");
 	if($result->num_rows > 0) {
         while($row = $result->fetch_assoc()) {
             if($opening_category == '') {
@@ -135,6 +140,7 @@ function BuildIndividualLocalAttaractionContainer($row) {
       $output_html .= ' <div class="col-12 col-12-xsmall">';
       $output_html .= '  <h4>'.$row['Attraction_Name'].'</h4>';
       $output_html .= '  <p>'.$row['Attraction_Description'].' <a href="#" id="show_more_attraction_information_'.$row['Attraction_ID'].'" class="show_more_attraction_information_link" attraction_id="'.$row['Attraction_ID'].'" action="more" style="font-size:0.8em;font-style:italic;">(Show More Information)</a></p>';
+      $output_html .= AttractionReservationButton($row);
       $output_html .= '  <div id="more_attraction_information_container_'.$row['Attraction_ID'].'" class="more_attraction_information_container">';
       $output_html .= FormatIndividualAttractionInformation($row);
       $output_html .= '  </div>';
@@ -147,6 +153,7 @@ function BuildIndividualLocalAttaractionContainer($row) {
       $output_html .= '<div class="col-10 col-12-xsmall">'; 
       $output_html .= ' <h4>'.$row['Attraction_Name'].'</h4>';
       $output_html .= ' <p>'.$row['Attraction_Description'].'  <a href="#" id="show_more_attraction_information_'.$row['Attraction_ID'].'" class="show_more_attraction_information_link" attraction_id="'.$row['Attraction_ID'].'" action="more" style="font-size:0.8em;font-style:italic;">(Show More Information)</a></p>';
+      $output_html .= AttractionReservationButton($row);
       $output_html .= ' <div id="more_attraction_information_container_'.$row['Attraction_ID'].'" class="more_attraction_information_container">';
       $output_html .= FormatIndividualAttractionInformation($row);
       $output_html .= ' </div>';         
@@ -158,6 +165,29 @@ function BuildIndividualLocalAttaractionContainer($row) {
     return $output_html;
 
 } 
+
+/* ************************************************************************ */
+/* Funciton:    AttractionReservationButton                                 */
+/* Description: The "Reserve a Room" button for a hotel with a reservation  */
+/*              link (e.g. the event's discounted room block).              */
+/* Returns:     HTML, or '' when there's no usable link                     */
+/* ************************************************************************ */
+function AttractionReservationButton($row) {
+  $link = AttractionReservationLink($row['Attraction_Hotel_Reservation_Link'] ?? '');
+  if ($link === '') {
+    return '';
+  }
+  return '<p><a href="'.htmlspecialchars($link, ENT_QUOTES).'" target="_blank" rel="noopener" class="button primary small">Reserve a Room</a></p>';
+}
+
+// A reservation link trimmed, or '' if it's blank or not an http(s) address
+function AttractionReservationLink($link) {
+  $link = trim((string)$link);
+  if ($link === '' || !filter_var($link, FILTER_VALIDATE_URL) || !preg_match('#^https?://#i', $link)) {
+    return '';
+  }
+  return $link;
+}
 
 /* ************************************************************************ */
 /* Funciton:    FormatIndividualAttractionInformation                       */
@@ -227,7 +257,7 @@ function CreateNewLocalAttraction() {
   $output_html .= '<option value="" selected disabled hidden>Select the category</option>';
 
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_attraction_categories` WHERE `Event_ID` = ? ORDER BY `Category_ID`", [(int)$event_id]);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_attraction_categories` ORDER BY `Category_ID`");
 	if($result->num_rows > 0) {
         while($row = $result->fetch_assoc()) {
           $output_html .= '<option value="'.$row['Category_Name'].'">'.$row['Category_Title'].'</option>';
@@ -255,6 +285,10 @@ $output_html .= '<input type="text" name="email" id="info_text_field_attraction_
 $output_html .= '</div>';
 $output_html .= '<div class="col-4 col-12-xsmall">';
 $output_html .= '<input type="text" name="phone" id="info_text_field_attraction_phone" value="" placeholder="Phone Number" />';
+$output_html .= '</div>';
+$output_html .= '<div id="info_text_field_attraction_reservation_link_container" class="col-12 col-12-xsmall" style="display:none;">';  // shown for a hotel category (render.js)
+$output_html .= '<input type="url" name="reservation_link" id="info_text_field_attraction_reservation_link" value="" maxlength="2048" placeholder="Hotel Reservation Link (the link the hotel gave you for the event\'s room block)" />';
+$output_html .= '<p id="info_text_field_attraction_reservation_link_message" class="event_settings_error" style="display:none;"></p>';
 $output_html .= '</div>';
 $output_html .= '<div class="col-5 col-12-xsmall">';
 $output_html .= '<input type="text" name="street" id="info_text_field_attraction_street" value="" placeholder="Street Address" />';
@@ -358,16 +392,14 @@ $output_html .= '</div>';
 /* Returns:     HTML                                        				        */
 /* ************************************************************************ */ 
 function EnterNewAttractionCategory() {
-    $event_id = $_POST['event_id'];
     $cat_title =$_POST['title'];
     $cat_name = $_POST['name'];
     $results = array();
 
     // Attempt an insertion with SQL injection protection
     $dbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
-    $insert_query = "INSERT INTO `nsx_meetup_attraction_categories` (`Event_ID`,`Category_Name`, `Category_Title`) VALUES (:event_id,:cat_name,:cat_title)";
+    $insert_query = "INSERT INTO `nsx_meetup_attraction_categories` (`Category_Name`, `Category_Title`) VALUES (:cat_name,:cat_title)";
     $sth = $dbh->prepare($insert_query);
-    $sth->bindParam(':event_id', $event_id);
     $sth->bindParam(':cat_title', $cat_title);
     $sth->bindParam(':cat_name', $cat_name);
 
@@ -397,9 +429,20 @@ function EnterNewAttractionDetails() {
   $results = array();
   $attraction_data = json_decode($_POST['attraction_data'], true);
 
+  // Only an http(s) address is saved, since it becomes a link on the event's page
+  $reservation_link = trim((string)($attraction_data['reservation_link'] ?? ''));
+  if ($reservation_link !== '' && AttractionReservationLink($reservation_link) === '') {
+    echo json_encode(['fail', 'The hotel reservation link must be a web address starting with http:// or https://']);
+    return;
+  }
+  if (strlen($reservation_link) > 2048) {
+    echo json_encode(['fail', 'The hotel reservation link is too long (2048 characters at most).']);
+    return;
+  }
+
   // Attempt an insertion with SQL injection protection
   $dbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
-  $insert_query = "INSERT INTO `nsx_meetup_attractions` (`Event_ID`, `Attraction_Name`, `Attraction_Street_Address`, `Attraction_City`, `Attraction_State`, `Attraction_Zip`, `Attraction_Phone`, `Attraction_Email`, `Attraction_Web`, `Attraction_Category`, `Attraction_Description`, `Attraction_Additional_Info`, `Attraction_Parking`, `Attraction_Distance`) VALUES (:event_id,:attr_name,:attr_addr,:attr_city,:attr_state,:attr_zip,:attr_phone,:attr_email,:attr_web,:attr_category,:attr_desc,:attr_additional,:attr_parking,:attr_distance)";
+  $insert_query = "INSERT INTO `nsx_meetup_attractions` (`Event_ID`, `Attraction_Name`, `Attraction_Street_Address`, `Attraction_City`, `Attraction_State`, `Attraction_Zip`, `Attraction_Phone`, `Attraction_Email`, `Attraction_Web`, `Attraction_Category`, `Attraction_Description`, `Attraction_Additional_Info`, `Attraction_Parking`, `Attraction_Distance`, `Attraction_Hotel_Reservation_Link`) VALUES (:event_id,:attr_name,:attr_addr,:attr_city,:attr_state,:attr_zip,:attr_phone,:attr_email,:attr_web,:attr_category,:attr_desc,:attr_additional,:attr_parking,:attr_distance,:attr_reservation_link)";
   $sth = $dbh->prepare($insert_query);
 
   $sth->bindParam(':event_id',$attraction_data['event_id']);
@@ -416,6 +459,7 @@ function EnterNewAttractionDetails() {
   $sth->bindParam(':attr_additional',$attraction_data['additional']);
   $sth->bindParam(':attr_parking',$attraction_data['parking']);
   $sth->bindParam(':attr_distance',$attraction_data['distance']);
+  $sth->bindParam(':attr_reservation_link',$reservation_link);
   
   try {
     $dbh->beginTransaction();
