@@ -1544,3 +1544,17 @@ input[type="checkbox"].payment_method_toggle:checked + label.payment_method_swit
     letter-spacing: normal;
     text-transform: none;
 }
+
+/* Front page event cards: every event image fits the same 2:1 box (scaled down, never
+   cropped), so a square or tall logo doesn't push its card's text below the others */
+.features-grid.frontpage .image.fit img {
+    aspect-ratio: 2 / 1;
+    object-fit: contain;
+}
+
+/* Generic event page (templates/event_index.php) banner for an event without its own
+   banner images: just the name and dates. main.js sets each slide's background from its
+   <img>, which this banner doesn't have. */
+#banner.event_banner_plain > article {
+    background-image: none !important;
+}
