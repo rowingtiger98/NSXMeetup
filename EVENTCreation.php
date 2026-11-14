@@ -185,8 +185,10 @@ function EnterNewEventToDatabase() {
 /* ************************************************************************ */
 /* Function:    CreateNewDirectoryPath                                      */
 /* Description: Creates events/<new_path>/, with its images/sponsors/      */
-/*              folder for sponsor logos, for an event that's already in    */
-/*              the database (EnterNewEventToDatabase runs first).          */
+/*              folder for sponsor logos and an index.php copied from       */
+/*              templates/event_index.php, for an event that's already in   */
+/*              the database (EnterNewEventToDatabase runs first). An       */
+/*              index.php that's already there is left alone.               */
 /* Returns:     JSON ['pass', message] or ['fail', message]                 */
 /* ************************************************************************ */
 function CreateNewDirectoryPath() {
@@ -212,7 +214,12 @@ function CreateNewDirectoryPath() {
         error_log('CreateNewDirectoryPath: could not create '.$sponsor_path);
         EventCreationFail('The folder events/'.$new_path.'/ was created, but its images/sponsors/ folder could not be.');
     }
+    $index_path = $directory_path.'/index.php';
+    if (!file_exists($index_path) && !copy(__DIR__.'/templates/event_index.php', $index_path)) {
+        error_log('CreateNewDirectoryPath: could not copy templates/event_index.php to '.$index_path);
+        EventCreationFail('The folder events/'.$new_path.'/ was created, but its index.php page could not be copied from templates/event_index.php.');
+    }
 
     header('Content-Type: application/json');
-    echo json_encode(['pass', 'Created events/'.$new_path.'/ and events/'.$new_path.'/images/sponsors/']);
+    echo json_encode(['pass', 'Created events/'.$new_path.'/ with its index.php page and images/sponsors/ folder']);
 }
