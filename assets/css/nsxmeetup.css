@@ -1042,7 +1042,8 @@ span.attr_more_info_field {
     box-shadow: 0 0 0 1px #ff0000;
 }
 
-.experience_banner_preview img {
+.experience_banner_preview img,
+.local_attraction_image_preview img {
     display: block;
     max-width: 100%;
     max-height: 200px;
@@ -1557,4 +1558,15 @@ input[type="checkbox"].payment_method_toggle:checked + label.payment_method_swit
    <img>, which this banner doesn't have. */
 #banner.event_banner_plain > article {
     background-image: none !important;
+}
+
+/* Space between a hotel's picture and its information on the Local Attractions page
+   (instead of the grid's 0.5rem gutter), back to the gutter once they stack on small screens */
+.individual_local_attraction_container .row > .hotel_information {
+    padding-left: 2em;
+}
+@media screen and (max-width: 736px) {
+    .individual_local_attraction_container .row > .hotel_information {
+        padding-left: 0.5rem;
+    }
 }

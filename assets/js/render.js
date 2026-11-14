@@ -3,6 +3,7 @@
 // an event's page in events/<dir>/ as well as from the top folder.
 var RENDER_SITE_BASE = (document.currentScript && document.currentScript.src)
     ? document.currentScript.src.replace(/assets\/js\/render\.js(\?.*)?$/, '') : '';
+var ATTRACTION_IMAGE_MAX_BYTES = 10 * 1048576; // keep in step with FRONTPAGE_IMAGE_MAX_BYTES in eventImages.php
 
 // -------------------------------------------------------------------------------------
 // Function: 	RenderEventStatsContent
@@ -87,6 +88,7 @@ function RenderLocalAttractionsPage(event) {
         $("#hangout").removeClass('active');         
         $("#register_button_container").removeClass('active');
 		$("#details_info").html(results[0]);
+        window.scrollTo(0, 0);  // the page is replaced from wherever the button was, so start at its top
 
         var elms = document.querySelectorAll('[id^="local_attraction_link_"]');
         for (i = 0; i < elms.length; i++) {
@@ -163,9 +165,34 @@ function OpenLocalAttractionForm(event_id, attraction_id) {
         document.querySelector('[id="new_category_name_container"]').oninput = ShowAttractionReservationLink;
         document.querySelector('[id="submit_new_local_attraction_button"]').onclick = SubmitNewLocalAttraction;
         document.querySelector('[id="cancel_local_attraction_button"]').onclick = CancelLocalAttractionForm;
-        ShowAttractionReservationLink(); // an edited hotel shows its link
+        $("#info_text_field_attraction_image").on('change', PreviewLocalAttractionImage);
+        $("#local_attraction_image_preview").data('current_image', $("#local_attraction_image_preview").html());
+        ShowAttractionReservationLink(); // an edited hotel shows its link and picture
       }
     });
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	PreviewLocalAttractionImage
+// Description: Shows the hotel picture chosen in the form before it's saved, or refuses
+//              one that's too large.
+// -------------------------------------------------------------------------------------
+function PreviewLocalAttractionImage() {
+    var preview = $("#local_attraction_image_preview");
+    var message = $("#info_text_field_attraction_image_message");
+    var file = this.files[0];
+    message.hide();
+    if (!file) {
+        preview.html(preview.data('current_image') || '');
+        return;
+    }
+    if (file.size > ATTRACTION_IMAGE_MAX_BYTES) {
+        this.value = '';
+        preview.html(preview.data('current_image') || '');
+        message.text('The picture is too large. Please choose one under 10 MB.').show();
+        return;
+    }
+    preview.empty().append($('<img>').attr({src: URL.createObjectURL(file), alt: 'Picture preview'}));
 }
 
 // -------------------------------------------------------------------------------------
@@ -459,8 +486,9 @@ function EnterNewLocalAttractionDetails(attraction_data) {
 		$.ajax({
 			url: RENDER_SITE_BASE + 'LOCALAttractionFunctions.php',
 			type: 'POST',
-			data: {method: attraction_data['attraction_id'] ? 'SaveLocalAttraction' : 'EnterNewAttractionDetails',
-			       event_id:attraction_data['event_id'], attraction_data:JSON.stringify(attraction_data)},
+			data: LocalAttractionFormData(attraction_data),
+			processData: false,
+			contentType: false,
 			success: function(data) {
 			console.log(data);
 			resolve(data);
@@ -479,6 +507,28 @@ function EnterNewLocalAttractionDetails(attraction_data) {
 			},		
 		});
 	});	  
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	LocalAttractionFormData
+// Description: The attraction to save as a multipart form, with the hotel picture chosen
+//              (or the box to remove the current one) when the picture field is showing.
+// -------------------------------------------------------------------------------------
+function LocalAttractionFormData(attraction_data) {
+  var data = new FormData();
+  data.append('method', attraction_data['attraction_id'] ? 'SaveLocalAttraction' : 'EnterNewAttractionDetails');
+  data.append('event_id', attraction_data['event_id']);
+  data.append('attraction_data', JSON.stringify(attraction_data));
+  if ($("#info_text_field_attraction_image_container").is(':visible')) {
+    var image = document.getElementById("info_text_field_attraction_image");
+    if (image && image.files[0]) {
+      data.append('image', image.files[0]);
+    }
+    if ($("#info_checkbox_attraction_remove_image").is(':checked')) {
+      data.append('remove_image', '1');
+    }
+  }
+  return data;
 }
 
 // -------------------------------------------------------------------------------------
@@ -506,6 +556,7 @@ function ShowAttractionReservationLink() {
   var category = (select.val() == 'new') ? $("#new_category_name_container").val()
                                           : (select.val() || '') + ' ' + select.find('option:selected').text();
   $("#info_text_field_attraction_reservation_link_container").toggle(/hotel/i.test(category));
+  $("#info_text_field_attraction_image_container").toggle(/hotel/i.test(category));
 }
 
 // -------------------------------------------------------------------------------------

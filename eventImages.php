@@ -79,6 +79,40 @@ function EventExperienceBannerDirectory($directory) {
 }
 
 /* ************************************************************************ */
+/* Function:    EventAttractionImageDirectory                               */
+/* Description: The site-relative hotel and attraction picture folder for  */
+/*              an event, e.g. events/TestEvent/images/attractions.         */
+/* Inputs:      $directory - the event's EVENT_Directory.                   */
+/* Returns:     string, or '' if the directory name isn't usable.           */
+/* ************************************************************************ */
+function EventAttractionImageDirectory($directory) {
+    $event_dir = EventImagesDirectory($directory);
+    return ($event_dir === '') ? '' : $event_dir.'/attractions';
+}
+
+/* ************************************************************************ */
+/* Function:    AttractionImageURL                                          */
+/* Description: The URL of a hotel or attraction's picture. Uploaded        */
+/*              pictures are stored with their site-relative path           */
+/*              (events/<dir>/images/attractions/...); older ones are a     */
+/*              file name in assets/images/attractions/<event id>/.         */
+/* Inputs:      $image - Attraction_Image. $event_id - its Event_ID.        */
+/* Returns:     string, or '' when there's no picture                       */
+/* ************************************************************************ */
+function AttractionImageURL($image, $event_id) {
+    $image = trim((string)$image);
+    if ($image === '') {
+        return '';
+    }
+    if (preg_match('#^events/[A-Za-z0-9_-]+/images/attractions/[A-Za-z0-9_.-]+$#', $image)) {
+        $path = $image;
+    } else {
+        $path = 'assets/images/attractions/'.(int)$event_id.'/'.basename($image);
+    }
+    return function_exists('app_url') ? app_url($path) : $path;
+}
+
+/* ************************************************************************ */
 /* Function:    ExperienceBannerURL                                         */
 /* Description: The URL of a agenda event's banner. Uploaded banners are   */
 /*              stored with their site-relative path                        */

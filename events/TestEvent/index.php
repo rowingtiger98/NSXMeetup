@@ -167,7 +167,7 @@ if(isset($_GET['event_id'])) {
                                         <span class="number"><span class="icon solid fa-hotel"></span></span>
                                         <h3>Hotel Information</h3>
                                         <p>The event does not have an official hotel or venue, but folks have enjoyed staying at the properties lilsted on our hotels page. Click below to learn more.</p>
-                                        <a href="hotels.php" class="button primary small fit">Book Your Room</a>
+                                        <a href="?attractions=hotels" id="render_local_attractions" event_id="<?php echo (int)$event_id; ?>" editable="false" category="hotels" class="button primary small fit">Book Your Room</a>
                                         <!-- <a href="#" class="button  small fit">Coming Soon</a> -->
 
                                     </div>
@@ -302,6 +302,22 @@ if(isset($_GET['event_id'])) {
 					elms[i].onclick = CloseSponsorModal;
 				}
                 
+                $("#render_local_attractions").on('click', function(event) {
+                    event.preventDefault();
+                    RenderLocalAttractionsPage.call(this, event);
+                });
+
+                // index.php?attractions opens the Hotels & Local Attractions page straight away, and
+                // index.php?attractions=<category> opens it on that category, so it can be linked to
+                var url_params = new URLSearchParams(window.location.search);
+                if (url_params.has('attractions') && $("#render_local_attractions").length) {
+                    var attractions_link = $("#render_local_attractions");
+                    if (url_params.get('attractions') !== '') {
+                        attractions_link.attr('category', url_params.get('attractions'));
+                    }
+                    RenderLocalAttractionsPage.call(attractions_link[0]);
+                }
+
                 if (active_page == 'events') {
                     var elms = document.querySelectorAll('tr[id^="event_info_row"]');
                     for (i = 0; i < elms.length; i++) {
