@@ -185,7 +185,8 @@ function EnterNewEventToDatabase() {
 /* ************************************************************************ */
 /* Function:    CreateNewDirectoryPath                                      */
 /* Description: Creates events/<new_path>/, with its images/sponsors/      */
-/*              folder for sponsor logos and an index.php copied from       */
+/*              folder for sponsor logos, its images/banners/ folder for    */
+/*              banner images and an index.php copied from                  */
 /*              templates/event_index.php, for an event that's already in   */
 /*              the database (EnterNewEventToDatabase runs first). An       */
 /*              index.php that's already there is left alone.               */
@@ -209,10 +210,11 @@ function CreateNewDirectoryPath() {
         error_log('CreateNewDirectoryPath: could not create '.$directory_path);
         EventCreationFail('The folder events/'.$new_path.'/ could not be created.');
     }
-    $sponsor_path = __DIR__.'/'.EventSponsorLogoDirectory($new_path);
-    if (!is_dir($sponsor_path) && !mkdir($sponsor_path, 0755, true)) {
-        error_log('CreateNewDirectoryPath: could not create '.$sponsor_path);
-        EventCreationFail('The folder events/'.$new_path.'/ was created, but its images/sponsors/ folder could not be.');
+    foreach (['images/sponsors/' => EventSponsorLogoDirectory($new_path), 'images/banners/' => EventBannerDirectory($new_path)] as $name => $folder) {
+        if (!is_dir(__DIR__.'/'.$folder) && !mkdir(__DIR__.'/'.$folder, 0755, true)) {
+            error_log('CreateNewDirectoryPath: could not create '.$folder);
+            EventCreationFail('The folder events/'.$new_path.'/ was created, but its '.$name.' folder could not be.');
+        }
     }
     $index_path = $directory_path.'/index.php';
     if (!file_exists($index_path) && !copy(__DIR__.'/templates/event_index.php', $index_path)) {
@@ -221,5 +223,5 @@ function CreateNewDirectoryPath() {
     }
 
     header('Content-Type: application/json');
-    echo json_encode(['pass', 'Created events/'.$new_path.'/ with its index.php page and images/sponsors/ folder']);
+    echo json_encode(['pass', 'Created events/'.$new_path.'/ with its index.php page and images/sponsors/ and images/banners/ folders']);
 }

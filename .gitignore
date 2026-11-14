@@ -14,11 +14,17 @@ Thumbs.db
 .vscode/
 *.swp
 
+# Adobe Illustrator source files (not used by the site)
+*.ai
+
 # Front page images uploaded through Edit Event Settings - created on the server
 /events/*/images/frontpage_*
 
 # Hotel pictures uploaded through Add / Edit Hotels and Local Attractions - created on the server
 /events/*/images/attractions/
+
+# Banner images uploaded through Edit Event Settings - created on the server
+/events/*/images/banners/banner_*
 
 # Shared front page images (copied to the server by hand)
 /assets/images/frontpage/

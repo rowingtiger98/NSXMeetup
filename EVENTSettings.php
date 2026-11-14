@@ -19,7 +19,8 @@ require_once __DIR__ . '/paymentMethods.php';
 
 app_session_start();
 
-const EVENT_SETTINGS_METHODS = ['RenderEditEventSettings', 'SaveEventSettings', 'UploadFrontpageImage', 'UploadPaymentQRCode', 'RemovePaymentQRCode'];
+const EVENT_SETTINGS_METHODS = ['RenderEditEventSettings', 'SaveEventSettings', 'UploadFrontpageImage', 'UploadPaymentQRCode', 'RemovePaymentQRCode',
+                                'UploadBannerImage', 'SaveBannerOrder', 'DeleteBannerImage'];
 
 const FRONTPAGE_IMAGE_MAX_HEIGHT = 450;           // uploads (front page image, payment QR codes) are scaled down to this height, width in proportion
 // FRONTPAGE_IMAGE_MAX_BYTES / _MAX_PIXELS, CheckFrontpageImageUpload() and SaveFrontpageImage() are in eventImages.php
@@ -386,6 +387,9 @@ function RenderEditEventSettings() {
     $output_html .= '<div id="event_settings_messages" class="event_settings_messages"></div>';
     $output_html .= '<a href="#" id="save_event_settings_button" class="button primary fit">Save '.$h($tool['title']).'</a>';
     $output_html .= '</form>';
+    if ($tool['id'] === 'settings') {
+        $output_html .= RenderBannerTool($event);
+    }
 
     EventAdminRespond('Pass', $output_html);
 }
@@ -712,4 +716,192 @@ function ReceiveEventImageUpload(array $event, $file_field, $basename) {
         EventAdminRespond('Fail', ['The image could not be saved. Please try again.']);
     }
     return ['event_dir' => $event_dir, 'filename' => $filename];
+}
+
+/* ************************************************************************ */
+/* Function:    RenderBannerTool                                            */
+/* Description: The Banner Images section at the bottom of Edit Event       */
+/*              Settings: up to EVENT_BANNER_MAX_IMAGES images in the       */
+/*              event's images/banners/ folder, each switched on or off for */
+/*              the event page's banner and put in order. Changes here are  */
+/*              saved straight away.                                        */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderBannerTool(array $event) {
+    $output_html  = '<div id="event_banner_tool" class="event_banner_tool">';
+    $output_html .= '<h3 style="margin-top:2em;">Banner Images</h3>';
+    $output_html .= '<p>These are the pictures that slide across the top of the event\'s page, each with the event\'s name and dates over it.
+        Upload up to '.EVENT_BANNER_MAX_IMAGES.' (JPEG, PNG or WebP - wide landscape photos work best; they\'re scaled to fit '
+        .EVENT_BANNER_MAX_WIDTH.' x '.EVENT_BANNER_MAX_HEIGHT.'). Tick Show for the ones to include, and use the arrows to set the order they appear in.
+        The other pages of the event show the first one. Changes here are saved straight away - there\'s no need to press Save above.</p>';
+    $output_html .= '<div id="event_banner_list">'.RenderBannerList($event).'</div>';
+    $output_html .= '<div id="event_banner_status" class="frontpage_upload_status"></div>';
+    $output_html .= '</div>';
+    return $output_html;
+}
+
+/* ************************************************************************ */
+/* Function:    RenderBannerList                                            */
+/* Description: The banner images table (shown ones first, in order, then   */
+/*              the rest) and the upload button, or a note when the folder  */
+/*              is full.                                                    */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderBannerList(array $event) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+    $files = EventBannerFiles($event['EVENT_Directory']);
+    $enabled = EventEnabledBanners($event);
+    $rows = array_merge($enabled, array_values(array_diff($files, $enabled)));
+
+    $output_html = '';
+    if (!$rows) {
+        $output_html .= '<p>No banner images yet. Until some are shown, the event\'s page uses its banners.php file if it has one, or a plain banner with its name and dates.</p>';
+    } else {
+        $output_html .= '<div class="table-wrapper"><table class="regtype_table event_banner_table"><thead><tr>';
+        $output_html .= '<th>Order</th><th>Show</th><th>Image</th><th>File</th><th></th></tr></thead><tbody>';
+        $last = count($enabled) - 1;
+        foreach ($rows as $i => $file) {
+            $shown = $i <= $last;
+            $id = 'event_banner_show_'.$i;
+            $output_html .= '<tr class="event_banner_row" banner_file="'.$h($file).'">';
+            $output_html .= '<td class="question_order_buttons">';
+            if ($shown) {
+                $output_html .= ($i > 0 ? '<a href="#" class="button small event_banner_move_button" direction="up" title="Move up">&uarr;</a>' : '')
+                               .($i < $last ? '<a href="#" class="button small event_banner_move_button" direction="down" title="Move down">&darr;</a>' : '');
+            }
+            $output_html .= '</td>';
+            $output_html .= '<td><input type="checkbox" id="'.$id.'" class="event_banner_show_checkbox"'.($shown ? ' checked' : '').' />';
+            $output_html .= '<label for="'.$id.'" class="regtype_checkbox_label" title="Show this image in the event page\'s banner"></label></td>';
+            $output_html .= '<td class="event_banner_thumb"><img src="'.$h(EventBannerURL($event['EVENT_Directory'], $file)).'" alt="" /></td>';
+            $output_html .= '<td>'.$h($file).($shown ? '<br><span class="event_banner_position">Slide '.($i + 1).'</span>' : '').'</td>';
+            $output_html .= '<td class="regtype_actions"><a href="#" class="button small event_banner_delete_button">Delete</a></td>';
+            $output_html .= '</tr>';
+        }
+        $output_html .= '</tbody></table></div>';
+    }
+
+    if (count($files) < EVENT_BANNER_MAX_IMAGES) {
+        $output_html .= '<input type="file" id="event_banner_upload" accept="image/jpeg,image/png,image/webp" style="display:none;" />';
+        $output_html .= '<label for="event_banner_upload" id="event_banner_upload_button" class="button small">Upload Banner Image ('
+                       .count($files).' of '.EVENT_BANNER_MAX_IMAGES.' used)</label>';
+    } else {
+        $output_html .= '<p>All '.EVENT_BANNER_MAX_IMAGES.' banner images are in use. Delete one to upload another.</p>';
+    }
+    return $output_html;
+}
+
+/* ************************************************************************ */
+/* Function:    SaveEventBanners                                            */
+/* Description: Stores the event's shown banner images, in order, in        */
+/*              EVENT_Banner_Images, then responds with the updated list.   */
+/* Returns:     JSON ['Pass', ['html', 'message']] or ['Fail', [messages]]  */
+/* ************************************************************************ */
+function SaveEventBanners(PDO $pdo, array $event, array $enabled, $message) {
+    $enabled = array_values($enabled);
+    $value = $enabled ? json_encode($enabled) : null;
+    $stmt = $pdo->prepare('UPDATE nsx_meetup_events SET EVENT_Banner_Images = ? WHERE EVENT_ID = ?');
+    if (!$stmt->execute([$value, $event['EVENT_ID']])) {
+        error_log('SaveEventBanners: database update failed for event '.$event['EVENT_ID']);
+        EventAdminRespond('Fail', ['The banner images could not be saved. Please try again.']);
+    }
+    $event['EVENT_Banner_Images'] = $value;
+    EventAdminRespond('Pass', ['html' => RenderBannerList($event), 'message' => $message]);
+}
+
+/* ************************************************************************ */
+/* Function:    UploadBannerImage                                           */
+/* Description: Saves an uploaded banner image in the posted event's        */
+/*              images/banners/ folder as banner_<date>_<time>_<random>,    */
+/*              scaled to fit EVENT_BANNER_MAX_WIDTH x _HEIGHT, and adds it */
+/*              to the end of the shown banners. Refused once the folder    */
+/*              holds EVENT_BANNER_MAX_IMAGES.                              */
+/* Returns:     JSON ['Pass', ['html', 'message']] or ['Fail', [messages]]  */
+/* ************************************************************************ */
+function UploadBannerImage() {
+    list($pdo, $event) = EventAdminLoadEvent();
+    if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
+        EventAdminRespond('Fail', ['This form has expired. Reload the page and try again.']);
+    }
+    if (count(EventBannerFiles($event['EVENT_Directory'])) >= EVENT_BANNER_MAX_IMAGES) {
+        EventAdminRespond('Fail', ['This event already has '.EVENT_BANNER_MAX_IMAGES.' banner images. Delete one to upload another.']);
+    }
+    if (!function_exists('imagecreatetruecolor')) {
+        error_log('UploadBannerImage: the GD extension is not available, so images cannot be resized');
+        EventAdminRespond('Fail', ['Image uploads are not available on this server (the PHP GD extension is missing).']);
+    }
+    $upload = CheckFrontpageImageUpload($_FILES['banner_image'] ?? null);
+    if ($upload['error'] !== '') {
+        EventAdminRespond('Fail', [$upload['error']]);
+    }
+
+    $banner_dir = EventBannerDirectory($event['EVENT_Directory']);
+    if ($banner_dir === '' || !is_dir(__DIR__.'/events/'.$event['EVENT_Directory'])) {
+        EventAdminRespond('Fail', ['This event\'s folder (events/'.$event['EVENT_Directory'].'/) could not be found, so the image has nowhere to go.']);
+    }
+    $dir = __DIR__.'/'.$banner_dir;
+    if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+        error_log('UploadBannerImage: could not create '.$dir);
+        EventAdminRespond('Fail', ['The image could not be saved. Please try again.']);
+    }
+
+    // A new name for every upload (two in the same second still differ), so browsers never show a cached older image
+    $filename = SaveFrontpageImage($upload['tmp'], $upload['type'], $dir, 'banner_'.date('Ymd_His').'_'.bin2hex(random_bytes(2)),
+                                   EVENT_BANNER_MAX_HEIGHT, EVENT_BANNER_MAX_WIDTH);
+    if ($filename === '') {
+        error_log('UploadBannerImage: saving the banner failed for event '.$event['EVENT_ID']);
+        EventAdminRespond('Fail', ['The image could not be saved. Please try again.']);
+    }
+
+    $enabled = EventEnabledBanners($event);
+    $enabled[] = $filename;
+    SaveEventBanners($pdo, $event, $enabled, 'Banner image uploaded and added to the end of the banner.');
+}
+
+/* ************************************************************************ */
+/* Function:    SaveBannerOrder                                             */
+/* Description: Saves which banner images are shown and their order: the    */
+/*              posted banners is a JSON list of file names in the order    */
+/*              they're shown. Every name must be in the banners folder.    */
+/* Returns:     JSON ['Pass', ['html', 'message']] or ['Fail', [messages]]  */
+/* ************************************************************************ */
+function SaveBannerOrder() {
+    list($pdo, $event) = EventAdminLoadEvent();
+    if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
+        EventAdminRespond('Fail', ['This form has expired. Reload the page and try again.']);
+    }
+    $posted = json_decode((string)($_POST['banners'] ?? ''), true);
+    $files = EventBannerFiles($event['EVENT_Directory']);
+    if (!is_array($posted)) {
+        EventAdminRespond('Fail', ['The banner images could not be read. Please try again.']);
+    }
+    foreach ($posted as $file) {
+        if (!is_string($file) || !in_array($file, $files, true)) {
+            EventAdminRespond('Fail', ['A banner image is no longer there. Reload the page and try again.']);
+        }
+    }
+    SaveEventBanners($pdo, $event, array_unique($posted), 'Banner saved.');
+}
+
+/* ************************************************************************ */
+/* Function:    DeleteBannerImage                                           */
+/* Description: Deletes the posted file from the event's banners folder and */
+/*              takes it out of the shown banners.                          */
+/* Returns:     JSON ['Pass', ['html', 'message']] or ['Fail', [messages]]  */
+/* ************************************************************************ */
+function DeleteBannerImage() {
+    list($pdo, $event) = EventAdminLoadEvent();
+    if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
+        EventAdminRespond('Fail', ['This form has expired. Reload the page and try again.']);
+    }
+    $file = $_POST['file'] ?? '';
+    if (!is_string($file) || !in_array($file, EventBannerFiles($event['EVENT_Directory']), true)) {
+        EventAdminRespond('Fail', ['That banner image is no longer there. Reload the page to see the current list.']);
+    }
+    $path = __DIR__.'/'.EventBannerDirectory($event['EVENT_Directory']).'/'.$file;
+    if (!unlink($path)) {
+        error_log('DeleteBannerImage: could not delete '.$path);
+        EventAdminRespond('Fail', ['The banner image could not be deleted. Please try again.']);
+    }
+    $enabled = array_diff(EventEnabledBanners($event), [$file]);
+    SaveEventBanners($pdo, $event, $enabled, 'Banner image deleted.');
 }

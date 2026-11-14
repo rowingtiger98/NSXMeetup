@@ -21,6 +21,13 @@ function RenderEditEventSettings(event_id, tool) {
                     document.querySelector('[id="event_setting_EVENT_Frontpage_Image"]').onchange = UpdateFrontpageImagePreview;
                     document.querySelector('[id="event_setting_frontpage_preview"]').onerror = HandleFrontpageImagePreviewError;
                 }
+                if (document.querySelector('[id="event_banner_tool"]')) { // only on the settings form
+                    $("#event_banner_tool")
+                        .on('change', '#event_banner_upload', UploadBannerImage)
+                        .on('change', '.event_banner_show_checkbox', SaveBannerOrder)
+                        .on('click', '.event_banner_move_button', MoveBannerImage)
+                        .on('click', '.event_banner_delete_button', DeleteBannerImage);
+                }
                 if (document.querySelector('[id="payment_methods"]')) { // only on the payment options form
                     document.querySelector('[id="event_setting_EVENT_Collect_Payments"]').onchange = TogglePaymentMethods;
                     $(".payment_method_toggle").on('change', TogglePaymentMethodDrawer);
@@ -387,3 +394,115 @@ function ShowUploadStatus(status, message, is_error) {
         .toggleClass('event_settings_success', !is_error && message !== '')
         .text(message);
 }
+
+// -------------------------------------------------------------------------------------
+// Banner Images (bottom of Edit Event Settings). Each change is saved straight away and
+// the server sends back the redrawn list.
+// -------------------------------------------------------------------------------------
+
+// Uploads the picked banner image; it's added to the end of the shown banners.
+function UploadBannerImage() {
+    UploadEventImage(this, {
+        method: 'UploadBannerImage',
+        file_field: 'banner_image',
+        button: $("#event_banner_upload_button"),
+        status: $("#event_banner_status"),
+        on_pass: function(result) {
+            $("#event_banner_list").html(result.html);
+            return result.message;
+        }
+    });
+}
+
+// Moves a shown banner image one place up or down, then saves the new order.
+function MoveBannerImage(event) {
+    event.preventDefault();
+    if ($(this).hasClass('disabled')) {
+        return;
+    }
+    var row = $(this).closest('tr');
+    if ($(this).attr('direction') === 'up') {
+        row.insertBefore(row.prev());
+    } else {
+        row.insertAfter(row.next());
+    }
+    SaveBannerOrder();
+}
+
+// Saves which banner images are shown (ticked), in the order the rows are in.
+function SaveBannerOrder() {
+    var banners = [];
+    $("#event_banner_list tr.event_banner_row").each(function() {
+        if ($(this).find('.event_banner_show_checkbox').is(':checked')) {
+            banners.push($(this).attr('banner_file'));
+        }
+    });
+    SendBannerRequest({method: 'SaveBannerOrder', banners: JSON.stringify(banners)});
+}
+
+// The first click asks for confirmation on the button itself; a second click within a
+// few seconds deletes the image from the event's banners folder.
+function DeleteBannerImage(event) {
+    event.preventDefault();
+    var button = $(this);
+    if (button.hasClass('disabled')) {
+        return;
+    }
+    if (!button.hasClass('regtype_confirm_delete')) {
+        button.addClass('regtype_confirm_delete').text('Click again to delete');
+        setTimeout(function() {
+            button.removeClass('regtype_confirm_delete').text('Delete');
+        }, 4000);
+        return;
+    }
+    button.removeClass('regtype_confirm_delete').text('Deleting...');
+    SendBannerRequest({method: 'DeleteBannerImage', file: button.closest('tr').attr('banner_file')});
+}
+
+// Sends a banner change and shows the list the server sends back. The list's buttons
+// are switched off until it answers, so changes can't overlap.
+function SendBannerRequest(data) {
+    var form = $("#event_settings_form");
+    var status = $("#event_banner_status");
+    var list = $("#event_banner_list");
+    list.find('.button').addClass('disabled');
+    list.find('input').prop('disabled', true);
+    ShowUploadProgress(status, 'Saving...');
+	$.ajax({
+	    url: 'EVENTSettings.php',
+	    type: 'POST',
+	    dataType: 'json',
+	    data: $.extend({event_id: form.attr('event_id'), csrf_token: form.attr('csrf_token')}, data),
+	    success: function(results) {
+            if (results[0] == 'Pass') {
+                list.html(results[1].html);
+                ShowUploadStatus(status, results[1].message, false);
+            } else {
+                ShowUploadStatus(status, [].concat(results[1]).join(' '), true);
+                ReloadBannerList();
+            }
+	    },
+	    error: function() {
+            ShowUploadStatus(status, 'The banner images could not be saved. Please try again.', true);
+            ReloadBannerList();
+	    }
+	  });
+}
+
+// After a failed change, puts the list back as it's saved, taken from a fresh copy of
+// the settings form (the rest of the form, with any unsaved edits, is left alone).
+function ReloadBannerList() {
+    var form = $("#event_settings_form");
+	$.ajax({
+	    url: 'EVENTSettings.php',
+	    type: 'POST',
+	    dataType: 'json',
+	    data: {method: 'RenderEditEventSettings', event_id: form.attr('event_id'), tool: form.attr('tool')},
+	    success: function(results) {
+            if (results[0] == 'Pass') {
+                $("#event_banner_list").html($('<div>').html(results[1]).find('#event_banner_list').html());
+            }
+	    }
+	  });
+}
+

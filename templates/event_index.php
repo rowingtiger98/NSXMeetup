@@ -2,9 +2,9 @@
 // -------------------------------------------------------------------------------------
 // Generic event page. Copy this file to events/<EVENT_Directory>/index.php for a new
 // event - everything on it comes from the event's database row (found by the folder's
-// name), so it works for any event without changes. An event can still have its own
-// banners.php / still_banner.php in its folder; without them the banner shows the
-// event's name and dates.
+// name), so it works for any event without changes. The banner uses the images chosen in
+// Edit Event Settings > Banner Images; an event without any can still have its own
+// banners.php / still_banner.php in its folder, and otherwise shows its name and dates.
 // -------------------------------------------------------------------------------------
 include('../../login.php'); // Includes Login Script
 // Resolve the logged-in user before any HTML is sent: session.php redirects (and stops)
@@ -133,16 +133,37 @@ if ($event_id) {
 			  <?php include '../../login_modal.php'; ?>
 			</section>
 
-		<!-- Banner: the event's own banner files if it has them, otherwise its name and dates -->
+		<!-- Banner: the images shown in Edit Event Settings > Banner Images (a slideshow on
+		     the main page, the first one on the others), each with the event's name and
+		     dates. Without any, the event's own banners.php / still_banner.php if it has
+		     them, otherwise just its name and dates. -->
             <?php
-                if ($active_page == '' && is_file(__DIR__.'/banners.php')) {
+                $banner_images = empty($event_data) ? [] : EventEnabledBanners($event_data);
+                if ($active_page != '' && $banner_images) {
+                    $banner_images = array_slice($banner_images, 0, 1);
+                }
+                if ($banner_images) {
+            ?>
+            <div id="banner" class="<?php echo ($active_page == '') ? 'active' : 'still'; ?>">
+                <?php foreach ($banner_images as $banner_image) { ?>
+                <article data-position="center">
+                    <div class="inner">
+                        <img src="<?php echo htmlspecialchars(EventBannerURL($event_data['EVENT_Directory'], $banner_image), ENT_QUOTES); ?>" alt="" />
+                        <h1><?php echo $event_name; ?></h1>
+                        <p><?php echo htmlspecialchars($event_dates, ENT_QUOTES); ?></p>
+                    </div>
+                </article>
+                <?php } ?>
+            </div>
+            <?php
+                } elseif ($active_page == '' && is_file(__DIR__.'/banners.php')) {
                     include 'banners.php';
                 } elseif (is_file(__DIR__.'/still_banner.php')) {
                     include 'still_banner.php';
                 } else {
             ?>
             <div id="banner" class="event_banner_plain <?php echo ($active_page == '') ? 'active' : 'still'; ?>">
-                <article data-position="middle right">
+                <article data-position="center">
                     <div class="inner">
                         <h1><?php echo $event_name; ?></h1>
                         <p><?php echo htmlspecialchars($event_dates, ENT_QUOTES); ?></p>

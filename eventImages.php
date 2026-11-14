@@ -17,6 +17,9 @@ const DEFAULT_SPONSOR_LOGO       = 'sponsor-coming-soon-front.jpg';  // in SHARE
 const FRONTPAGE_IMAGE_MAX_BYTES  = 10 * 1048576;  // 10 MB - keep in step with .user.ini and eventsettings.js
 const FRONTPAGE_IMAGE_MAX_PIXELS = 24000000;      // 24 megapixels - larger images need too much memory to resize
 const SPONSOR_LOGO_MAX_SIZE      = 600;           // sponsor logos are scaled to fit a 600 x 600 box
+const EVENT_BANNER_MAX_IMAGES    = 6;             // banner images an event's banners folder may hold
+const EVENT_BANNER_MAX_WIDTH     = 1920;          // banner uploads are scaled down to fit 1920 x 1280
+const EVENT_BANNER_MAX_HEIGHT    = 1280;
 
 /* ************************************************************************ */
 /* Function:    EventImagesDirectory                                        */
@@ -76,6 +79,71 @@ function EventSponsorLogoDirectory($directory) {
 function EventExperienceBannerDirectory($directory) {
     $event_dir = EventImagesDirectory($directory);
     return ($event_dir === '') ? '' : $event_dir.'/experiences';
+}
+
+/* ************************************************************************ */
+/* Function:    EventBannerDirectory                                        */
+/* Description: The site-relative banner image folder for an event, e.g.    */
+/*              events/TestEvent/images/banners.                            */
+/* Inputs:      $directory - the event's EVENT_Directory.                   */
+/* Returns:     string, or '' if the directory name isn't usable.           */
+/* ************************************************************************ */
+function EventBannerDirectory($directory) {
+    $event_dir = EventImagesDirectory($directory);
+    return ($event_dir === '') ? '' : $event_dir.'/banners';
+}
+
+/* ************************************************************************ */
+/* Function:    EventBannerFiles                                            */
+/* Description: The image files in an event's banners folder, uploaded or   */
+/*              copied in by hand, in name order.                           */
+/* Inputs:      $directory - the event's EVENT_Directory.                   */
+/* Returns:     array of file names                                         */
+/* ************************************************************************ */
+function EventBannerFiles($directory) {
+    $dir = EventBannerDirectory($directory);
+    if ($dir === '' || !is_dir(__DIR__.'/'.$dir)) {
+        return [];
+    }
+    $files = [];
+    foreach (scandir(__DIR__.'/'.$dir) as $file) {
+        if (preg_match('/^[A-Za-z0-9_.-]+\.(jpe?g|png|webp|gif)$/i', $file) && is_file(__DIR__.'/'.$dir.'/'.$file)) {
+            $files[] = $file;
+        }
+    }
+    natcasesort($files);
+    return array_values($files);
+}
+
+/* ************************************************************************ */
+/* Function:    EventEnabledBanners                                         */
+/* Description: The event's banner images that are switched on, in the      */
+/*              order they're shown (EVENT_Banner_Images, a JSON list of    */
+/*              file names). Names whose file is no longer in the banners   */
+/*              folder are left out.                                        */
+/* Inputs:      $event - the event's nsx_meetup_events row.                 */
+/* Returns:     array of file names                                         */
+/* ************************************************************************ */
+function EventEnabledBanners(array $event) {
+    $enabled = json_decode((string)($event['EVENT_Banner_Images'] ?? ''), true);
+    if (!is_array($enabled)) {
+        return [];
+    }
+    $files = EventBannerFiles($event['EVENT_Directory'] ?? '');
+    return array_values(array_unique(array_filter($enabled, function ($file) use ($files) {
+        return is_string($file) && in_array($file, $files, true);
+    })));
+}
+
+/* ************************************************************************ */
+/* Function:    EventBannerURL                                              */
+/* Description: The URL of one of an event's banner images.                 */
+/* Inputs:      $directory - the event's EVENT_Directory. $file - its name. */
+/* Returns:     string                                                      */
+/* ************************************************************************ */
+function EventBannerURL($directory, $file) {
+    $path = EventBannerDirectory($directory).'/'.rawurlencode(basename((string)$file));
+    return function_exists('app_url') ? app_url($path) : $path;
 }
 
 /* ************************************************************************ */

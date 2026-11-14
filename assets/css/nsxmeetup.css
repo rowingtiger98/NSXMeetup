@@ -1603,3 +1603,16 @@ input[type="checkbox"].payment_method_toggle:checked + label.payment_method_swit
         padding-left: 0.5rem;
     }
 }
+
+/* Banner Images section of Edit Event Settings */
+.event_banner_table .event_banner_thumb img {
+    display: block;
+    width: 120px;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: 4px;
+}
+    .event_banner_table .event_banner_position {
+        font-size: 0.85em;
+        color: #ffcc00;
+    }
