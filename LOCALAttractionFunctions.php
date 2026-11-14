@@ -55,10 +55,17 @@ function RenderOpeningPageInformation() {
 
 	$conn = connectDB('kirbypar_nsx_meetup');
 	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_attraction_categories` ORDER BY `Category_ID`");
-	if($result->num_rows > 0) {
-        while($row = $result->fetch_assoc()) {
-            if($opening_category == '') {
-                $opening_category = $row['Category_Name'];
+	$categories = [];
+	while ($result && ($row = $result->fetch_assoc())) {
+        $categories[] = $row;
+	}
+	// Open on the category asked for (e.g. "hotels" from the event page's hotel card), else the first one
+	$requested_category = is_string($_POST['category'] ?? null) ? $_POST['category'] : '';
+	$category_names = array_column($categories, 'Category_Name');
+	$opening_category = in_array($requested_category, $category_names, true) ? $requested_category : ($category_names[0] ?? '');
+	if(count($categories) > 0) {
+        foreach($categories as $row) {
+            if($row['Category_Name'] == $opening_category) {
                 $category_links .= '<li id="local_attraction_link_'.$row['Category_Name'].'" class="local_attraction_link active" event_id="'.$event_id.'"'.$editable_attr.' section_name="'.$row['Category_Name'].'">'.$row['Category_Title'].'</li>';
             } else {            
                 $category_links .= '<li id="local_attraction_link_'.$row['Category_Name'].'" class="local_attraction_link" event_id="'.$event_id.'"'.$editable_attr.' section_name="'.$row['Category_Name'].'">'.$row['Category_Title'].'</li>';
@@ -204,7 +211,7 @@ function BuildIndividualLocalAttaractionContainer($row) {
       $output_html .= ' <div class="col-12 col-12-xsmall" style="border-bottom:1px solid #ffffff;margin:0 0 0.5em 0.5em;"></div>';    
     } else {
       $output_html .= '<div class="col-2 col-12-xsmall">';    
-      $output_html .= ' <span class="image fit"><img src="assets/images/attractions/'.$row['Event_ID'].'/'.$row['Attraction_Image'].'"></span>';
+      $output_html .= ' <span class="image fit"><img src="'.app_url('assets/images/attractions/'.$row['Event_ID'].'/'.$row['Attraction_Image']).'"></span>';
       $output_html .= '</div>';
       $output_html .= '<div class="col-10 col-12-xsmall">'; 
       $output_html .= ' <h4>'.$row['Attraction_Name'].'</h4>';

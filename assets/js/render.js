@@ -1,3 +1,9 @@
+// The site's top folder URL, worked out from where this script was loaded
+// (.../assets/js/render.js), so the calls to LOCALAttractionFunctions.php below work from
+// an event's page in events/<dir>/ as well as from the top folder.
+var RENDER_SITE_BASE = (document.currentScript && document.currentScript.src)
+    ? document.currentScript.src.replace(/assets\/js\/render\.js(\?.*)?$/, '') : '';
+
 // -------------------------------------------------------------------------------------
 // Function: 	RenderEventStatsContent
 // Description: This function renders the attending page.
@@ -60,11 +66,12 @@ function RenderAttendingPage() {
 function RenderLocalAttractionsPage(event) {
     var event_id = $(this).attr('event_id');
     var editable = $(this).attr('editable');
+    var category = $(this).attr('category') || '';  // the category to open on, e.g. "hotels"; the first one if blank
     console.log("Render the locals attractions for event id = " + event_id + ' with editable = ' + editable);
 	$.ajax({
-	  url: 'LOCALAttractionFunctions.php',
+	  url: RENDER_SITE_BASE + 'LOCALAttractionFunctions.php',
 	  type: 'POST',
-	  data: {method: 'RenderOpeningPageInformation', event_id:event_id, editable:editable},
+	  data: {method: 'RenderOpeningPageInformation', event_id:event_id, editable:editable, category:category},
 	  success: function(data) {
 		results = eval(data);
         console.log('Results', results);        
@@ -120,7 +127,7 @@ function ReactToMenuLinkSelection(event) {
 // -------------------------------------------------------------------------------------
 function LoadLocalAttractionSection(event_id, section_name, editable) {
     $.ajax({
-      url: 'LOCALAttractionFunctions.php',
+      url: RENDER_SITE_BASE + 'LOCALAttractionFunctions.php',
       type: 'POST',
       data: {method: 'BuildLocalAttractionSection', event_id:event_id, section_name:section_name, editable:editable || ''},
       success: function(data) {
@@ -143,7 +150,7 @@ function LoadLocalAttractionSection(event_id, section_name, editable) {
 function OpenLocalAttractionForm(event_id, attraction_id) {
     console.log("Open the local attraction form for event = " + event_id + ", attraction = " + attraction_id);
     $.ajax({
-      url: 'LOCALAttractionFunctions.php',
+      url: RENDER_SITE_BASE + 'LOCALAttractionFunctions.php',
       type: 'POST',
       data: {method: 'CreateNewLocalAttraction', event_id:event_id, attraction_id:attraction_id || ''},
       success: function(data) {
@@ -196,7 +203,7 @@ function DeleteLocalAttraction(event) {
     }
     button.removeClass('regtype_confirm_delete').addClass('disabled').text('Deleting...');
     $.ajax({
-      url: 'LOCALAttractionFunctions.php',
+      url: RENDER_SITE_BASE + 'LOCALAttractionFunctions.php',
       type: 'POST',
       dataType: 'json',
       data: {method: 'DeleteLocalAttraction', event_id:button.attr('event_id'), attraction_id:button.attr('attraction_id')},
@@ -416,7 +423,7 @@ async function SubmitNewLocalAttraction(event) {
 function EnterNewLocalAttractionCategory(category_data) {
 	return new Promise((resolve, reject) => {
 		$.ajax({
-			url: 'LOCALAttractionFunctions.php',
+			url: RENDER_SITE_BASE + 'LOCALAttractionFunctions.php',
 			type: 'POST',
 			data: {method: 'EnterNewAttractionCategory', event_id:category_data['event_id'], title:category_data['cat_title'], name:category_data['cat_name']},
 			success: function(data) {
@@ -450,7 +457,7 @@ function EnterNewLocalAttractionDetails(attraction_data) {
 
 	return new Promise((resolve, reject) => {
 		$.ajax({
-			url: 'LOCALAttractionFunctions.php',
+			url: RENDER_SITE_BASE + 'LOCALAttractionFunctions.php',
 			type: 'POST',
 			data: {method: attraction_data['attraction_id'] ? 'SaveLocalAttraction' : 'EnterNewAttractionDetails',
 			       event_id:attraction_data['event_id'], attraction_data:JSON.stringify(attraction_data)},

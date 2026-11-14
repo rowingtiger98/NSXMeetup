@@ -60,12 +60,19 @@ if (!empty($event_data['EVENT_Start_Date'])) {
     }
 }
 
-// The Weekend Events button goes live once the event has agenda events to show
+// The Weekend Events button goes live once the event has agenda events to show, and the
+// Hotels & Local Attractions card opens that page on the first hotel category (one with
+// "hotel" in its name or title), if there is one
 $has_agenda = false;
+$hotel_category = '';
 if ($event_id) {
     $conn = connectDB('kirbypar_nsx_meetup');
     $result = PreparedQuery($conn, "SELECT COUNT(*) AS `shown` FROM `nsx_meetup_experiences` WHERE `EVENT_ID` = ? AND `EXPERIENCE_Display` = 1", [(int)$event_id]);
     $has_agenda = $result && ($row = $result->fetch_assoc()) && $row['shown'] > 0;
+    $result = PreparedQuery($conn, "SELECT `Category_Name` FROM `nsx_meetup_attraction_categories` WHERE `Category_Name` LIKE '%hotel%' OR `Category_Title` LIKE '%hotel%' ORDER BY `Category_ID` LIMIT 1");
+    if ($result && ($row = $result->fetch_assoc())) {
+        $hotel_category = $row['Category_Name'];
+    }
     closeDB($conn);
 }
 
@@ -182,7 +189,7 @@ if ($event_id) {
                                         <span class="number"><span class="icon solid fa-hotel"></span></span>
                                         <h3>Hotels &amp; Local Attractions</h3>
                                         <p>Looking for a place to stay, somewhere to eat or something to do while you're in the area? Click below for hotels and local attractions near the event.</p>
-                                        <a href="#" id="render_local_attractions" event_id="<?php echo (int)$event_id; ?>" editable="false" class="button primary small fit">Click Here</a>
+                                        <a href="?attractions" id="render_local_attractions" event_id="<?php echo (int)$event_id; ?>" editable="false" category="<?php echo htmlspecialchars($hotel_category, ENT_QUOTES); ?>" class="button primary small fit">Click Here</a>
                                     </div>
                                     <!-- Schedule (Add / Edit Agenda Events tool) -->
                                     <div>
@@ -204,8 +211,7 @@ if ($event_id) {
                                     </div>
                                 </div>
                                 <ul class="actions special">
-                                    <!-- <a href="../../register_all.php?event_id=<?php echo (int)$event_id; ?>" event_id="<?php echo (int)$event_id; ?>" class="button large primary fit">Register Today</a> -->
-                                    <a href="#" event_id="<?php echo (int)$event_id; ?>" class="button large primary fit">Opening Soon</a>
+                                    <a href="../../register_all.php?event_id=<?php echo (int)$event_id; ?>" event_id="<?php echo (int)$event_id; ?>" class="button large primary fit">Register Today</a>
                                 </ul>
                             </div>
                         </section>
@@ -299,6 +305,17 @@ if ($event_id) {
                     event.preventDefault();
                     RenderLocalAttractionsPage.call(this, event);
                 });
+
+                // index.php?attractions opens the Hotels & Local Attractions page straight away, and
+                // index.php?attractions=<category> opens it on that category, so it can be linked to
+                var url_params = new URLSearchParams(window.location.search);
+                if (url_params.has('attractions') && $("#render_local_attractions").length) {
+                    var attractions_link = $("#render_local_attractions");
+                    if (url_params.get('attractions') !== '') {
+                        attractions_link.attr('category', url_params.get('attractions'));
+                    }
+                    RenderLocalAttractionsPage.call(attractions_link[0]);
+                }
 
                 if (active_page == 'events') {
                     var elms = document.querySelectorAll('tr[id^="event_info_row"]');
