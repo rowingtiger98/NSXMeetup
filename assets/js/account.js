@@ -372,7 +372,8 @@ function RenderSelectedEventToManage(event_id) {
 
 
           } else {
-            console.log('fail');
+            // Say why instead of leaving the page blank (e.g. not an admin of this event)
+            $("#managed_event_tools_section").html('<p>'+$('<div>').text(results[1] && results[1][0] ? results[1][0] : 'This event could not be opened.').html()+'</p>');
           }
 	    },	
 	  });	    

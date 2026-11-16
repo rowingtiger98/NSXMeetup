@@ -26,10 +26,11 @@ function EventAdminRespond($status, $payload) {
 /* ************************************************************************ */
 /* Function:    EventAdminAuthorize                                        */
 /* Description: Ends the request with a 'Fail' response unless the session  */
-/*              belongs to a logged-in, non-idle overlord, or an admin who  */
+/*              belongs to a logged-in, non-idle overlord, or a user who    */
 /*              administers the event (listed in                            */
-/*              NSX_User_Events_Administered). Uses only the session, never */
-/*              browser-sent ids.                                           */
+/*              NSX_User_Events_Administered - whatever their role, since   */
+/*              being made an event's admin doesn't change it). Uses only   */
+/*              the session, never browser-sent ids.                        */
 /* Inputs:      $pdo - PHP Data Object, $event_id - the event's id.         */
 /* ************************************************************************ */
 function EventAdminAuthorize(PDO $pdo, $event_id) {
@@ -44,7 +45,7 @@ function EventAdminAuthorize(PDO $pdo, $event_id) {
 
     $administered = $user ? array_map('trim', explode(',', (string)$user['NSX_User_Events_Administered'])) : [];
     $is_overlord = $user && $user['NSX_User_Role'] === 'overlord';
-    $is_event_admin = $user && $user['NSX_User_Role'] === 'admin' && in_array((string)$event_id, $administered, true);
+    $is_event_admin = $user && in_array((string)$event_id, $administered, true);
     if (!$is_overlord && !$is_event_admin) {
         EventAdminRespond('Fail', ['You are not an administrator for this event.']);
     }

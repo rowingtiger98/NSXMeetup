@@ -15,7 +15,8 @@
 /*                    (user_id / email come from the session)  */
 /*    'event_admin' - an admin of the posted event_id, or an   */
 /*                    overlord                                 */
-/*    'admin'       - any logged-in admin or overlord          */
+/*    'admin'       - any logged-in admin or overlord, or a    */
+/*                    user who administers at least one event  */
 /*    'overlord'    - an overlord                              */
 /*                                                             */
 /*  Any other posted method name is refused. Methods that      */
@@ -89,7 +90,7 @@ function EndpointAuthorize($level) {
         $_POST['email'] = (string)$user['NSX_Email_Address'];
         return;
     }
-    if ($level === 'admin' && in_array($user['NSX_User_Role'], ['admin', 'overlord'], true)) {
+    if ($level === 'admin' && (in_array($user['NSX_User_Role'], ['admin', 'overlord'], true) || trim((string)$user['NSX_User_Events_Administered']) !== '')) {
         return;
     }
     if ($level === 'overlord' && $user['NSX_User_Role'] === 'overlord') {
@@ -102,7 +103,8 @@ function EndpointAuthorize($level) {
 /* Function:    EndpointLoggedInUser                                        */
 /* Description: The logged-in, non-idle user's account row. Ends the        */
 /*              request with a 'Fail' response if there isn't one.          */
-/* Returns:     array - NSX_User_ID, NSX_Email_Address, NSX_User_Role       */
+/* Returns:     array - NSX_User_ID, NSX_Email_Address, NSX_User_Role,      */
+/*              NSX_User_Events_Administered                                */
 /* ************************************************************************ */
 function EndpointLoggedInUser() {
     if (empty($_SESSION['login_user']) || app_session_idle_expired()) {
@@ -111,7 +113,7 @@ function EndpointLoggedInUser() {
     $_SESSION['last_activity'] = time();
 
     $pdo = Create_SQL_PHP_DataObject(DB_NAME);
-    $stmt = $pdo->prepare('SELECT NSX_User_ID, NSX_Email_Address, NSX_User_Role FROM nsx_meetup_user_accounts WHERE NSX_Username = ?');
+    $stmt = $pdo->prepare('SELECT NSX_User_ID, NSX_Email_Address, NSX_User_Role, NSX_User_Events_Administered FROM nsx_meetup_user_accounts WHERE NSX_Username = ?');
     $stmt->execute([$_SESSION['login_user']]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$user) {
