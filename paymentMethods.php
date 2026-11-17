@@ -23,7 +23,8 @@ const PAYMENT_METHODS = [
 /* Payment methods where registrants send money to the event's own account (a username, QR code
    and instructions set in the method's drawer). The admins mark registrants paid when it arrives.
    handle_pattern applies after HandleFromInput() strips any @ / link in front of the username;
-   handle_how_to is shown in the drawer under "How do I find my ... username?". */
+   handle_how_to is shown in the drawer under "How do I find my ... username?". link_column, when
+   given, turns the Open link (HandlePaymentLink) on and off - see ShowHandlePaymentLink(). */
 const HANDLE_PAYMENT_METHODS = [
     'venmo' => [
         'handle_column'       => 'EVENT_Venmo_Handle',
@@ -44,6 +45,7 @@ const HANDLE_PAYMENT_METHODS = [
         'handle_column'       => 'EVENT_PayPal_Handle',
         'description_column'  => 'EVENT_PayPal_Description',  // was EVENT_Payment_Instructions
         'qr_column'           => 'EVENT_PayPal_QR_Code',
+        'link_column'         => 'EVENT_PayPal_Show_Link',  // off for accounts without a PayPal.me link (e.g. some business accounts)
         'handle_label'        => 'PayPal Username',
         'handle_prefix'       => '@',         // your PayPal @username and PayPal.me link (paypal.me/<username>) are the same name
         'handle_pattern'      => '/^[A-Za-z0-9]{1,20}$/',
@@ -82,6 +84,29 @@ function HandlePaymentLink($method, $handle, $cents, $note) {
         return 'https://www.paypal.com/paypalme/'.rawurlencode($handle).'/'.$amount;
     }
     return 'https://venmo.com/'.rawurlencode($handle).'?'.http_build_query(['txn' => 'pay', 'amount' => $amount, 'note' => $note], '', '&', PHP_QUERY_RFC3986);
+}
+
+/* ************************************************************************ */
+/* Function:    ShowHandlePaymentLink                                       */
+/* Description: Whether the checkout page and confirmation email show the   */
+/*              Open link for a HANDLE_PAYMENT_METHODS method - always,     */
+/*              unless the method has a link_column and the event turned    */
+/*              it off.                                                     */
+/* ************************************************************************ */
+function ShowHandlePaymentLink(array $event, $method) {
+    $column = HANDLE_PAYMENT_METHODS[$method]['link_column'] ?? null;
+    return $column === null || !isset($event[$column]) || !empty($event[$column]);
+}
+
+/* ************************************************************************ */
+/* Function:    HandlePaymentReady                                          */
+/* Description: Whether a HANDLE_PAYMENT_METHODS method has what the        */
+/*              checkout page needs: its username, unless its Open link is  */
+/*              off - then the admins' instructions say where to send it    */
+/*              (e.g. search PayPal for an email address).                  */
+/* ************************************************************************ */
+function HandlePaymentReady(array $event, $method) {
+    return (string)$event[HANDLE_PAYMENT_METHODS[$method]['handle_column']] !== '' || !ShowHandlePaymentLink($event, $method);
 }
 
 /* ************************************************************************ */

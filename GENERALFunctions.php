@@ -429,6 +429,7 @@ function RenderPayLaterInstructions($method, array $event, array $participants, 
     $name = PAYMENT_METHODS[$method]['name'];
     $handle = (string)$event[$info['handle_column']];
     $account = $info['handle_prefix'].$handle;
+    $to_account = ($handle !== '') ? ' to <b>'.$h($account).'</b>' : '';  // none when the instructions say where to send it
 
     $names = [];
     foreach ($participants as $participant) {
@@ -445,18 +446,21 @@ function RenderPayLaterInstructions($method, array $event, array $participants, 
         $instructions = nl2br($h($instructions));
     }
 
-    $details  = '<p>Send <b>$'.$h(number_format($cents / 100, 2)).'</b> to <b>'.$h($account).'</b> on '.$h($name).'.</p>';
+    $details  = '<p>Send <b>$'.$h(number_format($cents / 100, 2)).'</b>'.$to_account.' on '.$h($name).'.</p>';
     $details .= '<p class="checkout_handle_note_label">Payment note:</p>';
     $details .= '<p class="checkout_handle_note">'.$h($note).'</p>';
     $details .= '<div class="checkout_instructions">'.$instructions;
-    $details .= '<p class="checkout_handle_link"><a href="'.$h(HandlePaymentLink($method, $handle, $cents, $note)).'" target="_blank" rel="noopener">Open '.$h($name).' to send your payment</a></p></div>';
+    if (ShowHandlePaymentLink($event, $method)) {
+        $details .= '<p class="checkout_handle_link"><a href="'.$h(HandlePaymentLink($method, $handle, $cents, $note)).'" target="_blank" rel="noopener">Open '.$h($name).' to send your payment</a></p>';
+    }
+    $details .= '</div>';
 
     $qr_code = PaymentQRCodePath($event, $method);
     if ($qr_code === '') {
         return '<div class="pay_later_instructions">'.$details.'</div>';
     }
     $output_html  = '<div class="row gtr-uniform pay_later_instructions">';
-    $output_html .= '  <div class="col-4 col-12-small checkout_handle_qr"><img src="'.$h(AbsoluteSiteURL($qr_code)).'" alt="'.$h($name).' QR code for '.$h($account).'" /><p>Scan with your phone\'s camera or '.$h($info['app_name']).'</p></div>';
+    $output_html .= '  <div class="col-4 col-12-small checkout_handle_qr"><img src="'.$h(AbsoluteSiteURL($qr_code)).'" alt="'.$h($name).' QR code'.($handle !== '' ? ' for '.$h($account) : '').'" /><p>Scan with your phone\'s camera or '.$h($info['app_name']).'</p></div>';
     $output_html .= '  <div class="col-8 col-12-small">'.$details.'</div>';
     $output_html .= '</div>';
     return $output_html;
@@ -547,7 +551,7 @@ function BuildConfirmationPage($driver1, $driver2, $event_id, $collect_payment, 
             $output_html .= '  <div class="col-12">';
             $output_html .= '   <span class="driver_name">'.$row['Participant_Name'].' - '.$row['Participant_Role'].'';
             $output_html .= '  </div>';
-            $output_html .= '  <div class="col-2 col-12-small"><span class="image fit"><img src="assets/images/nsx_colors/fullsize_'.$row['Participant_Car_Image'].'" alt="" /></span>';
+            $output_html .= '  <div class="col-2 col-12-small"><span class="image fit"><img src="'.app_url('assets/images/nsx_colors/fullsize_'.$row['Participant_Car_Image']).'" alt="" /></span>';
     
             $car_info = json_decode($row['Participant_Car_Info'], true);
             if ($row['Participant_Is_NSX']) {
@@ -627,7 +631,7 @@ function BuildConfirmationPage($driver1, $driver2, $event_id, $collect_payment, 
 	    	  $output_html .= '  <div class="col-12">';
 	    	  $output_html .= '   <span class="driver_name">'.$row['Participant_Name'].' - '.$row['Participant_Role'].'';
 	    	  $output_html .= '  </div>';
-	    	  $output_html .= '  <div class="col-2 col-12-small"><span class="image fit"><img src="assets/images/nsx_colors/fullsize_'.$row['Participant_Car_Image'].'" alt="" /></span>';
+	    	  $output_html .= '  <div class="col-2 col-12-small"><span class="image fit"><img src="'.app_url('assets/images/nsx_colors/fullsize_'.$row['Participant_Car_Image']).'" alt="" /></span>';
 	  
 			  $car_info = json_decode($row['Participant_Car_Info'], true);
 	    	  if ($row['Participant_Is_NSX']) {
@@ -1327,7 +1331,7 @@ function RenderAttendingInformation() {
 		} else {
 			$more_info_link = '';
 		}
-		$output_html .= '<tr><td style="vertical-align:middle;" width="65%">'.$parts_row["Participant_Display_Name"].' '.$more_info_link.'<div id="part_extra_info_'.$parts_row['Participant_ID'].'" class="part_extra_info">'.$shared_html.'</div></td><td style="vertical-align:middle;" class="table_column">'.$parts_row["Participant_State"].'</td><td style="text-align:right;"   class="table_column"><img src="assets/images/nsx_colors/'.$parts_row['Participant_Car_Image'].'" /></td></tr>';
+		$output_html .= '<tr><td style="vertical-align:middle;" width="65%">'.$parts_row["Participant_Display_Name"].' '.$more_info_link.'<div id="part_extra_info_'.$parts_row['Participant_ID'].'" class="part_extra_info">'.$shared_html.'</div></td><td style="vertical-align:middle;" class="table_column">'.$parts_row["Participant_State"].'</td><td style="text-align:right;"   class="table_column"><img src="'.app_url('assets/images/nsx_colors/'.$parts_row['Participant_Car_Image']).'" /></td></tr>';
 		// $output_html .= '<tr><td style="vertical-align:middle;">'.$parts_row["Participant_Display_Name"].'</div></td><td style="vertical-align:middle;">'.$parts_row["Participant_State"].'</td><td style="text-align:right;"><img src="assets/images/nsx_colors/'.$parts_row['Driver_Car_Image'].'" /></td></tr>';
 
 	  }		
@@ -1359,7 +1363,7 @@ function RenderEventStatsContent() {
 	if($parts_result->num_rows > 0) {
       while($parts_row = $parts_result->fetch_assoc()) {
         if ($parts_row["Participant_Role"] == 'driving' && $parts_row["Participant_Is_NSX"] == 1){
-            $output_html .= '<div class="nsx_image_mini"><span class="image fit"><img src="assets/images/nsx_colors/'.$parts_row['Participant_Car_Image'].'" /></span><span class="nsx_image_mini_hovertext">'.$parts_row["Participant_Display_Name"].'</span></div>';
+            $output_html .= '<div class="nsx_image_mini"><span class="image fit"><img src="'.app_url('assets/images/nsx_colors/'.$parts_row['Participant_Car_Image']).'" /></span><span class="nsx_image_mini_hovertext">'.$parts_row["Participant_Display_Name"].'</span></div>';
         }
 	  }		
 	}

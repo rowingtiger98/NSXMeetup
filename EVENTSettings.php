@@ -112,6 +112,13 @@ function EventSettingsFields($tool) {
                                             'drawer' => $method, 'placeholder' => $info['handle_example'],
                                             'help' => 'The '.$name.' account registrants pay, e.g. '.$info['handle_example'].' ('.$info['handle_rule'].').',
                                             'how_to' => ['How do I find my '.$name.' username?', $info['handle_how_to']]];
+        if (isset($info['link_column'])) {
+            $methods[$info['link_column']] = ['label' => 'Show '.$name.' Payment Link', 'type' => 'checkbox', 'rendered_by' => 'payment_methods',
+                                              'drawer' => $method,
+                                              'help' => 'Adds an "Open '.$name.'" link with the amount filled in to the checkout page and confirmation email. '
+                                                       .'It uses your '.$name.'.me link - turn it off if your account doesn\'t have one (e.g. some business accounts). '
+                                                       .'With it off, the username can be left blank - say where to send the payment in the instructions.'];
+        }
         $methods[$info['description_column']] = ['label' => $name.' Instructions', 'type' => $info['description_html'] ? 'html' : 'textarea',
                                                  'max' => 4000, 'null_ok' => true, 'rendered_by' => 'payment_methods',
                                                  'drawer' => $method, 'placeholder' => $info['default_description'],
@@ -203,7 +210,10 @@ function RenderPaymentMethodOptions($event, $separator) {
                 $value = HANDLE_PAYMENT_METHODS[$field['payment_method']]['handle_prefix'].$value; // stored without it
             }
             $output_html .= '           <label for="'.$id.'" class="payment_method_field_label">'.$h($field['label']).'</label>';
-            if ($field['type'] === 'textarea' || $field['type'] === 'html') {
+            if ($field['type'] === 'checkbox') {
+                $output_html .= '           <input type="checkbox" id="'.$id.'" db_key="'.$column.'"'.(($event[$column] ?? 1) ? ' checked' : '').'>';
+                $output_html .= '           <label for="'.$id.'">Yes</label>';
+            } elseif ($field['type'] === 'textarea' || $field['type'] === 'html') {
                 $output_html .= '           <textarea id="'.$id.'" db_key="'.$column.'" rows="5"'.$max.$placeholder.'>'.$h($value).'</textarea>';
             } else {
                 $output_html .= '           <input type="text" id="'.$id.'" db_key="'.$column.'" value="'.$h($value).'"'.$max.$placeholder.' />';
@@ -507,8 +517,10 @@ function SaveEventSettings() {
 
         foreach (HANDLE_PAYMENT_METHODS as $method => $info) {
             $name = PAYMENT_METHODS[$method]['name'];
-            if ($values['EVENT_Collect_Payments'] && $values[PAYMENT_METHODS[$method]['column']] && $values[$info['handle_column']] === null) {
-                $errors[] = $name.' needs a '.$info['handle_label'].' - enter it under '.$name.', or turn '.$name.' off.';
+            $link_on = !isset($info['link_column']) || !empty($values[$info['link_column']]);
+            if ($values['EVENT_Collect_Payments'] && $values[PAYMENT_METHODS[$method]['column']] && $values[$info['handle_column']] === null && $link_on) {
+                $errors[] = $name.' needs a '.$info['handle_label'].' - enter it under '.$name.', or turn '.$name.' off.'
+                           .(isset($info['link_column']) ? ' (It can be left blank with the payment link off, if your instructions say where to send the payment.)' : '');
             }
         }
     }

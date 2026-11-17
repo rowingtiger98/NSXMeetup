@@ -128,12 +128,12 @@ if ($pledged_method && $_SERVER['REQUEST_METHOD'] !== 'POST') {
 /* ************************************************************************ */
 /* Function:    PledgeablePaymentMethod                                     */
 /* Description: True if $method is one registrants pay later (Venmo,        */
-/*              PayPal), the event has it turned on, and its account is     */
-/*              set.                                                        */
+/*              PayPal), the event has it turned on, and it's set up        */
+/*              (HandlePaymentReady).                                       */
 /* ************************************************************************ */
 function PledgeablePaymentMethod($event, $method) {
     return $event && isset(HANDLE_PAYMENT_METHODS[$method]) && isset(EnabledPaymentMethods($event)[$method])
-        && (string)$event[HANDLE_PAYMENT_METHODS[$method]['handle_column']] !== '';
+        && HandlePaymentReady($event, $method);
 }
 
 /* ************************************************************************ */
@@ -187,6 +187,7 @@ function RenderHandlePayment($method, array $event, $total_due, array $registran
     $name = PAYMENT_METHODS[$method]['name'];
     $handle = (string)$event[$info['handle_column']];
     $account = $info['handle_prefix'].$handle;
+    $to_account = ($handle !== '') ? ' to <b>'.$h($account).'</b>' : '';  // none when the instructions say where to send it
 
     $names = [];
     foreach ($registrants as $registrant) {
@@ -204,22 +205,25 @@ function RenderHandlePayment($method, array $event, $total_due, array $registran
         $instructions_html = $info['description_html'] ? $instructions : nl2br($h($instructions));
     }
 
-    $output_html  = '<p>Send <b>$'.$h(number_format($total_due / 100, 2)).'</b> to <b>'.$h($account).'</b> on '.$h($name).'.</p>';
+    $output_html  = '<p>Send <b>$'.$h(number_format($total_due / 100, 2)).'</b>'.$to_account.' on '.$h($name).'.</p>';
     $qr_code = PaymentQRCodePath($event, $method);
     if ($qr_code !== '') {
-        $output_html .= '<div class="checkout_handle_qr"><img src="'.$h($qr_code).'" alt="'.$h($name).' QR code for '.$h($account).'" /><p>Scan with your phone\'s camera or '.$h($info['app_name']).'</p></div>';
+        $output_html .= '<div class="checkout_handle_qr"><img src="'.$h($qr_code).'" alt="'.$h($name).' QR code'.($handle !== '' ? ' for '.$h($account) : '').'" /><p>Scan with your phone\'s camera or '.$h($info['app_name']).'</p></div>';
     }
     $output_html .= '<p class="checkout_handle_note_label">Payment note:</p>';
     $output_html .= '<p class="checkout_handle_note">'.$h($note).'</p>';
-    $output_html .= '<div class="checkout_instructions">'.$instructions_html
-                  .'<p class="checkout_handle_link"><a href="'.$h(HandlePaymentLink($method, $handle, $total_due, $note)).'" target="_blank" rel="noopener">Open '.$h($name).' to send your payment</a></p></div>';
+    $output_html .= '<div class="checkout_instructions">'.$instructions_html;
+    if (ShowHandlePaymentLink($event, $method)) {
+        $output_html .= '<p class="checkout_handle_link"><a href="'.$h(HandlePaymentLink($method, $handle, $total_due, $note)).'" target="_blank" rel="noopener">Open '.$h($name).' to send your payment</a></p>';
+    }
+    $output_html .= '</div>';
 
     if ($with_complete) {
         $output_html .= '<form method="post" action="event_checkout.php?event_id='.(int)$event['EVENT_ID'].'" class="checkout_complete_form">';
         $output_html .= '<input type="hidden" name="action" value="complete_registration" />';
         $output_html .= '<input type="hidden" name="payment_method" value="'.$h($method).'" />';
         $output_html .= '<input type="hidden" name="csrf_token" value="'.$h(app_csrf_token()).'" />';
-        $output_html .= '<p class="checkout_agreement">By clicking <b>Complete Registration</b>, you agree to send <b>$'.$h(number_format($total_due / 100, 2)).'</b> to <b>'.$h($account).'</b> on '.$h($name).'. '
+        $output_html .= '<p class="checkout_agreement">By clicking <b>Complete Registration</b>, you agree to send <b>$'.$h(number_format($total_due / 100, 2)).'</b>'.$to_account.' on '.$h($name).'. '
                       .'Your registration is not complete until the event organizers receive and confirm your payment.</p>';
         $output_html .= '<button type="submit" class="button primary fit">Complete Registration</button>';
         $output_html .= '</form>';
@@ -373,7 +377,7 @@ function RemoveUnpaidCheckoutParticipants(array $event) {
                                             <label for="checkout_payment_<?php echo $method; ?>_select">Pay with <?php echo $h($name); ?></label>
                                         </div>
                                         <div id="checkout_payment_<?php echo $method; ?>_drawer" class="checkout_payment_drawer"<?php echo $only_one ? '' : ' style="display:none;"'; ?>>
-                                            <?php if (isset(HANDLE_PAYMENT_METHODS[$method]) && (string)$event[HANDLE_PAYMENT_METHODS[$method]['handle_column']] !== '') { ?>
+                                            <?php if (isset(HANDLE_PAYMENT_METHODS[$method]) && HandlePaymentReady($event, $method)) { ?>
                                                 <?php echo RenderHandlePayment($method, $event, $total_due, $registrants); ?>
                                             <?php } else { ?>
                                                 <p>The <?php echo $h($name); ?> payment options will go here.</p>
