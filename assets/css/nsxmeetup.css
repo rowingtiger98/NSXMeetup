@@ -283,19 +283,24 @@ html {
         background: rgba(0,0,0,0.1);
         z-index: 99999;
         opacity:0;
-        -webkit-transition: opacity 200ms ease-in;
-        -moz-transition: opacity 200ms ease-in;
-        transition: opacity 200ms ease-in;
+        /* Hidden, not just see-through, while closed - otherwise phones (iPhone password
+           AutoFill) find the login fields on every page and offer to sign in */
+        visibility: hidden;
+        -webkit-transition: opacity 200ms ease-in, visibility 200ms;
+        -moz-transition: opacity 200ms ease-in, visibility 200ms;
+        transition: opacity 200ms ease-in, visibility 200ms;
         pointer-events: none;
     }
 
         .modalDialog.errorevent {
             opacity:1;
+            visibility: visible;
             pointer-events: auto;
         }
 
     .modalDialog:target {
         opacity:1;
+        visibility: visible;
         pointer-events: auto;
     }
 
@@ -1616,3 +1621,16 @@ input[type="checkbox"].payment_method_toggle:checked + label.payment_method_swit
         font-size: 0.85em;
         color: #ffcc00;
     }
+
+/* While the page loads, the banner's cover (main.css) shows the logo instead of a blank
+   panel, and it fades away as soon as the first slide's image is in (main.js adds
+   banner_ready) rather than once the whole page has loaded. */
+body.is-preload #banner:after {
+    background: #292929 url("../images/NSXMeetup-Logo-white.png") no-repeat center;
+    background-size: min(60%, 30rem) auto;
+}
+body.is-preload #banner.banner_ready:after {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 2.5s ease-out, visibility 2.5s;  /* a slow cross-fade from the logo to the picture */
+}

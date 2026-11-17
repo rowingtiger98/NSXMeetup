@@ -20,6 +20,10 @@ const SPONSOR_LOGO_MAX_SIZE      = 600;           // sponsor logos are scaled to
 const EVENT_BANNER_MAX_IMAGES    = 6;             // banner images an event's banners folder may hold
 const EVENT_BANNER_MAX_WIDTH     = 1920;          // banner uploads are scaled down to fit 1920 x 1280
 const EVENT_BANNER_MAX_HEIGHT    = 1280;
+const EVENT_FRONTPAGE_BANNERS    = 3;             // banner images an event may put on the site's front page
+const SITE_BANNER_DIR            = 'images/banners';  // the front page's own "Welcome to NSX Meetup" images (copied to the server by hand)
+const SITE_BANNER_MIN_SLIDES     = 6;             // the front page banner is topped up to this many with SITE_BANNER_DIR images
+const SITE_BANNER_MAX_SLIDES     = 9;
 
 /* ************************************************************************ */
 /* Function:    EventImagesDirectory                                        */
@@ -133,6 +137,118 @@ function EventEnabledBanners(array $event) {
     return array_values(array_unique(array_filter($enabled, function ($file) use ($files) {
         return is_string($file) && in_array($file, $files, true);
     })));
+}
+
+/* ************************************************************************ */
+/* Function:    EventFrontpageBanners                                       */
+/* Description: The event's banner images picked for the site's front page  */
+/*              (EVENT_Frontpage_Banners, a JSON list of file names): only  */
+/*              ones shown on the event page, in that order, at most        */
+/*              EVENT_FRONTPAGE_BANNERS.                                    */
+/* Inputs:      $event - the event's nsx_meetup_events row.                 */
+/* Returns:     array of file names                                         */
+/* ************************************************************************ */
+function EventFrontpageBanners(array $event) {
+    $picked = json_decode((string)($event['EVENT_Frontpage_Banners'] ?? ''), true);
+    if (!is_array($picked)) {
+        return [];
+    }
+    $shown = array_values(array_intersect(EventEnabledBanners($event), $picked));
+    return array_slice($shown, 0, EVENT_FRONTPAGE_BANNERS);
+}
+
+/* ************************************************************************ */
+/* Function:    EventDateRange                                              */
+/* Description: An event's dates for a banner, e.g. "December 6 - 8, 2026"  */
+/*              or "July 31 - August 2, 2026".                              */
+/* Inputs:      $start, $end - EVENT_Start_Date, EVENT_End_Date.            */
+/* Returns:     string, or '' without a start date                          */
+/* ************************************************************************ */
+function EventDateRange($start, $end) {
+    if (empty($start)) {
+        return '';
+    }
+    $start = strtotime($start);
+    $end = !empty($end) ? strtotime($end) : $start;
+    if (date('Y-m-d', $start) === date('Y-m-d', $end)) {
+        return date('F j, Y', $start);
+    } elseif (date('Y-m', $start) === date('Y-m', $end)) {
+        return date('F j', $start).' - '.date('j, Y', $end);
+    } elseif (date('Y', $start) === date('Y', $end)) {
+        return date('F j', $start).' - '.date('F j, Y', $end);
+    }
+    return date('F j, Y', $start).' - '.date('F j, Y', $end);
+}
+
+/* ************************************************************************ */
+/* Function:    SiteBannerSlides                                            */
+/* Description: The slides for the site's front page banner: up to         */
+/*              EVENT_FRONTPAGE_BANNERS front page images from each event   */
+/*              on the front page that hasn't finished (the same test as    */
+/*              its Upcoming Events), soonest first and taking turns -      */
+/*              every event's first image, then their second, ... - at most */
+/*              SITE_BANNER_MAX_SLIDES. Topped up to SITE_BANNER_MIN_SLIDES */
+/*              with the SITE_BANNER_DIR images, in random order.           */
+/* Inputs:      $pdo - PHP Data Object, or null when the database couldn't  */
+/*              be reached (then only the SITE_BANNER_DIR images).          */
+/* Returns:     array of ['image' => URL, 'title', 'dates']                 */
+/* ************************************************************************ */
+function SiteBannerSlides($pdo) {
+    $per_event = [];
+    if ($pdo) {
+        $stmt = $pdo->prepare('SELECT * FROM nsx_meetup_events WHERE EVENT_Display = 1 AND EVENT_End_Date > ? ORDER BY EVENT_Start_Date');
+        $stmt->execute([date('Y-m-d')]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $event) {
+            $slides = [];
+            foreach (EventFrontpageBanners($event) as $file) {
+                $slides[] = ['image' => EventBannerURL($event['EVENT_Directory'], $file), 'title' => $event['EVENT_Name'],
+                             'dates' => EventDateRange($event['EVENT_Start_Date'], $event['EVENT_End_Date'])];
+            }
+            if ($slides) {
+                $per_event[] = $slides;
+            }
+        }
+    }
+
+    $slides = [];
+    for ($round = 0; $round < EVENT_FRONTPAGE_BANNERS; $round++) {
+        foreach ($per_event as $event_slides) {
+            if (isset($event_slides[$round]) && count($slides) < SITE_BANNER_MAX_SLIDES) {
+                $slides[] = $event_slides[$round];
+            }
+        }
+    }
+
+    $defaults = SiteBannerFiles();
+    shuffle($defaults);
+    foreach ($defaults as $file) {
+        if (count($slides) >= SITE_BANNER_MIN_SLIDES) {
+            break;
+        }
+        $path = SITE_BANNER_DIR.'/'.rawurlencode($file);
+        $slides[] = ['image' => function_exists('app_url') ? app_url($path) : $path, 'title' => 'Welcome to NSX Meetup', 'dates' => ''];
+    }
+    return $slides;
+}
+
+/* ************************************************************************ */
+/* Function:    SiteBannerFiles                                             */
+/* Description: The image files in SITE_BANNER_DIR, in name order.          */
+/* Returns:     array of file names                                         */
+/* ************************************************************************ */
+function SiteBannerFiles() {
+    $dir = __DIR__.'/'.SITE_BANNER_DIR;
+    if (!is_dir($dir)) {
+        return [];
+    }
+    $files = [];
+    foreach (scandir($dir) as $file) {
+        if (preg_match('/^[^.].*\.(jpe?g|png|webp|gif)$/i'  /* copied by hand - any name, spaces included */, $file) && is_file($dir.'/'.$file)) {
+            $files[] = $file;
+        }
+    }
+    natcasesort($files);
+    return array_values($files);
 }
 
 /* ************************************************************************ */

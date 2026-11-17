@@ -25,6 +25,7 @@ function RenderEditEventSettings(event_id, tool) {
                     $("#event_banner_tool")
                         .on('change', '#event_banner_upload', UploadBannerImage)
                         .on('change', '.event_banner_show_checkbox', SaveBannerOrder)
+                        .on('change', '.event_banner_frontpage_checkbox', PickFrontpageBanner)
                         .on('click', '.event_banner_move_button', MoveBannerImage)
                         .on('click', '.event_banner_delete_button', DeleteBannerImage);
                 }
@@ -429,15 +430,33 @@ function MoveBannerImage(event) {
     SaveBannerOrder();
 }
 
-// Saves which banner images are shown (ticked), in the order the rows are in.
+var EVENT_FRONTPAGE_BANNERS = 3; // keep in step with eventImages.php
+
+// Saves a Front Page tick - at most EVENT_FRONTPAGE_BANNERS images can go on the site's
+// front page.
+function PickFrontpageBanner() {
+    if (this.checked && $("#event_banner_list .event_banner_frontpage_checkbox:checked").length > EVENT_FRONTPAGE_BANNERS) {
+        this.checked = false;
+        ShowUploadStatus($("#event_banner_status"), 'Only ' + EVENT_FRONTPAGE_BANNERS + ' images can go on the front page. Untick Front Page on one first.', true);
+        return;
+    }
+    SaveBannerOrder();
+}
+
+// Saves which banner images are shown (ticked), in the order the rows are in, and which
+// of those also go on the site's front page.
 function SaveBannerOrder() {
     var banners = [];
+    var frontpage = [];
     $("#event_banner_list tr.event_banner_row").each(function() {
         if ($(this).find('.event_banner_show_checkbox').is(':checked')) {
             banners.push($(this).attr('banner_file'));
+            if ($(this).find('.event_banner_frontpage_checkbox').is(':checked')) {
+                frontpage.push($(this).attr('banner_file'));
+            }
         }
     });
-    SendBannerRequest({method: 'SaveBannerOrder', banners: JSON.stringify(banners)});
+    SendBannerRequest({method: 'SaveBannerOrder', banners: JSON.stringify(banners), frontpage: JSON.stringify(frontpage)});
 }
 
 // The first click asks for confirmation on the button itself; a second click within a

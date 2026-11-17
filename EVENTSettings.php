@@ -745,7 +745,8 @@ function RenderBannerTool(array $event) {
     $output_html .= '<p>These are the pictures that slide across the top of the event\'s page, each with the event\'s name and dates over it.
         Upload up to '.EVENT_BANNER_MAX_IMAGES.' (JPEG, PNG or WebP - wide landscape photos work best; they\'re scaled to fit '
         .EVENT_BANNER_MAX_WIDTH.' x '.EVENT_BANNER_MAX_HEIGHT.'). Tick Show for the ones to include, and use the arrows to set the order they appear in.
-        The other pages of the event show the first one. Changes here are saved straight away - there\'s no need to press Save above.</p>';
+        The other pages of the event show the first one. Tick Front Page on up to '.EVENT_FRONTPAGE_BANNERS.' shown images to also put them in the banner on
+        the NSX Meetup front page until the event is over. Changes here are saved straight away - there\'s no need to press Save above.</p>';
     $output_html .= '<div id="event_banner_list">'.RenderBannerList($event).'</div>';
     $output_html .= '<div id="event_banner_status" class="frontpage_upload_status"></div>';
     $output_html .= '</div>';
@@ -763,6 +764,7 @@ function RenderBannerList(array $event) {
     $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
     $files = EventBannerFiles($event['EVENT_Directory']);
     $enabled = EventEnabledBanners($event);
+    $frontpage = EventFrontpageBanners($event);
     $rows = array_merge($enabled, array_values(array_diff($files, $enabled)));
 
     $output_html = '';
@@ -770,7 +772,7 @@ function RenderBannerList(array $event) {
         $output_html .= '<p>No banner images yet. Until some are shown, the event\'s page uses its banners.php file if it has one, or a plain banner with its name and dates.</p>';
     } else {
         $output_html .= '<div class="table-wrapper"><table class="regtype_table event_banner_table"><thead><tr>';
-        $output_html .= '<th>Order</th><th>Show</th><th>Image</th><th>File</th><th></th></tr></thead><tbody>';
+        $output_html .= '<th>Order</th><th>Show</th><th>Front Page</th><th>Image</th><th>File</th><th></th></tr></thead><tbody>';
         $last = count($enabled) - 1;
         foreach ($rows as $i => $file) {
             $shown = $i <= $last;
@@ -784,6 +786,10 @@ function RenderBannerList(array $event) {
             $output_html .= '</td>';
             $output_html .= '<td><input type="checkbox" id="'.$id.'" class="event_banner_show_checkbox"'.($shown ? ' checked' : '').' />';
             $output_html .= '<label for="'.$id.'" class="regtype_checkbox_label" title="Show this image in the event page\'s banner"></label></td>';
+            // Only a shown image can go on the front page
+            $output_html .= '<td><input type="checkbox" id="'.$id.'_frontpage" class="event_banner_frontpage_checkbox"'
+                           .(in_array($file, $frontpage, true) ? ' checked' : '').($shown ? '' : ' disabled').' />';
+            $output_html .= '<label for="'.$id.'_frontpage" class="regtype_checkbox_label" title="'.($shown ? 'Also show this image in the NSX Meetup front page banner' : 'Tick Show first').'"></label></td>';
             $output_html .= '<td class="event_banner_thumb"><img src="'.$h(EventBannerURL($event['EVENT_Directory'], $file)).'" alt="" /></td>';
             $output_html .= '<td>'.$h($file).($shown ? '<br><span class="event_banner_position">Slide '.($i + 1).'</span>' : '').'</td>';
             $output_html .= '<td class="regtype_actions"><a href="#" class="button small event_banner_delete_button">Delete</a></td>';
@@ -805,18 +811,23 @@ function RenderBannerList(array $event) {
 /* ************************************************************************ */
 /* Function:    SaveEventBanners                                            */
 /* Description: Stores the event's shown banner images, in order, in        */
-/*              EVENT_Banner_Images, then responds with the updated list.   */
+/*              EVENT_Banner_Images, and the shown ones picked for the      */
+/*              site's front page in EVENT_Frontpage_Banners, then responds */
+/*              with the updated list.                                      */
 /* Returns:     JSON ['Pass', ['html', 'message']] or ['Fail', [messages]]  */
 /* ************************************************************************ */
-function SaveEventBanners(PDO $pdo, array $event, array $enabled, $message) {
+function SaveEventBanners(PDO $pdo, array $event, array $enabled, array $frontpage, $message) {
     $enabled = array_values($enabled);
+    $frontpage = array_values(array_intersect($enabled, $frontpage));  // in the shown order, shown ones only
     $value = $enabled ? json_encode($enabled) : null;
-    $stmt = $pdo->prepare('UPDATE nsx_meetup_events SET EVENT_Banner_Images = ? WHERE EVENT_ID = ?');
-    if (!$stmt->execute([$value, $event['EVENT_ID']])) {
+    $frontpage_value = $frontpage ? json_encode($frontpage) : null;
+    $stmt = $pdo->prepare('UPDATE nsx_meetup_events SET EVENT_Banner_Images = ?, EVENT_Frontpage_Banners = ? WHERE EVENT_ID = ?');
+    if (!$stmt->execute([$value, $frontpage_value, $event['EVENT_ID']])) {
         error_log('SaveEventBanners: database update failed for event '.$event['EVENT_ID']);
         EventAdminRespond('Fail', ['The banner images could not be saved. Please try again.']);
     }
     $event['EVENT_Banner_Images'] = $value;
+    $event['EVENT_Frontpage_Banners'] = $frontpage_value;
     EventAdminRespond('Pass', ['html' => RenderBannerList($event), 'message' => $message]);
 }
 
@@ -866,14 +877,16 @@ function UploadBannerImage() {
 
     $enabled = EventEnabledBanners($event);
     $enabled[] = $filename;
-    SaveEventBanners($pdo, $event, $enabled, 'Banner image uploaded and added to the end of the banner.');
+    SaveEventBanners($pdo, $event, $enabled, EventFrontpageBanners($event), 'Banner image uploaded and added to the end of the banner.');
 }
 
 /* ************************************************************************ */
 /* Function:    SaveBannerOrder                                             */
 /* Description: Saves which banner images are shown and their order: the    */
 /*              posted banners is a JSON list of file names in the order    */
-/*              they're shown. Every name must be in the banners folder.    */
+/*              they're shown, and frontpage the ones of those also on the  */
+/*              site's front page (at most EVENT_FRONTPAGE_BANNERS). Every  */
+/*              name must be in the banners folder.                         */
 /* Returns:     JSON ['Pass', ['html', 'message']] or ['Fail', [messages]]  */
 /* ************************************************************************ */
 function SaveBannerOrder() {
@@ -886,12 +899,20 @@ function SaveBannerOrder() {
     if (!is_array($posted)) {
         EventAdminRespond('Fail', ['The banner images could not be read. Please try again.']);
     }
-    foreach ($posted as $file) {
+    $frontpage = json_decode((string)($_POST['frontpage'] ?? '[]'), true);
+    if (!is_array($frontpage)) {
+        EventAdminRespond('Fail', ['The banner images could not be read. Please try again.']);
+    }
+    foreach (array_merge($posted, $frontpage) as $file) {
         if (!is_string($file) || !in_array($file, $files, true)) {
             EventAdminRespond('Fail', ['A banner image is no longer there. Reload the page and try again.']);
         }
     }
-    SaveEventBanners($pdo, $event, array_unique($posted), 'Banner saved.');
+    $frontpage = array_intersect(array_unique($posted), $frontpage);
+    if (count($frontpage) > EVENT_FRONTPAGE_BANNERS) {
+        EventAdminRespond('Fail', ['Only '.EVENT_FRONTPAGE_BANNERS.' images can go on the front page. Untick Front Page on one first.']);
+    }
+    SaveEventBanners($pdo, $event, array_unique($posted), $frontpage, 'Banner saved.');
 }
 
 /* ************************************************************************ */
@@ -915,5 +936,5 @@ function DeleteBannerImage() {
         EventAdminRespond('Fail', ['The banner image could not be deleted. Please try again.']);
     }
     $enabled = array_diff(EventEnabledBanners($event), [$file]);
-    SaveEventBanners($pdo, $event, $enabled, 'Banner image deleted.');
+    SaveEventBanners($pdo, $event, $enabled, EventFrontpageBanners($event), 'Banner image deleted.');
 }

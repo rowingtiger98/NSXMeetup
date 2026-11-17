@@ -53,6 +53,23 @@ if(isset($_GET['event_id'])) {
         $display_sponsor = $event_data['EVENT_Display_Sponsors'];        
     }
 }
+$event_name = htmlspecialchars((string)($event_data['EVENT_Name'] ?? ''), ENT_QUOTES);
+
+// The event's dates for the banner, e.g. "December 6 - 8, 2026" or "July 31 - August 2, 2026"
+$event_dates = '';
+if (!empty($event_data['EVENT_Start_Date'])) {
+    $start = strtotime($event_data['EVENT_Start_Date']);
+    $end = !empty($event_data['EVENT_End_Date']) ? strtotime($event_data['EVENT_End_Date']) : $start;
+    if (date('Y-m-d', $start) === date('Y-m-d', $end)) {
+        $event_dates = date('F j, Y', $start);
+    } elseif (date('Y-m', $start) === date('Y-m', $end)) {
+        $event_dates = date('F j', $start).' - '.date('j, Y', $end);
+    } elseif (date('Y', $start) === date('Y', $end)) {
+        $event_dates = date('F j', $start).' - '.date('F j, Y', $end);
+    } else {
+        $event_dates = date('F j, Y', $start).' - '.date('F j, Y', $end);
+    }
+}
 
 ?>
 
@@ -120,14 +137,44 @@ if(isset($_GET['event_id'])) {
 			  <?php include '../../login_modal.php'; ?>
 			</section>
 			
-		<!-- Banner -->
-            <?php 
-                if($active_page == '') {
-                    include 'banners.php';
-                } else {
-                    include 'still_banner.php';
+		<!-- Banner: the images shown in Edit Event Settings > Banner Images (a slideshow on
+		     the main page, the first one on the others), each with the event's name and
+		     dates. Without any, the event's own banners.php / still_banner.php if it has
+		     them, otherwise just its name and dates. -->
+            <?php
+                $banner_images = empty($event_data) ? [] : EventEnabledBanners($event_data);
+                if ($active_page != '' && $banner_images) {
+                    $banner_images = array_slice($banner_images, 0, 1);
                 }
+                if ($banner_images) {
             ?>
+            <div id="banner" class="<?php echo ($active_page == '') ? 'active' : 'still'; ?>">
+                <?php foreach ($banner_images as $banner_image) { ?>
+                <article data-position="center">
+                    <div class="inner">
+                        <img src="<?php echo htmlspecialchars(EventBannerURL($event_data['EVENT_Directory'], $banner_image), ENT_QUOTES); ?>" alt="" />
+                        <h1><?php echo $event_name; ?></h1>
+                        <p><?php echo htmlspecialchars($event_dates, ENT_QUOTES); ?></p>
+                    </div>
+                </article>
+                <?php } ?>
+            </div>
+            <?php
+                } elseif ($active_page == '' && is_file(__DIR__.'/banners.php')) {
+                    include 'banners.php';
+                } elseif (is_file(__DIR__.'/still_banner.php')) {
+                    include 'still_banner.php';
+                } else {
+            ?>
+            <div id="banner" class="event_banner_plain <?php echo ($active_page == '') ? 'active' : 'still'; ?>">
+                <article data-position="center">
+                    <div class="inner">
+                        <h1><?php echo $event_name; ?></h1>
+                        <p><?php echo htmlspecialchars($event_dates, ENT_QUOTES); ?></p>
+                    </div>
+                </article>
+            </div>
+            <?php } ?>
 
         <?php if($display_error_message) { ?>
             <!-- Event Stats -->            
