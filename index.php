@@ -31,6 +31,7 @@ if ($is_logged_in) {
             <header id="header" class="alt">
             <?php
                 if($is_logged_in){
+                    $header_contact_link = true; // Contact instead of Information
                     include 'header_user.php';
                  } else {
                     include 'header_landing.php';
