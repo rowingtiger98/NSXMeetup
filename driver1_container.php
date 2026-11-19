@@ -439,7 +439,7 @@
         <!-- Driver One Register another person -->
         <div class="col-12 col-12-xsmall" style="margin-top:1em;">
 			<span style="font-weight:600; color:#ffcc00;">Add a passenger or another driver (Optional)</span><br>
-            <input type="checkbox" id="info_field_driver1_additional_guest" driver="driver1" cost="<?php echo $event_data['EVENT_Base_Fee']*100; ?>" name="additional_guest"><label for="info_field_driver1_additional_guest">Click the check box to register another person as either a passenger or the driver of another car.</label>
+            <input type="checkbox" id="info_field_driver1_additional_guest" driver="driver1" cost="0" name="additional_guest"><label for="info_field_driver1_additional_guest">Click the check box to register another person as either a passenger or the driver of another car.</label>
         </div>
     </div>
 </div>

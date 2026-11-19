@@ -45,6 +45,11 @@ function HandleBackButtonClick() {
         console.log('Going to handle the back button click for', action, 'for EVENT ID = ', event_id);
         RenderSponsorshipManagementInterface(event_id);        
     }
+    else if (action === 'backtoeditsponsors') {
+        var event_id = $(this).attr('event_id');
+        console.log('Going to handle the back button click for', action, 'for EVENT ID = ', event_id);
+        RenderSponsorManagementInterface(event_id);
+    }
     else if (action === 'backtoparticipantsinformation') {
         var event_id = $(this).attr('event_id');
         var participant_id = $(this).attr('participant_id');

@@ -1,3 +1,10 @@
+// The site's top folder URL, worked out from where this script was loaded
+// (.../assets/js/render.js), so the calls to LOCALAttractionFunctions.php below work from
+// an event's page in events/<dir>/ as well as from the top folder.
+var RENDER_SITE_BASE = (document.currentScript && document.currentScript.src)
+    ? document.currentScript.src.replace(/assets\/js\/render\.js(\?.*)?$/, '') : '';
+var ATTRACTION_IMAGE_MAX_BYTES = 10 * 1048576; // keep in step with FRONTPAGE_IMAGE_MAX_BYTES in eventImages.php
+
 // -------------------------------------------------------------------------------------
 // Function: 	RenderEventStatsContent
 // Description: This function renders the attending page.
@@ -60,11 +67,12 @@ function RenderAttendingPage() {
 function RenderLocalAttractionsPage(event) {
     var event_id = $(this).attr('event_id');
     var editable = $(this).attr('editable');
+    var category = $(this).attr('category') || '';  // the category to open on, e.g. "hotels"; the first one if blank
     console.log("Render the locals attractions for event id = " + event_id + ' with editable = ' + editable);
 	$.ajax({
-	  url: 'LOCALAttractionFunctions.php',
+	  url: RENDER_SITE_BASE + 'LOCALAttractionFunctions.php',
 	  type: 'POST',
-	  data: {method: 'RenderOpeningPageInformation', event_id:event_id, editable:editable},
+	  data: {method: 'RenderOpeningPageInformation', event_id:event_id, editable:editable, category:category},
 	  success: function(data) {
 		results = eval(data);
         console.log('Results', results);        
@@ -80,6 +88,7 @@ function RenderLocalAttractionsPage(event) {
         $("#hangout").removeClass('active');         
         $("#register_button_container").removeClass('active');
 		$("#details_info").html(results[0]);
+        window.scrollTo(0, 0);  // the page is replaced from wherever the button was, so start at its top
 
         var elms = document.querySelectorAll('[id^="local_attraction_link_"]');
         for (i = 0; i < elms.length; i++) {
@@ -102,49 +111,148 @@ function RenderLocalAttractionsPage(event) {
 function ReactToMenuLinkSelection(event) {
     var event_id = $(this).attr('event_id');
     var section_name = $(this).attr('section_name');
-    
 
     if (section_name == 'create') {
-      console.log("Handle Menu Link Selection to create a new local attraction");
-      $.ajax({
-        url: 'LOCALAttractionFunctions.php',
-        type: 'POST',
-        data: {method: 'CreateNewLocalAttraction', event_id:event_id},
-        success: function(data) {
-          console.log(data);
-          results = eval(data);
-          html_code = results[0];
-          $("#local_attractions_content").html(html_code);
-          // new_local_attraction_category
-          document.querySelector('[id="new_local_attraction_category"]').onchange = ReactToNewAttractionCartegorySection;
-          document.querySelector('[id="submit_new_local_attraction_button"]').onclick = SubmitNewLocalAttraction;     
-        }
-      });      
-
+      OpenLocalAttractionForm(event_id, '');
     } else {
       console.log("Handle Menu Link Selection for section = " + section_name);
-      $('[id^="local_attraction_"]').each(function () {
-          $(this).removeClass('active');
-      });
-
+      $('[id^="local_attraction_link_"]').removeClass('active');
       $("#local_attraction_link_"+section_name+"").addClass('active');
+      LoadLocalAttractionSection(event_id, section_name, $(this).attr('editable'));
+    }
+}
 
-      $.ajax({
-        url: 'LOCALAttractionFunctions.php',
-        type: 'POST',
-        data: {method: 'BuildLocalAttractionSection', event_id:event_id, section_name:section_name},
-        success: function(data) {
-          results = eval(data);
-          html_code = results[0];
-          $("#local_attractions_content").html(html_code);
+// -------------------------------------------------------------------------------------
+// Function: 	LoadLocalAttractionSection
+// Description: Shows a category's attractions on the right: the event page's list, or
+//              (editable = 'true') the admin tool's table with Edit buttons.
+// -------------------------------------------------------------------------------------
+function LoadLocalAttractionSection(event_id, section_name, editable) {
+    $.ajax({
+      url: RENDER_SITE_BASE + 'LOCALAttractionFunctions.php',
+      type: 'POST',
+      data: {method: 'BuildLocalAttractionSection', event_id:event_id, section_name:section_name, editable:editable || ''},
+      success: function(data) {
+        results = eval(data);
+        $("#local_attractions_content").html(results[0]);
 
-          var elms = document.querySelectorAll('[id^="show_more_attraction_information_"]');
-          for (i = 0; i < elms.length; i++) {
-            elms[i].onclick = ReactToShowMoreLocalInformationClick;
-          }            	
+        var elms = document.querySelectorAll('[id^="show_more_attraction_information_"]');
+        for (i = 0; i < elms.length; i++) {
+          elms[i].onclick = ReactToShowMoreLocalInformationClick;
         }
-      });
-    }    
+      }
+    });
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	OpenLocalAttractionForm
+// Description: Shows the attraction form on the right: empty to add one, or filled in
+//              with an attraction's details when attraction_id is given.
+// -------------------------------------------------------------------------------------
+function OpenLocalAttractionForm(event_id, attraction_id) {
+    console.log("Open the local attraction form for event = " + event_id + ", attraction = " + attraction_id);
+    $.ajax({
+      url: RENDER_SITE_BASE + 'LOCALAttractionFunctions.php',
+      type: 'POST',
+      data: {method: 'CreateNewLocalAttraction', event_id:event_id, attraction_id:attraction_id || ''},
+      success: function(data) {
+        results = eval(data);
+        $("#local_attractions_content").html(results[0]);
+        if (!document.getElementById("new_local_attraction_category")) {
+          return; // the attraction wasn't found - the message says so
+        }
+        document.querySelector('[id="new_local_attraction_category"]').onchange = ReactToNewAttractionCartegorySection;
+        document.querySelector('[id="new_category_name_container"]').oninput = ShowAttractionReservationLink;
+        document.querySelector('[id="submit_new_local_attraction_button"]').onclick = SubmitNewLocalAttraction;
+        document.querySelector('[id="cancel_local_attraction_button"]').onclick = CancelLocalAttractionForm;
+        $("#info_text_field_attraction_image").on('change', PreviewLocalAttractionImage);
+        $("#local_attraction_image_preview").data('current_image', $("#local_attraction_image_preview").html());
+        ShowAttractionReservationLink(); // an edited hotel shows its link and picture
+      }
+    });
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	PreviewLocalAttractionImage
+// Description: Shows the hotel picture chosen in the form before it's saved, or refuses
+//              one that's too large.
+// -------------------------------------------------------------------------------------
+function PreviewLocalAttractionImage() {
+    var preview = $("#local_attraction_image_preview");
+    var message = $("#info_text_field_attraction_image_message");
+    var file = this.files[0];
+    message.hide();
+    if (!file) {
+        preview.html(preview.data('current_image') || '');
+        return;
+    }
+    if (file.size > ATTRACTION_IMAGE_MAX_BYTES) {
+        this.value = '';
+        preview.html(preview.data('current_image') || '');
+        message.text('The picture is too large. Please choose one under 10 MB.').show();
+        return;
+    }
+    preview.empty().append($('<img>').attr({src: URL.createObjectURL(file), alt: 'Picture preview'}));
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	CancelLocalAttractionForm
+// Description: Closes the attraction form without saving and shows the selected
+//              category's table again.
+// -------------------------------------------------------------------------------------
+function CancelLocalAttractionForm(event) {
+    event.preventDefault();
+    var link = $("li.local_attraction_link.active");
+    if (link.length) {
+      LoadLocalAttractionSection(link.attr('event_id'), link.attr('section_name'), link.attr('editable'));
+    } else {
+      $("#local_attractions_content").empty();
+    }
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	DeleteLocalAttraction
+// Description: The first click asks for confirmation on the button itself; a second
+//              click within a few seconds deletes the attraction and redraws the table.
+// -------------------------------------------------------------------------------------
+function DeleteLocalAttraction(event) {
+    event.preventDefault();
+    var button = $(this);
+    if (button.hasClass('disabled')) {
+      return;
+    }
+    if (!button.hasClass('regtype_confirm_delete')) {
+      button.addClass('regtype_confirm_delete').text('Click again to delete');
+      setTimeout(function() {
+        button.removeClass('regtype_confirm_delete').text('Delete');
+      }, 4000);
+      return;
+    }
+    button.removeClass('regtype_confirm_delete').addClass('disabled').text('Deleting...');
+    $.ajax({
+      url: RENDER_SITE_BASE + 'LOCALAttractionFunctions.php',
+      type: 'POST',
+      dataType: 'json',
+      data: {method: 'DeleteLocalAttraction', event_id:button.attr('event_id'), attraction_id:button.attr('attraction_id')},
+      success: function(results) {
+        if (results[0] == 'success') {
+          var link = $("li.local_attraction_link.active");
+          LoadLocalAttractionSection(link.attr('event_id'), link.attr('section_name'), link.attr('editable'));
+        } else {
+          $("#local_attraction_list_message").text([].concat(results[1]).join(' ')).show();
+          button.removeClass('disabled').text('Delete');
+        }
+      },
+      error: function() {
+        $("#local_attraction_list_message").text('The attraction could not be deleted. Please try again.').show();
+        button.removeClass('disabled').text('Delete');
+      }
+    });
+}
+
+// Shows why an attraction couldn't be saved, under the form's buttons
+function ShowLocalAttractionFormMessage(message) {
+    $("#local_attraction_form_message").text(message || 'The attraction could not be saved. Please try again.').show();
 }
 
 // -------------------------------------------------------------------------------------
@@ -172,6 +280,11 @@ function ReactToShowMoreLocalInformationClick(event) {
 // Description: This function submits a new local attraction to the database.
 // -------------------------------------------------------------------------------------
 async function SubmitNewLocalAttraction(event) {
+  event.preventDefault();
+  var button = $(this);
+  if (button.hasClass('disabled')) {
+    return;
+  }
   var ready = false;
   var reload_page = false;
   var update_cats = false;
@@ -179,6 +292,7 @@ async function SubmitNewLocalAttraction(event) {
   console.log("Submit a new local attraction to the database for event = "+event_id+"");
   attraction_data = new Object();
   attraction_data['event_id'] = $(this).attr('event_id');
+  attraction_data['attraction_id'] = $(this).attr('attraction_id') || ''; // set when editing
   attraction_data['category'] = document.getElementById("new_local_attraction_category").value;
   attraction_data['name'] = $("#info_text_field_attraction_name").val();
   attraction_data['email'] = $("#info_text_field_attraction_email").val();
@@ -192,6 +306,28 @@ async function SubmitNewLocalAttraction(event) {
   attraction_data['parking'] = document.getElementById("info_text_field_attraction_parking").value;
   attraction_data['additional'] = document.getElementById("info_text_field_attraction_additional").value;
   attraction_data['distance'] = $("#info_text_field_attraction_distance").val();
+  // A link typed for a hotel isn't saved if the category was then changed to something else
+  attraction_data['reservation_link'] = $("#info_text_field_attraction_reservation_link_container").is(':visible')
+      ? $.trim($("#info_text_field_attraction_reservation_link").val() || '') : '';
+
+  // The reservation link becomes a button on the event's page, so it has to be a web address
+  var link_message = $("#info_text_field_attraction_reservation_link_message");
+  if (attraction_data['reservation_link'] !== '' && !/^https?:\/\/\S+$/i.test(attraction_data['reservation_link'])) {
+    link_message.text('The hotel reservation link must be a web address starting with http:// or https://').show();
+    return;
+  }
+  link_message.hide();
+  if (attraction_data['category'] == '' || attraction_data['category'] == null) {
+    ShowLocalAttractionFormMessage('Select the category.');
+    return;
+  }
+  if ($.trim(attraction_data['name']) == '') {
+    ShowLocalAttractionFormMessage('Enter the attraction\'s name.');
+    return;
+  }
+  $("#local_attraction_form_message").hide();
+  var button_text = button.text();
+  button.addClass('disabled').text('Saving...');
 
 
   if (attraction_data['category'] == 'new') {
@@ -218,11 +354,13 @@ async function SubmitNewLocalAttraction(event) {
       } else {
         ready = false;
         console.log('Something failed in entering the new category.');
+        ShowLocalAttractionFormMessage(attraction_result[1]);
       }
     })
     .catch((error) => {
       console.log(error)
       ready = false;
+      ShowLocalAttractionFormMessage();
     })
     
     if (ready) {
@@ -238,12 +376,14 @@ async function SubmitNewLocalAttraction(event) {
           reload_page=true;
         } else {
           ready = false;
-          console.log('Something failed in entering the new category.');
+          console.log('Something failed in entering the new attraction.');
+          ShowLocalAttractionFormMessage(attraction_result[1]);
         }
       })
       .catch((error) => {
         console.log(error)
         ready = false;
+        ShowLocalAttractionFormMessage();
       })      
     } else {
       console.log("The category creation has failed, no reason to enter the new attraction.")
@@ -261,14 +401,17 @@ async function SubmitNewLocalAttraction(event) {
         reload_page=true;
       } else {
         ready = false;
-        console.log('Something failed in entering the new category.');
+        console.log('Something failed in entering the new attraction.');
+        ShowLocalAttractionFormMessage(attraction_result[1]);
       }
     })
     .catch((error) => {
       console.log(error)
       ready = false;
+      ShowLocalAttractionFormMessage();
     }) 
   }
+  button.removeClass('disabled').text(button_text);
 
 	if (reload_page) {
     console.log("Reload the page with category = "+attraction_data['category']+" active");
@@ -278,8 +421,9 @@ async function SubmitNewLocalAttraction(event) {
         li.setAttribute('id', 'local_attraction_link_'+attraction_data['category']+'');
         li.setAttribute('class', 'local_attraction_link');
         li.setAttribute('event_id', attraction_data['event_id']);
+        li.setAttribute('editable', 'true');
         li.setAttribute('section_name', attraction_data['category']);
-        li.innerHTML = attraction_data['category'];
+        li.textContent = category_data['cat_title'];
         // li.appendChild(document.createTextNode(attraction_data['category']));
         ul.appendChild(li); 
         
@@ -291,28 +435,9 @@ async function SubmitNewLocalAttraction(event) {
     }
 
 
-    $('[id^="local_attraction_"]').each(function () {
-        $(this).removeClass('active');
-    });
-
+    $('[id^="local_attraction_link_"]').removeClass('active');
     $("#local_attraction_link_"+attraction_data['category']+"").addClass('active');
-
-    $.ajax({
-      url: 'LOCALAttractionFunctions.php',
-      type: 'POST',
-      data: {method: 'BuildLocalAttractionSection', event_id:event_id, section_name:attraction_data['category']},
-      success: function(data) {
-        results = eval(data);
-        html_code = results[0];
-        $("#local_attractions_content").html(html_code);
-
-        var elms = document.querySelectorAll('[id^="show_more_attraction_information_"]');
-        for (i = 0; i < elms.length; i++) {
-          elms[i].onclick = ReactToShowMoreLocalInformationClick;
-        }  
-        
-      }
-    });    
+    LoadLocalAttractionSection(event_id, attraction_data['category'], 'true');
   }	
 
 
@@ -325,7 +450,7 @@ async function SubmitNewLocalAttraction(event) {
 function EnterNewLocalAttractionCategory(category_data) {
 	return new Promise((resolve, reject) => {
 		$.ajax({
-			url: 'LOCALAttractionFunctions.php',
+			url: RENDER_SITE_BASE + 'LOCALAttractionFunctions.php',
 			type: 'POST',
 			data: {method: 'EnterNewAttractionCategory', event_id:category_data['event_id'], title:category_data['cat_title'], name:category_data['cat_name']},
 			success: function(data) {
@@ -359,9 +484,11 @@ function EnterNewLocalAttractionDetails(attraction_data) {
 
 	return new Promise((resolve, reject) => {
 		$.ajax({
-			url: 'LOCALAttractionFunctions.php',
+			url: RENDER_SITE_BASE + 'LOCALAttractionFunctions.php',
 			type: 'POST',
-			data: {method: 'EnterNewAttractionDetails', attraction_data:JSON.stringify(attraction_data)},
+			data: LocalAttractionFormData(attraction_data),
+			processData: false,
+			contentType: false,
 			success: function(data) {
 			console.log(data);
 			resolve(data);
@@ -383,6 +510,28 @@ function EnterNewLocalAttractionDetails(attraction_data) {
 }
 
 // -------------------------------------------------------------------------------------
+// Function: 	LocalAttractionFormData
+// Description: The attraction to save as a multipart form, with the hotel picture chosen
+//              (or the box to remove the current one) when the picture field is showing.
+// -------------------------------------------------------------------------------------
+function LocalAttractionFormData(attraction_data) {
+  var data = new FormData();
+  data.append('method', attraction_data['attraction_id'] ? 'SaveLocalAttraction' : 'EnterNewAttractionDetails');
+  data.append('event_id', attraction_data['event_id']);
+  data.append('attraction_data', JSON.stringify(attraction_data));
+  if ($("#info_text_field_attraction_image_container").is(':visible')) {
+    var image = document.getElementById("info_text_field_attraction_image");
+    if (image && image.files[0]) {
+      data.append('image', image.files[0]);
+    }
+    if ($("#info_checkbox_attraction_remove_image").is(':checked')) {
+      data.append('remove_image', '1');
+    }
+  }
+  return data;
+}
+
+// -------------------------------------------------------------------------------------
 // Function: 	ReactToNewAttractionCartegorySection
 // Description: This function toggels the new category name input when needed.
 // -------------------------------------------------------------------------------------
@@ -394,7 +543,20 @@ function ReactToNewAttractionCartegorySection(event) {
   } else {
     $("#new_category_name_container").removeClass('active');
   }
+  ShowAttractionReservationLink();
+}
 
+// -------------------------------------------------------------------------------------
+// Function: 	ShowAttractionReservationLink
+// Description: Shows the Hotel Reservation Link box only when the chosen category (or
+//              the name typed for a new one) is a hotel category, i.e. has "hotel" in it.
+// -------------------------------------------------------------------------------------
+function ShowAttractionReservationLink() {
+  var select = $("#new_local_attraction_category");
+  var category = (select.val() == 'new') ? $("#new_category_name_container").val()
+                                          : (select.val() || '') + ' ' + select.find('option:selected').text();
+  $("#info_text_field_attraction_reservation_link_container").toggle(/hotel/i.test(category));
+  $("#info_text_field_attraction_image_container").toggle(/hotel/i.test(category));
 }
 
 // -------------------------------------------------------------------------------------
@@ -517,7 +679,7 @@ function DisplayDailyEventInformation() {
 	$('[id^="individual_event_child_container_"]').each(function() {
 		$(this).removeClass('active');
 	});		
-	$('[id^="individual_event_child_container_'+event_name+'"]').addClass('active');
+	$(document.getElementById('individual_event_child_container_'+event_name)).addClass('active');  // exact id - "golf" mustn't also match "golf-2"
 }
 
 // -------------------------------------------------------------------------------------

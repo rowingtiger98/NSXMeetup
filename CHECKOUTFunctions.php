@@ -1,11 +1,10 @@
 <?php
 
-    require_once './vendor/autoload.php';
-    // require_once '../secrets.php';
-    // $stripeSecretKey = getenv('STRPSECKEY');
-    // $stripe = new \Stripe\StripeClient($stripeSecretKey);
+    // The Stripe library (Composer's vendor/ folder) isn't in the repo - it's installed on the server
+    const STRIPE_AUTOLOAD = __DIR__.'/vendor/autoload.php';
+    const STRIPE_MINIMUM_CHARGE = 50;  // cents - Stripe won't charge less than $0.50
 
-    if(isset($_POST['method'])) {
+    if (isset($_POST['method']) && in_array($_POST['method'], ['DisplayShoppingCartAtCheckout', 'CreateStripeIntent'], true)) {
         $_POST['method']();
     }
 
@@ -30,18 +29,33 @@
     function calculateOrderAmount(array $items): int {
         $total = 0;
         foreach($items as $item) {
-          $total += $item->amount;
+          $total += (int)($item->amount ?? 0);
         }
         return $total;
     }
 
     function CreateStripeIntent() {
-        $stripeSecretKey = getenv('STRPSECKEY');
-        $stripe = new \Stripe\StripeClient($stripeSecretKey);        
         $results = array();
         try {
-            $items = json_decode($_POST['items']);
+            if (!is_file(STRIPE_AUTOLOAD)) {
+                throw new RuntimeException('The Stripe library is not installed on the server (vendor/autoload.php is missing).');
+            }
+            require_once STRIPE_AUTOLOAD;
+
+            $stripeSecretKey = getenv('STRPSECKEY');
+            if (!$stripeSecretKey) {
+                throw new RuntimeException('The Stripe secret key is not set on the server (STRPSECKEY environment variable).');
+            }
+            $stripe = new \Stripe\StripeClient($stripeSecretKey);
+
+            $items = json_decode($_POST['items'] ?? '');
+            if (!isset($items->basket) || !is_array($items->basket)) {
+                throw new RuntimeException('The shopping cart is empty or unreadable.');
+            }
             $total = calculateOrderAmount($items->basket);
+            if ($total < STRIPE_MINIMUM_CHARGE) {
+                throw new RuntimeException('The total is $'.number_format($total / 100, 2).' - Stripe can only charge $0.50 or more.');
+            }
             // Create a PaymentIntent with amount and currency
             $paymentIntent = $stripe->paymentIntents->create([
                 'amount' => $total,
@@ -60,7 +74,8 @@
             }
 
         
-        } catch (Error $e) {
+        } catch (Throwable $e) {  // Stripe's own errors are Exceptions, not Errors
+            error_log('CreateStripeIntent failed: '.get_class($e).': '.$e->getMessage());
             $results[] = 'FAIL';
             $results[] = $e->getMessage();
         }

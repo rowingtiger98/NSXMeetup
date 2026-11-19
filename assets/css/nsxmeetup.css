@@ -283,19 +283,24 @@ html {
         background: rgba(0,0,0,0.1);
         z-index: 99999;
         opacity:0;
-        -webkit-transition: opacity 200ms ease-in;
-        -moz-transition: opacity 200ms ease-in;
-        transition: opacity 200ms ease-in;
+        /* Hidden, not just see-through, while closed - otherwise phones (iPhone password
+           AutoFill) find the login fields on every page and offer to sign in */
+        visibility: hidden;
+        -webkit-transition: opacity 200ms ease-in, visibility 200ms;
+        -moz-transition: opacity 200ms ease-in, visibility 200ms;
+        transition: opacity 200ms ease-in, visibility 200ms;
         pointer-events: none;
     }
 
         .modalDialog.errorevent {
             opacity:1;
+            visibility: visible;
             pointer-events: auto;
         }
 
     .modalDialog:target {
         opacity:1;
+        visibility: visible;
         pointer-events: auto;
     }
 
@@ -615,6 +620,11 @@ li.local_attraction_link:hover {
     color: #ffcc00;
 }
 
+/* Admin tool: the Add New Attraction button sits on its own above the categories */
+#local_attraction_add_button {
+    margin-bottom: 0.75em;
+}
+
 .local_attraction_container {
     display: none;
     border: 1px solid #ffffff;
@@ -920,6 +930,202 @@ span.attr_more_info_field {
 }
 
 
+/* Registration types tool (assets/js/regtypes.js) */
+.regtype_item {
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+    padding: 1em;
+    margin-bottom: 1em;
+}
+
+    .regtype_item label {
+        margin-bottom: 0.25em;
+    }
+
+    .regtype_messages ul {
+        margin: 0.75em 0 0 0;
+        padding: 0.5em 0.5em 0.5em 1.5em;
+    }
+
+    .regtype_messages ul.event_settings_error {
+        border: 2px solid #ff0000;
+    }
+
+    .regtype_messages ul.event_settings_success {
+        border: 2px solid #06fc0c;
+    }
+
+    .regtype_item .button {
+        margin-top: 0.75em;
+    }
+
+/* The list table: the Enabled checkbox has no text beside it */
+.regtype_table td {
+    vertical-align: middle;
+}
+
+    .regtype_table .regtype_checkbox_label {
+        width: 1.5rem;
+        height: 1.5rem;
+        padding: 0;
+        margin: 0;
+    }
+
+    .regtype_table .regtype_actions {
+        white-space: nowrap;
+        text-align: right;
+    }
+
+        .regtype_table .regtype_actions .button {
+            margin-top: 0;
+        }
+
+/* Edit modal - builds on .modal / .modal-content above */
+.regtype_modal {
+    z-index: 10000; /* above the page header */
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+    .regtype_modal .modal-content {
+        max-width: 50em;
+        margin: 8% auto;
+    }
+
+    .regtype_modal .modal-close {
+        color: #aaa;
+        line-height: 1;
+    }
+
+        .regtype_modal .modal-close:hover {
+            color: #fff;
+        }
+
+    .regtype_modal .regtype_item {
+        border: none;
+        padding: 0;
+        margin: 0;
+    }
+
+@media screen and (max-width: 736px) {
+    .regtype_modal .modal-content {
+        width: auto;
+        margin: 1em;
+    }
+}
+
+    .regtype_confirm_delete {
+        background-color: #b71c1c !important;
+        color: #fff !important;
+    }
+
+/* Agenda events tool (assets/js/experiences.js) - otherwise styled by the regtype_* rules above */
+
+/* main.css only styles the text-like input types; match its text boxes */
+#experience_tool input[type="date"],
+#experience_tool input[type="time"] {
+    -moz-appearance: none;
+    -webkit-appearance: none;
+    appearance: none;
+    background-color: rgba(255, 255, 255, 0.075);
+    border: solid 1px rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+    color: inherit;
+    color-scheme: dark;  /* light calendar / clock icons on the dark background */
+    display: block;
+    font-family: inherit;
+    font-size: inherit;
+    height: 2.5rem;
+    line-height: 2.5rem;
+    outline: 0;
+    padding: 0 1rem;
+    width: 100%;
+}
+
+#experience_tool input[type="date"]:focus,
+#experience_tool input[type="time"]:focus {
+    border-color: #ff0000;
+    box-shadow: 0 0 0 1px #ff0000;
+}
+
+.experience_banner_preview img,
+.local_attraction_image_preview img {
+    display: block;
+    max-width: 100%;
+    max-height: 200px;
+    margin-bottom: 0.75em;
+    border-radius: 4px;
+}
+
+.experience_field_help {
+    font-size: 0.8em;
+    opacity: 0.8;
+    margin: 0.5em 0 0 0;
+}
+
+.experience_remove_banner {
+    margin-top: 0.5em;
+}
+
+/* Registration form questions tool (assets/js/questions.js) - otherwise styled by the regtype_* and experience_* rules above */
+#question_tool input[type="checkbox"] + label {
+    margin-bottom: 0;
+}
+
+.question_preview {
+    font-size: 0.85em;
+    opacity: 0.8;
+}
+
+.question_order_buttons {
+    white-space: nowrap;
+}
+
+    .question_order_buttons .button {
+        padding: 0 0.75em;
+        margin: 0 0.25em 0.25em 0;
+    }
+
+.question_choice_row {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    margin-bottom: 0.5em;
+}
+
+    .question_choice_row input[type="text"] {
+        flex: 1 1 auto;
+    }
+
+    .question_choice_row .button,
+    .question_choice_picked {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    /* Line up with the input: no .regtype_item .button top margin, same height */
+    .question_choice_row input[type="text"],
+    .question_choice_row .button {
+        margin: 0;
+    }
+
+    .question_choice_row .button {
+        height: 2.5rem;
+        line-height: 2.5rem;
+    }
+
+    .question_choice_picked {
+        font-size: 0.8em;
+        opacity: 0.8;
+        min-width: 6em;
+    }
+
+/* Registration type drop downs on the registration form (QUESTIONFunctions.php) */
+.regtype_choice_description {
+    font-size: 0.8em;
+    margin-top: 0.5em;
+    opacity: 0.8;
+}
+
 /* Idle timer warning (assets/js/idletimer.js) */
 .idle_timer_warning {
 	display: none;
@@ -935,4 +1141,496 @@ span.attr_more_info_field {
 }
 .idle_timer_warning .button {
 	margin-left: 1em;
+}
+
+/* Payment Methods on the Payment Options tool card (EVENTSettings.php RenderPaymentMethodOptions) */
+.payment_methods_label {
+	text-transform: uppercase;
+	font-size: 1.25em;
+	padding-right: 0.25em;
+	color: #FFCC00;
+}
+.payment_method {
+	border: 1px solid rgba(255, 255, 255, 0.25);
+	border-radius: 4px;
+	margin-bottom: 0.75em;
+}
+.payment_method_header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.75em 1em;
+}
+.payment_method_name {
+	font-size: 1.1em;
+	font-weight: 600;
+	color: #fff;
+}
+.payment_method_drawer {
+	border-top: 1px solid rgba(255, 255, 255, 0.25);
+	padding: 1em;
+	background: rgba(255, 255, 255, 0.05);
+}
+.payment_method_drawer p {
+	margin: 0;
+}
+
+/* On/off slider - replaces the template's checkbox box (main.css input[type="checkbox"] + label:before) */
+input[type="checkbox"].payment_method_toggle + label.payment_method_switch {
+	position: relative;
+	padding: 0 0 0 3.75rem;
+	margin: 0;
+	min-height: 1.6rem;
+	line-height: 1.6rem;
+	font-size: 0.9rem;
+}
+input[type="checkbox"].payment_method_toggle + label.payment_method_switch:before {
+	content: '';
+	top: 0;
+	left: 0;
+	width: 3rem;
+	height: 1.6rem;
+	border-radius: 0.8rem;
+	background: rgba(255, 255, 255, 0.15);
+	border: solid 1px rgba(255, 255, 255, 0.35);
+	transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+input[type="checkbox"].payment_method_toggle + label.payment_method_switch:after {
+	content: '';
+	position: absolute;
+	top: 0.2rem;
+	left: 0.2rem;
+	width: 1.2rem;
+	height: 1.2rem;
+	border-radius: 50%;
+	background: #fff;
+	transition: transform 0.2s ease;
+}
+input[type="checkbox"].payment_method_toggle:checked + label.payment_method_switch:before {
+	content: '';
+	background-color: #ff0000;
+	border-color: #ff0000;
+}
+input[type="checkbox"].payment_method_toggle:checked + label.payment_method_switch:after {
+	transform: translateX(1.4rem);
+}
+.payment_method_switch .payment_method_on,
+input[type="checkbox"].payment_method_toggle:checked + label.payment_method_switch .payment_method_off {
+	display: none;
+}
+input[type="checkbox"].payment_method_toggle:checked + label.payment_method_switch .payment_method_on {
+	display: inline;
+}
+.payment_method_drawer .payment_method_field_label {
+	margin: 0 0 0.4em 0;
+}
+/* Spacing inside a payment method drawer: field, help, Test Link, how-to, then the next field */
+.payment_method_drawer .payment_method_field_help {
+	font-size: 0.8em;
+	opacity: 0.8;
+	margin: 0.6em 0 1em 0;
+}
+
+/* Checkout page (event_checkout.php) */
+.checkout_payment_method {
+	border: 1px solid rgba(255, 255, 255, 0.25);
+	border-radius: 4px;
+	padding: 1em 1.25em;
+	margin-bottom: 1em;
+}
+.checkout_payment_method {
+	transition: opacity 0.2s ease, border-color 0.2s ease;
+}
+.checkout_payment_method.selected {
+	border-color: #ffcc00;
+}
+/* Another method is chosen - this one is greyed out (still clickable, to switch) */
+.checkout_payment_method.not_selected {
+	opacity: 0.45;
+}
+.checkout_payment_header label {
+	color: #ffcc00;
+	font-weight: 600;
+	font-size: 1.1em;
+	margin: 0;
+}
+.checkout_payment_drawer {
+	margin-top: 1em;
+	padding-top: 1em;
+	border-top: 1px solid rgba(255, 255, 255, 0.25);
+}
+.checkout_payment_method p {
+	margin: 0;
+}
+.checkout_order_table .checkout_amount {
+	text-align: right;
+	white-space: nowrap;
+}
+.checkout_order_table tfoot td {
+	font-weight: 700;
+	color: #ffcc00;
+}
+.checkout_order_table .checkout_registrant td {
+	font-weight: 600;
+}
+.checkout_order_table .checkout_item td {
+	font-size: 0.85em;
+	opacity: 0.8;
+	padding-top: 0.25em;
+	padding-bottom: 0.25em;
+}
+.checkout_order_table .checkout_item td:first-child {
+	padding-left: 1.5em;
+}
+.checkout_instructions {
+	margin-top: 1em;
+}
+.checkout_change_form {
+	margin-top: 1em;
+}
+.checkout_change_note {
+	font-size: 0.8em;
+	opacity: 0.8;
+	margin: 0.5em 0 0 0;
+}
+.checkout_handle_note_label,
+.checkout_payment_method .checkout_handle_note_label {
+	margin-top: 0.75em;
+	font-size: 0.85em;
+	opacity: 0.8;
+}
+.checkout_handle_note,
+.checkout_payment_method .checkout_handle_note {
+	margin: 0.25em 0 0.75em 0;
+	padding: 0.5em 0.75em;
+	border-radius: 4px;
+	background: rgba(255, 255, 255, 0.075);
+	font-family: monospace;
+	word-break: break-word;
+}
+.checkout_handle_link {
+	margin-top: 0.75em;
+}
+.checkout_handle_link a {
+	color: #ffcc00;
+}
+.checkout_complete_form {
+	margin-top: 1.25em;
+	padding-top: 1em;
+	border-top: 1px solid rgba(255, 255, 255, 0.25);
+}
+.checkout_payment_method .checkout_agreement {
+	font-size: 0.9em;
+	margin-bottom: 1em;
+}
+.checkout_pending {
+	color: #ffcc00;
+}
+.checkout_handle_qr {
+	text-align: center;
+	margin: 1em 0;
+}
+.checkout_handle_qr img {
+	display: block;
+	margin: 0 auto;
+	max-width: 100%;
+	max-height: 300px;
+	border-radius: 4px;
+	background: #fff;
+}
+.checkout_handle_qr p,
+.checkout_payment_method .checkout_handle_qr p {
+	font-size: 0.8em;
+	opacity: 0.8;
+	margin-top: 0.5em;
+}
+.payment_method_how_to {
+	font-size: 0.85em;
+	margin: 0 0 2em 0;
+}
+.payment_method_how_to summary {
+	cursor: pointer;
+	color: #ffcc00;
+}
+.payment_method_drawer .payment_method_how_to p {
+	margin: 0.5em 0 0 0;
+	opacity: 0.9;
+}
+/* Pay-later instructions on the registration confirmation (RenderPayLaterInstructions) */
+.pay_later_instructions {
+	margin-bottom: 1.5em;
+}
+.pay_later_instructions.row .checkout_handle_qr {
+	margin: 0;
+}
+.confirmation_home_button {
+	margin: 2em 0 1em 0;
+}
+.payment_test_link_row {
+	display: flex;
+	align-items: center;
+	gap: 0.75em;
+	margin: 0 0 1.25em 0;
+}
+.payment_test_link_row .button {
+	flex-shrink: 0;
+	margin: 0;
+}
+.payment_test_link_status {
+	font-size: 0.8em;
+	opacity: 0.8;
+}
+@media screen and (max-width: 736px) {
+	.payment_test_link_row {
+		flex-direction: column;
+		align-items: stretch;
+	}
+}
+/* The last help text in a drawer (Stripe, the instructions box) needs room before the next field */
+.payment_method_drawer textarea + .payment_method_field_help,
+.payment_method_drawer .frontpage_upload_status + .payment_method_field_help {
+	margin-bottom: 2em;
+}
+.payment_method_drawer > :last-child {
+	margin-bottom: 0 !important;
+}
+.checkout_order_table .checkout_fee td {
+	font-size: 0.9em;
+	font-weight: 400;
+	color: inherit;  /* not the Total Due's bold yellow */
+	border-top: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+/* Find / Edit / Delete Registrations list (NewRenderFindEditRegistration in ACCOUNTManagement.php) */
+.registrant_table td {
+	vertical-align: middle;
+}
+.registrant_table .registrant_center {
+	text-align: center;
+	width: 1%;
+	white-space: nowrap;
+}
+.registrant_name_cell .edit_find_column {
+	cursor: pointer;
+}
+.registrant_view_icon {
+	color: #ffcc00;
+	border-bottom: 0;
+	margin-right: 0.35em;
+}
+.registrant_none {
+	opacity: 0.5;
+}
+.registrant_status {
+	display: inline-block;
+	white-space: nowrap;
+	font-size: 0.85em;
+	padding: 0.15em 0.6em;
+	border-radius: 1em;
+	border: 1px solid currentColor;
+}
+.registrant_status.status_paid       { color: #4caf50; }
+.registrant_status.status_awaiting   { color: #ffcc00; }
+.registrant_status.status_no_method  { color: #ff7043; }
+.registrant_status.status_no_charge,
+.registrant_status.status_wait_list  { color: rgba(255, 255, 255, 0.6); }
+.registrant_amount {
+	display: block;
+	font-size: 0.8em;
+	opacity: 0.8;
+	margin-top: 0.2em;
+}
+.registrant_table .registrant_center input[type="checkbox"] + label {
+	padding-left: 1.5rem;
+	padding-right: 0;
+}
+.registrant_delete_button {
+	color: rgba(255, 255, 255, 0.7);
+	border-bottom: 0;
+	white-space: nowrap;
+}
+.registrant_delete_button:hover {
+	color: #ff4d4d;
+}
+.registrant_delete_button .registrant_delete_confirm {
+	display: none;
+	margin-left: 0.4em;
+	font-size: 0.8em;
+}
+.registrant_delete_button.confirming {
+	color: #fff;
+	background: #b71c1c;
+	border-radius: 4px;
+	padding: 0.2em 0.5em;
+}
+.registrant_delete_button.confirming .registrant_delete_confirm {
+	display: inline;
+}
+
+/* Edit Information page (PARTICIPANTManagement.php RenderEditRegistrationType) */
+#edit_registration_type_container {
+	margin-top: 1.5em;
+}
+.edit_balance_preview {
+	font-size: 1.25em;
+	font-weight: 700;
+	color: #ffcc00;
+	margin: 0.4em 0 0 0;
+}
+.edit_balance_preview .edit_balance_old {
+	text-decoration: line-through;
+	opacity: 0.6;
+	font-weight: 400;
+}
+.edit_balance_note {
+	font-size: 0.8em;
+	opacity: 0.8;
+	margin-top: 0.75em;
+}
+.registrant_saved_messages {
+	margin-bottom: 1.5em;
+}
+
+/* Registration History on the Edit Information page (registrantHistory.php) */
+#registrant_history_container {
+	margin-top: 2em;
+}
+.registrant_history_table td {
+	vertical-align: top;
+	font-size: 0.85em;
+}
+.registrant_history_when {
+	white-space: nowrap;
+}
+.registrant_history_changes {
+	margin: 0.4em 0 0 0;
+	padding-left: 1.25em;
+}
+.registrant_history_changes li {
+	margin: 0;
+}
+.registrant_history_from {
+	opacity: 0.6;
+}
+.registrant_history_to {
+	color: #ffcc00;
+}
+.registrant_history_empty {
+	font-size: 0.85em;
+	opacity: 0.8;
+}
+
+/* Add New Sponsor - logo preview (assets/js/sponsormanagement.js) */
+.sponsor_logo_preview img {
+    display: block;
+    max-width: 100%;
+    max-height: 300px;
+    margin-top: 1em;
+    border-radius: 4px;
+}
+
+/* TinyMCE editors (sponsor descriptions) - main.css makes every <button> white and
+   uppercase with !important, which turns the editor's toolbar and menu text white */
+.tox .tox-tbtn,
+.tox .tox-tbtn:hover,
+.tox .tox-tbtn:focus,
+.tox .tox-mbtn,
+.tox .tox-mbtn:hover,
+.tox .tox-mbtn:focus,
+.tox .tox-split-button,
+.tox .tox-split-button:hover,
+.tox .tox-button--secondary,
+.tox .tox-button--secondary:hover,
+.tox .tox-button--naked,
+.tox .tox-button--naked:hover {
+    color: #222f3e !important;
+}
+.tox button {
+    font-family: inherit;
+    letter-spacing: normal;
+    text-transform: none;
+}
+
+/* Front page event cards: every event image fits the same 2:1 box (scaled down, never
+   cropped), so a square or tall logo doesn't push its card's text below the others */
+.features-grid.frontpage .image.fit img {
+    aspect-ratio: 2 / 1;
+    object-fit: contain;
+}
+
+/* Front page event cards are all the same size, with a white border and the Open Event
+   Page button along the bottom. This replaces the theme's features-grid layout, which
+   spaces cards with uneven padding on each card instead of gaps between them: 3 across,
+   2 on tablets, 1 on phones, every row as tall as the tallest card. */
+.features-grid.frontpage {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
+    gap: 2rem;
+}
+.features-grid.frontpage > div {
+    width: auto;
+    padding: 1.5rem;
+    border: 1px solid #ffffff;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+}
+.features-grid.frontpage > div > .button {
+    margin-top: auto;
+}
+@media screen and (max-width: 980px) {
+    .features-grid.frontpage {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media screen and (max-width: 736px) {
+    .features-grid.frontpage {
+        grid-template-columns: minmax(0, 1fr);
+        grid-auto-rows: auto;
+    }
+}
+
+/* Generic event page (templates/event_index.php) banner for an event without its own
+   banner images: just the name and dates. main.js sets each slide's background from its
+   <img>, which this banner doesn't have. */
+#banner.event_banner_plain > article {
+    background-image: none !important;
+}
+
+/* Space between a hotel's picture and its information on the Local Attractions page
+   (instead of the grid's 0.5rem gutter), back to the gutter once they stack on small screens */
+.individual_local_attraction_container .row > .hotel_information {
+    padding-left: 2em;
+}
+@media screen and (max-width: 736px) {
+    .individual_local_attraction_container .row > .hotel_information {
+        padding-left: 0.5rem;
+    }
+}
+
+/* Banner Images section of Edit Event Settings */
+.event_banner_table .event_banner_thumb img {
+    display: block;
+    width: 120px;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: 4px;
+}
+    .event_banner_table .event_banner_position {
+        font-size: 0.85em;
+        color: #ffcc00;
+    }
+
+/* While the page loads, the banner's cover (main.css) shows the logo instead of a blank
+   panel, and it fades away as soon as the first slide's image is in (main.js adds
+   banner_ready) rather than once the whole page has loaded. */
+body.is-preload #banner:after {
+    background: #292929 url("../images/NSXMeetup-Logo-white.png") no-repeat center;
+    background-size: min(60%, 30rem) auto;
+}
+body.is-preload #banner.banner_ready:after {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 2.5s ease-out, visibility 2.5s;  /* a slow cross-fade from the logo to the picture */
 }

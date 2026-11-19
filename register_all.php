@@ -2,12 +2,13 @@
 require_once 'SessionBootstrap.php';
 include_once 'QUESTIONFunctions.php' ;
 include_once 'CONTACTFunctions.php';
+include_once 'paymentMethods.php';
 app_session_start();
 
 if(isset($_GET['event_id'])) {
     include_once 'GENERALFunctions.php';
     $event_data = GetEventInformationFromID($_GET['event_id']);
-    // Relative, so it works wherever the site is hosted (e.g. kirbypark.net/luna/)
+    // Relative, so it works wherever the site is hosted (e.g. nsxmeetup.com or a subfolder)
     $directory = (string)($event_data['EVENT_Directory'] ?? '');
     $home_link = preg_match('/^[A-Za-z0-9_-]+$/', $directory) ? 'events/'.$directory.'/' : 'index.php';
     $reg_ready = True;
@@ -38,6 +39,7 @@ if(isset($_SESSION['login_user'])){
 		<title><?php echo $event_data['EVENT_Name']; ?> Registration</title>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+		<meta name="csrf-token" content="<?php echo htmlspecialchars(app_csrf_token(), ENT_QUOTES); ?>" />  <!-- read by assets/js/csrf.js -->
 		<meta name="description" content="" />
 		<meta name="keywords" content="" />
 		<link rel="stylesheet" href="assets/css/main.css" />
@@ -88,21 +90,26 @@ if(isset($_SESSION['login_user'])){
                             <?php include "driver1_container.php"; ?>
                             <?php include "driver2_container.php"; ?>
 
-                            <?php if ($event_data['EVENT_Base_Fee'] > 0) {
-                                print RenderBaseFeeInformation($event_data);
+                            <?php if ($event_data['EVENT_Collect_Payments']) {
+                                print RenderRegistrationFeeInformation($event_data);
                             }
                             ?>
                             <?php print RenderEventSpecificQuestions($event_data); ?>
                         <div style="margin-top:1.25em;">
                             <?php if($event_data['EVENT_Collect_Payments']) { 
-                                $starting_balance = ($event_data['EVENT_Base_Fee'] > 0)? ($event_data['EVENT_Base_Fee'] * 100) : 0;
+                                $starting_balance = 0; // the registration type drop downs add each registrant's fee (see register.js)
+                                // Checkout stays disabled until each registrant has a registration type
+                                // (UpdateCheckoutButtonState in register.js). Not for the waiting list.
+                                $regtype_required = !$event_data['EVENT_Sold_Out'];
                             ?>
-                                <!-- Handle STRIPE Credit Card Processing if it is available -->
-                                <?php if($event_data['EVENT_Enable_Stripe_Processing']) { ?>
-                                    <a href="#" id="stripe_checkout_button" class="button primary fit" event_id="<?php echo $event_data['EVENT_ID']; ?>" event_name="<?php echo $event_data['EVENT_Name']; ?>" style="margin-top:1.0em;" sold_out="<?php echo ($event_data['EVENT_Sold_Out'])?"yes":"no"; ?>" reg_button_driver1_total=<?php echo $starting_balance; ?> reg_button_driver2_total=<?php echo $starting_balance; ?> guest_active="no"><?php echo ($event_data['EVENT_Sold_Out'])?"Join Waiting List":"Proceed to Checkout";?></a>
-                                <?php } else { ?>
-                                    <a href="#" id="main_register_button" class="button primary fit" event_id="<?php echo $event_data['EVENT_ID']; ?>" event_name="<?php echo $event_data['EVENT_Name']; ?>" style="margin-top:1.0em;" sold_out="<?php echo ($event_data['EVENT_Sold_Out'])?"yes":"no"; ?>" reg_button_driver1_total=<?php echo $starting_balance; ?> reg_button_driver2_total=<?php echo $starting_balance; ?> guest_active="no"><?php echo ($event_data['EVENT_Sold_Out'])?"Join Waiting List":"REGISTER";?></a>
-                                <?php } ?>
+                                <?php
+                                // With payment methods set up, registrants are saved first and then go to the checkout
+                                // page (event_checkout.php) to pay. Otherwise (and for the waiting list) they register
+                                // and see their balance on the confirmation page.
+                                $go_to_checkout = !$event_data['EVENT_Sold_Out'] && EnabledPaymentMethods($event_data);
+                                $button_text = $event_data['EVENT_Sold_Out'] ? 'Join Waiting List' : ($go_to_checkout ? 'Proceed to Checkout' : 'REGISTER');
+                                ?>
+                                <a href="#" id="main_register_button" class="button primary fit<?php echo $regtype_required ? ' disabled' : ''; ?>" requires_regtype="<?php echo $regtype_required ? 'yes' : 'no'; ?>" checkout="<?php echo $go_to_checkout ? 'yes' : 'no'; ?>" event_id="<?php echo $event_data['EVENT_ID']; ?>" event_name="<?php echo $event_data['EVENT_Name']; ?>" style="margin-top:1.0em;" sold_out="<?php echo ($event_data['EVENT_Sold_Out'])?"yes":"no"; ?>" reg_button_driver1_total=<?php echo $starting_balance; ?> reg_button_driver2_total=<?php echo $starting_balance; ?> guest_active="no"><?php echo $button_text; ?></a>
                             <?php } else { ?>
                                 <a href="#" id="main_register_button" class="button primary fit" event_id="<?php echo $event_data['EVENT_ID']; ?>" event_name="<?php echo $event_data['EVENT_Name']; ?>" style="margin-top:1.0em;" sold_out="<?php echo ($event_data['EVENT_Sold_Out'])?"yes":"no"; ?>"><?php echo ($event_data['EVENT_Sold_Out'])?"Join Waiting List":"REGISTER";?></a>
                             <?php } ?>
@@ -130,14 +137,15 @@ if(isset($_SESSION['login_user'])){
 
 		<!-- Scripts -->
 			<script src="assets/js/jquery.min.js"></script>
+			<script src="assets/js/csrf.js?v=<?php echo filemtime(__DIR__.'/assets/js/csrf.js'); ?>"></script>
 			<script src="assets/js/browser.min.js"></script>
 			<script src="assets/js/breakpoints.min.js"></script>
 			<script src="assets/js/jquery.dropotron.min.js"></script>
 			<script src="assets/js/util.js"></script>
 			<script src="assets/js/main.js"></script>
 			<script src="assets/js/mailer.js"></script>
-			<script src="assets/js/register.js"></script>
-            <script src="assets/js/checkout.js"></script>
+			<script src="assets/js/register.js?v=<?php echo filemtime(__DIR__.'/assets/js/register.js'); ?>"></script>
+            <script src="assets/js/checkout.js?v=<?php echo filemtime(__DIR__.'/assets/js/checkout.js'); ?>"></script>
 			
 			<script>
 			  $( document ).ready(function() {
@@ -161,6 +169,9 @@ if(isset($_SESSION['login_user'])){
                     console.log('Adding the Driver One base registration fee to the basket ' + $("#cost_driver1").attr('cost'))
                     shopping_cart_actions("baseRegistration", $("#cost_driver1").attr('cost'), "Event entry fee (Main Guest)", 'driver1', 'add');
                 } 
+
+				// Registration type drop downs (Event Registration Fee section)
+				InitRegistrationTypeSelection();
 
 				// Guest Two Role selection
 				var elms = document.querySelectorAll('[name="driver_two_role_radio"]');
@@ -201,11 +212,6 @@ if(isset($_SESSION['login_user'])){
                     main_register_button.onclick = RegisterForTheEvent;
                 }
 
-                const stripe_checkout_button = document.querySelector('[id="stripe_checkout_button"]')
-                if (stripe_checkout_button) {
-                    console.log("Activating the main resgister button.");
-                    stripe_checkout_button.onclick = ProcessStripeCheckOut;
-                }
                 
 				
 				// Attending choices Click Handler
@@ -226,8 +232,14 @@ if(isset($_SESSION['login_user'])){
 					elms[i].onclick = HandleButtonActionClick;
 				}
 
+				// Back from the checkout page's Change Registration - fill the form in again (after all the handlers above are set)
+				if (new URLSearchParams(window.location.search).get('restore') === '1') {
+					RestoreRegistrationForm($("#main_register_button").attr('event_id'));
+				}
+
 			  });
 			</script>			
+			<?php if ($logged_in === 'yes') echo app_idle_timer_script(); ?>
 
 	</body>
 </html>

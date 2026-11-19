@@ -27,7 +27,10 @@ function ProcessStripeCheckOut() {
             } else {
                 console.log("Failure getting client secret from Stripe: " + results[1]);
             }
-	    },	
+	    },
+	    error: function(xhr, status, error) {
+	        console.log('CreateStripeIntent request failed:', xhr.status, status, error, xhr.responseText);
+	    }
 	  });
 
 
@@ -84,7 +87,7 @@ function update_driver_totals(driver_number) {
     }, 0);
     console.log(driver_number + ' new total = ' + sumQuantity);
     $("#"+driver_number+"_cost").attr('total', sumQuantity);
-    $("#"+driver_number+"_cost").html("$"+sumQuantity/100+".00");
+    $("#"+driver_number+"_cost").html("$"+(sumQuantity/100).toFixed(2));
     $("#main_register_button").attr('reg_button_'+driver_number+'_total', sumQuantity);
 
 

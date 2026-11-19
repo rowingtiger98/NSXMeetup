@@ -58,13 +58,13 @@ if ($is_logged_in) {
 
         <?php echo RenderLandingPageEvents(); ?>
 
-        <!-- SPONSOR SECTION -->
+        <!-- SPONSOR SECTION 
             <section id="sponsors" class="active" style="margin-top:4em;">
                 <div id="sponsor_info" class="inner">
                     <span class="welcome-title" >Thank You to Our Sponsors</span>
-                    <?php NEWRenderSponsorInformation(0); ?>
+                    <?php #NEWRenderSponsorInformation(0); ?>
                 </div> 
-            </section>
+            </section> -->
 
 		<!-- Footer -->
 			<section id="footer">
@@ -111,6 +111,23 @@ if ($is_logged_in) {
 				}	                                   
 			  });
 			  
+			// The Upcoming and Previous event cards are separate grids, and a grid only evens out
+			// the cards within itself. Make every card as tall as the tallest one on the page
+			// (once images have loaded, and again when the window is resized). Phones show one
+			// card at a time, so there each card keeps its own height.
+			function EqualizeEventCards() {
+				var cards = $(".features-grid.frontpage > div").css('min-height', '');
+				if (window.innerWidth <= 736) {
+					return;
+				}
+				var tallest = 0;
+				cards.each(function() {
+					tallest = Math.max(tallest, this.getBoundingClientRect().height);
+				});
+				cards.css('min-height', Math.ceil(tallest) + 'px');
+			}
+			$(window).on('load resize', EqualizeEventCards);
+
 			//   document.querySelector('[id="render_atttending_page"]').onclick = RenderAttendingPage;
             //   document.querySelector('[id="render_local_attractions"]').onclick = RenderLocalAttractionsPage;
             //   document.querySelector('[id="render_agenda_page"]').onclick = RenderAgendaPage;

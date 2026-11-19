@@ -18,6 +18,7 @@ if ($admin_rights == 'NOT SET') {
 		<title>NSX Meetup Account Information.</title>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+		<meta name="csrf-token" content="<?php echo htmlspecialchars(app_csrf_token(), ENT_QUOTES); ?>" />  <!-- read by assets/js/csrf.js -->
 		<meta name="description" content="" />
 		<meta name="keywords" content="" />
 		<link rel="stylesheet" href="assets/css/main.css" />
@@ -36,6 +37,7 @@ if ($admin_rights == 'NOT SET') {
 
 		<!-- Main -->
 			<input type="hidden" id="session_information" info_one="<?php echo $login_userid; ?>" info_two="<?php echo $login_username; ?>" />	
+			<input type="hidden" id="csrf_token_field" value="<?php echo htmlspecialchars(app_csrf_token()); ?>" />
 			<div id="main" user_role="<?php echo $login_userid; ?>" class="wrapper" style="padding:2rem 0 2rem 0;">
 				<section class="wrapper" style="padding:2rem 0 2rem 0;">
 					<div id="main_content_container" class="inner">
@@ -51,6 +53,7 @@ if ($admin_rights == 'NOT SET') {
 
 		<!-- Scripts -->
 			<script src="assets/js/jquery.min.js"></script>
+			<script src="assets/js/csrf.js?v=<?php echo filemtime(__DIR__.'/assets/js/csrf.js'); ?>"></script>
 			<script src="assets/js/browser.min.js"></script>
 			<script src="assets/js/breakpoints.min.js"></script>
 			<script src="assets/js/jquery.dropotron.min.js"></script>
@@ -61,11 +64,14 @@ if ($admin_rights == 'NOT SET') {
 			<script src="assets/js/account.js?v=<?php echo filemtime(__DIR__.'/assets/js/account.js'); ?>"></script>
             <script src="assets/js/render.js"></script>
 			<script src="assets/js/stupidtable.js"></script>
-            <script src="assets/js/sponsormanagement.js"></script>
+            <script src="assets/js/sponsormanagement.js?v=<?php echo filemtime(__DIR__.'/assets/js/sponsormanagement.js'); ?>"></script>
             <script src="assets/js/database_actions.js"></script>
-            <script src="assets/js/backbuttonfunctions.js"></script>
+            <script src="assets/js/backbuttonfunctions.js?v=<?php echo filemtime(__DIR__.'/assets/js/backbuttonfunctions.js'); ?>"></script>
             <script src="assets/js/eventsettings.js?v=<?php echo filemtime(__DIR__.'/assets/js/eventsettings.js'); ?>"></script>
-            <script src="assets/js/tinymce/tinymce.min.js"></script>            
+            <script src="assets/js/regtypes.js?v=<?php echo filemtime(__DIR__.'/assets/js/regtypes.js'); ?>"></script>
+            <script src="assets/js/experiences.js?v=<?php echo filemtime(__DIR__.'/assets/js/experiences.js'); ?>"></script>
+            <script src="assets/js/questions.js?v=<?php echo filemtime(__DIR__.'/assets/js/questions.js'); ?>"></script>
+            <script src="https://cdn.jsdelivr.net/npm/tinymce@6.8.5/tinymce.min.js" referrerpolicy="origin"></script>            
 
 		<script>
 		  $( document ).ready(function() {

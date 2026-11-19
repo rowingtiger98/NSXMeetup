@@ -14,20 +14,22 @@
 require_once __DIR__ . '/SessionBootstrap.php';
 require_once __DIR__ . '/databaseFunctions.php';
 require_once __DIR__ . '/eventImages.php';
+require_once __DIR__ . '/eventAdmin.php';
+require_once __DIR__ . '/paymentMethods.php';
 
 app_session_start();
 
-const EVENT_SETTINGS_METHODS = ['RenderEditEventSettings', 'SaveEventSettings', 'UploadFrontpageImage'];
+const EVENT_SETTINGS_METHODS = ['RenderEditEventSettings', 'SaveEventSettings', 'UploadFrontpageImage', 'UploadPaymentQRCode', 'RemovePaymentQRCode',
+                                'UploadBannerImage', 'SaveBannerOrder', 'DeleteBannerImage'];
 
-const FRONTPAGE_IMAGE_MAX_HEIGHT = 450;           // uploads are scaled down to this height, width in proportion
-const FRONTPAGE_IMAGE_MAX_BYTES  = 10 * 1048576;  // 10 MB - keep in step with .user.ini and eventsettings.js
-const FRONTPAGE_IMAGE_MAX_PIXELS = 24000000;      // 24 megapixels - larger images need too much memory to resize
+const FRONTPAGE_IMAGE_MAX_HEIGHT = 450;           // uploads (front page image, payment QR codes) are scaled down to this height, width in proportion
+// FRONTPAGE_IMAGE_MAX_BYTES / _MAX_PIXELS, CheckFrontpageImageUpload() and SaveFrontpageImage() are in eventImages.php
 
 if (isset($_POST['method']) && in_array($_POST['method'], EVENT_SETTINGS_METHODS, true)) {
     $_POST['method']();
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
     // PHP throws away the whole request (method included) when it's over post_max_size
-    EventSettingsRespond('Fail', ['The image is too large for the server to accept (limit '.ini_get('post_max_size').'). Please choose a smaller one.']);
+    EventAdminRespond('Fail', ['The image is too large for the server to accept (limit '.ini_get('post_max_size').'). Please choose a smaller one.']);
 }
 
 /* ************************************************************************ */
@@ -37,6 +39,7 @@ if (isset($_POST['method']) && in_array($_POST['method'], EVENT_SETTINGS_METHODS
 /*              type: text | textarea | html | date | money | percent |     */
 /*                    checkbox | emails | image                             */
 /*              null_ok: store NULL when left blank (column allows NULL)    */
+/*              widths: [label, input] column widths (default [6, 6])       */
 /*              Each admin tool card edits its own set of fields:           */
 /*              'settings' (Edit Event Settings) and 'payments' (Enable /   */
 /*              Edit Event Payment Options).                                */
@@ -83,26 +86,47 @@ function EventSettingsFields($tool) {
     ];
     $tools['payments'] = [
         'Fees & Payments' => [
-            'EVENT_Base_Fee'              => ['label' => 'Base Fee ($)', 'type' => 'money',
-                                              'help' => 'Registration fee per adult. Use 0 for a free event.'],
-            'EVENT_Enable_Child_Discount' => ['label' => 'Enable Child Pricing', 'type' => 'checkbox',
-                                              'help' => 'Offer a separate fee for children.'],
-            'EVENT_Child_Base_Fee'        => ['label' => 'Child Fee ($)', 'type' => 'money', 'null_ok' => true,
-                                              'help' => 'Registration fee per child, used when child pricing is enabled.'],
-            'EVENT_Child_Checkbox_Text'   => ['label' => 'Child Checkbox Text', 'type' => 'text', 'max' => 128, 'null_ok' => true,
-                                              'help' => 'Label for the "this person is a child" checkbox on the registration form.'],
-            'EVENT_Collect_Payments'      => ['label' => 'Collect Payments', 'type' => 'checkbox',
-                                              'help' => 'Collect payment as part of registration.'],
-            'EVENT_Payment_Instructions'  => ['label' => 'Payment Instructions', 'type' => 'html', 'null_ok' => true,
-                                              'help' => 'Shown to registrants with their balance due. HTML is allowed.'],
-            'EVENT_Processing_Percentage' => ['label' => 'Processing Fee (%)', 'type' => 'percent', 'null_ok' => true,
-                                              'help' => 'Service fee added to the total due, as a percentage. Leave blank for none.'],
-            'EVENT_Enable_Stripe_Processing' => ['label' => 'Enable Stripe Checkout', 'type' => 'checkbox',
-                                              'help' => 'Take card payments through Stripe. Requires the publishable key below.'],
-            'EVENT_Stripe_Public_Key'     => ['label' => 'Stripe Publishable Key', 'type' => 'text', 'max' => 128,
-                                              'help' => 'The publishable key (starts with pk_). Never enter the secret key (sk_) here.'],
+            'EVENT_Collect_Payments'      => ['label' => 'Collect Payments', 'type' => 'checkbox', 'widths' => [8, 4],
+                                              'after' => 'RenderPaymentMethodOptions',
+                                              'help' => 'Leave this off for a free event - registrants won\'t be asked to pay. '
+                                                      .'When it\'s on, at least one registration type must be enabled. If none is when you save, the event\'s first type '
+                                                      .'(every event starts with a disabled "'.DEFAULT_REGTYPE_NAME.'" type at $0.00) is enabled for you. '
+                                                      .'Then go to Add / Edit / Delete Registration Types to set its cost, and add more types if you need them.'],
+            'EVENT_Processing_Percentage' => ['label' => 'Processing Fee (%)', 'type' => 'percent', 'null_ok' => true, 'rendered_by' => 'payment_methods',
+                                              'help' => 'The percentage added to each registration\'s total, e.g. 3 or 2.9.'],
         ],
     ];
+
+    /* Drawn by RenderPaymentMethodOptions (under Collect Payments) instead of in the list */
+    $methods = [];
+    foreach (PAYMENT_METHODS as $method => $info) {
+        $methods[$info['column']] = ['label' => $info['name'], 'type' => 'checkbox', 'rendered_by' => 'payment_methods'];
+    }
+    $methods['EVENT_Stripe_Public_Key'] = ['label' => 'Stripe Publishable Key', 'type' => 'text', 'max' => 128, 'rendered_by' => 'payment_methods',
+                                           'drawer' => 'stripe',
+                                           'help' => 'The publishable key (starts with pk_). Never enter the secret key (sk_) here.'];
+    foreach (HANDLE_PAYMENT_METHODS as $method => $info) {
+        $name = PAYMENT_METHODS[$method]['name'];
+        $methods[$info['handle_column']] = ['label' => $info['handle_label'], 'type' => 'handle', 'payment_method' => $method,
+                                            'max' => 100, 'null_ok' => true,  /* room for a pasted link - HandleFromInput() trims it */ 'rendered_by' => 'payment_methods',
+                                            'drawer' => $method, 'placeholder' => $info['handle_example'],
+                                            'help' => 'The '.$name.' account registrants pay, e.g. '.$info['handle_example'].' ('.$info['handle_rule'].').',
+                                            'how_to' => ['How do I find my '.$name.' username?', $info['handle_how_to']]];
+        if (isset($info['link_column'])) {
+            $methods[$info['link_column']] = ['label' => 'Show '.$name.' Payment Link', 'type' => 'checkbox', 'rendered_by' => 'payment_methods',
+                                              'drawer' => $method,
+                                              'help' => 'Adds an "Open '.$name.'" link with the amount filled in to the checkout page and confirmation email. '
+                                                       .'It uses your '.$name.'.me link - turn it off if your account doesn\'t have one (e.g. some business accounts). '
+                                                       .'With it off, the username can be left blank - say where to send the payment in the instructions.'];
+        }
+        $methods[$info['description_column']] = ['label' => $name.' Instructions', 'type' => $info['description_html'] ? 'html' : 'textarea',
+                                                 'max' => 4000, 'null_ok' => true, 'rendered_by' => 'payment_methods',
+                                                 'drawer' => $method, 'placeholder' => $info['default_description'],
+                                                 'help' => 'Shown with the '.$name.' account and amount due on the checkout page - e.g. what to put in the payment note. '
+                                                          .($info['description_html'] ? 'HTML is allowed.' : 'Plain text.').' Leave blank to use the instructions shown in the box.'];
+    }
+    $tools['payments']['Payment Methods'] = $methods;
+
     return $tools[$tool];
 }
 
@@ -119,68 +143,9 @@ function EventSettingsTool() {
     ];
     $tool = $_POST['tool'] ?? 'settings';
     if (!is_string($tool) || !isset($tools[$tool])) {
-        EventSettingsRespond('Fail', ['Unknown event tool.']);
+        EventAdminRespond('Fail', ['Unknown event tool.']);
     }
     return ['id' => $tool] + $tools[$tool];
-}
-
-/* ************************************************************************ */
-/* Function:    EventSettingsRespond                                        */
-/* Description: Sends the JSON response and ends the request.              */
-/* ************************************************************************ */
-function EventSettingsRespond($status, $payload) {
-    header('Content-Type: application/json');
-    echo json_encode([$status, $payload]);
-    exit();
-}
-
-/* ************************************************************************ */
-/* Function:    EventSettingsAuthorize                                      */
-/* Description: Ends the request with a 'Fail' response unless the session  */
-/*              belongs to a logged-in, non-idle user who administers the   */
-/*              event (listed in NSX_User_Events_Administered) or is an     */
-/*              overlord. Uses only the session, never browser-sent ids.    */
-/* Inputs:      $pdo - PHP Data Object, $event_id - the event's id.         */
-/* ************************************************************************ */
-function EventSettingsAuthorize(PDO $pdo, $event_id) {
-    if (empty($_SESSION['login_user']) || app_session_idle_expired()) {
-        EventSettingsRespond('Fail', ['Your session has expired. Please log in again.']);
-    }
-    $_SESSION['last_activity'] = time();
-
-    $stmt = $pdo->prepare('SELECT NSX_User_Role, NSX_User_Events_Administered FROM nsx_meetup_user_accounts WHERE NSX_Username = ?');
-    $stmt->execute([$_SESSION['login_user']]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    $administered = $user ? array_map('trim', explode(',', (string)$user['NSX_User_Events_Administered'])) : [];
-    if (!$user || ($user['NSX_User_Role'] !== 'overlord' && !in_array((string)$event_id, $administered, true))) {
-        EventSettingsRespond('Fail', ['You are not an administrator for this event.']);
-    }
-}
-
-/* ************************************************************************ */
-/* Function:    EventSettingsLoadEvent                                      */
-/* Description: Validates the posted event id, authorizes the user, and     */
-/*              returns the PDO connection and event row.                   */
-/* Returns:     [PDO, array]                                                */
-/* ************************************************************************ */
-function EventSettingsLoadEvent() {
-    $event_id = filter_var($_POST['event_id'] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-    if ($event_id === false) {
-        EventSettingsRespond('Fail', ['No event was selected.']);
-    }
-
-    $pdo = Create_SQL_PHP_DataObject(DB_NAME);
-    EventSettingsAuthorize($pdo, $event_id);
-
-    $stmt = $pdo->prepare('SELECT * FROM nsx_meetup_events WHERE EVENT_ID = ?');
-    $stmt->execute([$event_id]);
-    $event = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$event) {
-        EventSettingsRespond('Fail', ['That event could not be found.']);
-    }
-
-    return [$pdo, $event];
 }
 
 /* ************************************************************************ */
@@ -201,13 +166,154 @@ function EventSettingsDisplayValue($field, $value) {
 }
 
 /* ************************************************************************ */
+/* Function:    RenderPaymentMethodOptions                                  */
+/* Description: The Payment Methods section under Collect Payments: an      */
+/*              on/off switch for each payment method (saved with the       */
+/*              form) that opens a drawer for its options. Only shown while */
+/*              Collect Payments is checked (eventsettings.js shows and     */
+/*              hides it). Fields marked 'drawer' => <method> in            */
+/*              EventSettingsFields go in that method's drawer, plus a QR   */
+/*              code upload for HANDLE_PAYMENT_METHODS; the other drawers   */
+/*              are placeholders for now.                                   */
+/* Inputs:      $event - the event row, $separator - the row divider HTML.  */
+/* Returns:     HTML (a full-width column of the settings grid)             */
+/* ************************************************************************ */
+function RenderPaymentMethodOptions($event, $separator) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+    $fields = EventSettingsFields('payments')['Payment Methods'];
+    $hidden = empty($event['EVENT_Collect_Payments']) ? ' style="display:none;"' : '';
+
+    $output_html  = '<div id="payment_methods" class="col-12 payment_methods"'.$hidden.'>';
+    $output_html .= RenderProcessingFeeOption($event);
+    $output_html .= '   <p><span class="payment_methods_label">Payment Methods:</span> Turn on each way registrants can pay, then set up its options. Registrants see a section on the checkout page for each one that\'s on.</p>';
+    foreach (PAYMENT_METHODS as $method => $info) {
+        $toggle = 'event_setting_'.$info['column'];
+        $drawer = 'payment_method_'.$method.'_drawer';
+        $on = !empty($event[$info['column']]);
+        $output_html .= '   <div class="payment_method" payment_method="'.$method.'">';
+        $output_html .= '       <div class="payment_method_header">';
+        $output_html .= '           <span class="payment_method_name">'.$h($info['name']).'</span>';
+        $output_html .= '           <input type="checkbox" id="'.$toggle.'" db_key="'.$info['column'].'" class="payment_method_toggle" drawer="'.$drawer.'" aria-controls="'.$drawer.'" aria-expanded="'.($on ? 'true' : 'false').'"'.($on ? ' checked' : '').'>';
+        $output_html .= '           <label for="'.$toggle.'" class="payment_method_switch" title="Turn '.$h($info['name']).' on or off"><span class="payment_method_off">Off</span><span class="payment_method_on">On</span></label>';
+        $output_html .= '       </div>';
+        $output_html .= '       <div id="'.$drawer.'" class="payment_method_drawer"'.($on ? '' : ' style="display:none;"').'>';
+        $drawer_fields = 0;
+        foreach ($fields as $column => $field) {
+            if (($field['drawer'] ?? '') !== $method) {
+                continue;
+            }
+            $id = 'event_setting_'.$column;
+            $max = isset($field['max']) ? ' maxlength="'.(int)$field['max'].'"' : '';
+            $placeholder = isset($field['placeholder']) ? ' placeholder="'.$h($field['placeholder']).'"' : '';
+            $value = (string)($event[$column] ?? '');
+            if ($field['type'] === 'handle' && $value !== '') {
+                $value = HANDLE_PAYMENT_METHODS[$field['payment_method']]['handle_prefix'].$value; // stored without it
+            }
+            $output_html .= '           <label for="'.$id.'" class="payment_method_field_label">'.$h($field['label']).'</label>';
+            if ($field['type'] === 'checkbox') {
+                $output_html .= '           <input type="checkbox" id="'.$id.'" db_key="'.$column.'"'.(($event[$column] ?? 1) ? ' checked' : '').'>';
+                $output_html .= '           <label for="'.$id.'">Yes</label>';
+            } elseif ($field['type'] === 'textarea' || $field['type'] === 'html') {
+                $output_html .= '           <textarea id="'.$id.'" db_key="'.$column.'" rows="5"'.$max.$placeholder.'>'.$h($value).'</textarea>';
+            } else {
+                $output_html .= '           <input type="text" id="'.$id.'" db_key="'.$column.'" value="'.$h($value).'"'.$max.$placeholder.' />';
+            }
+            $output_html .= '           <p class="payment_method_field_help">'.$h($field['help']).'</p>';
+            if ($field['type'] === 'handle') {
+                // Opens the checkout page's link (HandlePaymentLink) for what's typed - see OpenPaymentTestLink in eventsettings.js
+                $output_html .= '           <div class="payment_test_link_row"><a href="#" class="button small payment_test_link" payment_method="'.$h($field['payment_method']).'" handle_input="'.$id.'" note="'.$h($event['EVENT_Name'].' - Test').'">Test Link</a>';
+                $output_html .= '           <span class="payment_test_link_status">Opens your '.$h(PAYMENT_METHODS[$field['payment_method']]['name']).' link in a new window with a $1.00 test amount - nothing is sent unless you confirm it there.</span></div>';
+            }
+            if (isset($field['how_to'])) {
+                $output_html .= '           <details class="payment_method_how_to"><summary>'.$h($field['how_to'][0]).'</summary><p>'.$h($field['how_to'][1]).'</p></details>';
+            }
+            $drawer_fields++;
+        }
+        if (isset(HANDLE_PAYMENT_METHODS[$method])) {
+            $output_html .= RenderPaymentQRCodeField($event, $method);
+            $drawer_fields++;
+        }
+        if (!$drawer_fields) {
+            $output_html .= '           <p>Here is where you will configure the '.$h($info['name']).' options.</p>';
+        }
+        $output_html .= '       </div>';
+        $output_html .= '   </div>';
+    }
+    $output_html .= '</div>';
+    $output_html .= str_replace('class="col-12 col-12-xsmall"', 'class="col-12 col-12-xsmall payment_methods_separator"'.$hidden, $separator);
+    return $output_html;
+}
+
+/* ************************************************************************ */
+/* Function:    RenderProcessingFeeOption                                   */
+/* Description: The Processing Fee at the top of the payment section: an    */
+/*              on/off switch that opens the percentage. It's on when the   */
+/*              event has a percentage; turned off, the percentage input is */
+/*              disabled and saves blank (eventsettings.js), so no fee.     */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderProcessingFeeOption(array $event) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+    $field = EventSettingsFields('payments')['Fees & Payments']['EVENT_Processing_Percentage'];
+    $percent = $event['EVENT_Processing_Percentage'];
+    $on = ($percent !== null && (float)$percent > 0);
+    $value = $on ? rtrim(rtrim(number_format((float)$percent, 2, '.', ''), '0'), '.') : '';
+
+    $output_html  = '   <p><span class="payment_methods_label">Processing Fee:</span> Add a percentage to every registration\'s total to cover payment processing costs. '
+                   .'It applies to every payment method and shows as its own line on the checkout page.</p>';
+    $output_html .= '   <div class="payment_method processing_fee_option">';
+    $output_html .= '       <div class="payment_method_header">';
+    $output_html .= '           <span class="payment_method_name">Charge a Processing Fee</span>';
+    $output_html .= '           <input type="checkbox" id="processing_fee_toggle" class="payment_method_toggle" drawer="processing_fee_drawer" aria-controls="processing_fee_drawer" aria-expanded="'.($on ? 'true' : 'false').'"'.($on ? ' checked' : '').'>';
+    $output_html .= '           <label for="processing_fee_toggle" class="payment_method_switch" title="Turn the processing fee on or off"><span class="payment_method_off">Off</span><span class="payment_method_on">On</span></label>';
+    $output_html .= '       </div>';
+    $output_html .= '       <div id="processing_fee_drawer" class="payment_method_drawer"'.($on ? '' : ' style="display:none;"').'>';
+    $output_html .= '           <label for="event_setting_EVENT_Processing_Percentage" class="payment_method_field_label">'.$h($field['label']).'</label>';
+    $output_html .= '           <input type="number" id="event_setting_EVENT_Processing_Percentage" db_key="EVENT_Processing_Percentage" value="'.$h($value).'" min="0.01" max="100" step="0.01" placeholder="3"'.($on ? '' : ' disabled').' />';
+    $output_html .= '           <p class="payment_method_field_help">'.$h($field['help']).'</p>';
+    $output_html .= '       </div>';
+    $output_html .= '   </div>';
+    return $output_html;
+}
+
+/* ************************************************************************ */
+/* Function:    RenderPaymentQRCodeField                                    */
+/* Description: A HANDLE_PAYMENT_METHODS method's QR code in its drawer: a  */
+/*              preview, Upload (saved straight away by                     */
+/*              UploadPaymentQRCode) and Remove. Not part of the form's     */
+/*              save - it has no db_key.                                    */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderPaymentQRCodeField(array $event, $method) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+    $name = PAYMENT_METHODS[$method]['name'];
+    $app = HANDLE_PAYMENT_METHODS[$method]['app_name'];
+    $path = PaymentQRCodePath($event, $method);
+    $id = $method.'_qr';
+
+    $output_html  = '<label class="payment_method_field_label">'.$h($name).' QR Code</label>';
+    $output_html .= '<div class="frontpage_image_preview payment_qr_preview">';
+    $output_html .= '<img id="'.$id.'_preview" src="'.$h($path).'" alt="'.$h($name).' QR code"'.($path === '' ? ' style="display:none;"' : '').' />';
+    $output_html .= '<span id="'.$id.'_preview_none"'.($path !== '' ? ' style="display:none;"' : '').'>No QR code uploaded</span>';
+    $output_html .= '</div>';
+    $output_html .= '<input type="file" id="'.$id.'_upload" class="payment_qr_upload" payment_method="'.$method.'" accept="image/jpeg,image/png,image/webp" style="display:none;" />';
+    $output_html .= '<div class="row gtr-0 frontpage_image_controls">';
+    $output_html .= '<div class="col-6 col-12-small"><label for="'.$id.'_upload" id="'.$id.'_upload_button" class="button small fit">Upload QR Code</label></div>';
+    $output_html .= '<div class="col-6 col-12-small"><a href="#" id="'.$id.'_remove_button" class="button small fit payment_qr_remove_button" payment_method="'.$method.'"'.($path === '' ? ' style="display:none;"' : '').'>Remove QR Code</a></div>';
+    $output_html .= '</div>';
+    $output_html .= '<div id="'.$id.'_upload_status" class="frontpage_upload_status"></div>';
+    $output_html .= '<p class="payment_method_field_help">Optional. Download your QR code from '.$h($app).' and upload it here (JPEG, PNG or WebP) - it\'s shown in the '.$h($name).' section of the checkout page, scaled to '.FRONTPAGE_IMAGE_MAX_HEIGHT.'px high. It\'s saved as soon as it uploads.</p>';
+    return $output_html;
+}
+
+/* ************************************************************************ */
 /* Function:    RenderEditEventSettings                                     */
 /* Description: Returns the Edit Event Settings form for the posted event.  */
 /* Returns:     JSON ['Pass', HTML] or ['Fail', [messages]]                 */
 /* ************************************************************************ */
 function RenderEditEventSettings() {
     $tool = EventSettingsTool();
-    list($pdo, $event) = EventSettingsLoadEvent();
+    list($pdo, $event) = EventAdminLoadEvent();
     $pdo = null;
 
     $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
@@ -226,16 +332,21 @@ function RenderEditEventSettings() {
     $output_html .= 'Admins: <b>'.(is_array($admins) && $admins ? $h(implode(', ', $admins)) : 'None').'</b></p>';
 
     foreach (EventSettingsFields($tool['id']) as $section => $fields) {
+        $fields = array_filter($fields, function ($field) { return empty($field['rendered_by']); });
+        if (!$fields) {
+            continue;
+        }
         $output_html .= '<h3 style="margin-top:2em;">'.$h($section).'</h3>';
         $output_html .= '<div class="row gtr-25 gtr-uniform">';
         foreach ($fields as $column => $field) {
             $id = 'event_setting_'.$column;
             $value = EventSettingsDisplayValue($field, $event[$column]);
 
-            $output_html .= '       <div class="col-6 col-12-xsmall">';
+            list($label_width, $input_width) = $field['widths'] ?? [6, 6];
+            $output_html .= '       <div class="col-'.$label_width.' col-12-xsmall">';
             $output_html .= '           <p><span style="'.$label_style.'">'.$h($field['label']).':</span> '.$h($field['help']).'</p>';
             $output_html .= '       </div>';
-            $output_html .= '       <div class="col-6 col-12-xsmall">';
+            $output_html .= '       <div class="col-'.$input_width.' col-12-xsmall">';
             switch ($field['type']) {
                 case 'checkbox':
                     $output_html .= '<input type="checkbox" id="'.$id.'" db_key="'.$column.'"'.($value ? ' checked' : '').'>';
@@ -276,6 +387,9 @@ function RenderEditEventSettings() {
             }
             $output_html .= '       </div>';
             $output_html .= $separator;
+            if (!empty($field['after'])) {
+                $output_html .= $field['after']($event, $separator);
+            }
         }
         $output_html .= '</div>';
     }
@@ -283,8 +397,11 @@ function RenderEditEventSettings() {
     $output_html .= '<div id="event_settings_messages" class="event_settings_messages"></div>';
     $output_html .= '<a href="#" id="save_event_settings_button" class="button primary fit">Save '.$h($tool['title']).'</a>';
     $output_html .= '</form>';
+    if ($tool['id'] === 'settings') {
+        $output_html .= RenderBannerTool($event);
+    }
 
-    EventSettingsRespond('Pass', $output_html);
+    EventAdminRespond('Pass', $output_html);
 }
 
 /* ************************************************************************ */
@@ -296,10 +413,10 @@ function RenderEditEventSettings() {
 /* ************************************************************************ */
 function SaveEventSettings() {
     $tool = EventSettingsTool();
-    list($pdo, $event) = EventSettingsLoadEvent();
+    list($pdo, $event) = EventAdminLoadEvent();
 
     if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
-        EventSettingsRespond('Fail', ['This form has expired. Reload the page and try again.']);
+        EventAdminRespond('Fail', ['This form has expired. Reload the page and try again.']);
     }
 
     $posted = (isset($_POST['settings']) && is_array($_POST['settings'])) ? $_POST['settings'] : [];
@@ -339,6 +456,9 @@ function SaveEventSettings() {
                         $errors[] = $label.($field['type'] === 'percent' ? ' must be a number from 0 to 100.' : ' must be a number of 0 or more.');
                     }
                     $values[$column] = round((float)$raw, 2);
+                    if ($column === 'EVENT_Processing_Percentage' && $values[$column] == 0) {
+                        $values[$column] = null; // 0% is no fee
+                    }
                     break;
 
                 case 'emails':
@@ -359,6 +479,14 @@ function SaveEventSettings() {
                         $errors[] = $label.' must be just an image file name, e.g. my_event.png.';
                     }
                     $values[$column] = $raw;
+                    break;
+
+                case 'handle': // a HANDLE_PAYMENT_METHODS username - stored without its @ / link
+                    $info = HANDLE_PAYMENT_METHODS[$field['payment_method']];
+                    $values[$column] = HandleFromInput($raw);
+                    if (!preg_match($info['handle_pattern'], $values[$column])) {
+                        $errors[] = $label.' must be '.$info['handle_rule'].', e.g. '.$info['handle_example'].'.';
+                    }
                     break;
 
                 default: // text, textarea, html
@@ -383,16 +511,22 @@ function SaveEventSettings() {
                 ? 'That is a Stripe SECRET key. Only the publishable key (pk_...) belongs here - the secret key must never be put on a web page.'
                 : 'Stripe Publishable Key must start with pk_.';
         }
-        if ($values['EVENT_Enable_Stripe_Processing'] && $stripe_key === '') {
-            $errors[] = 'Enable Stripe Checkout requires a Stripe Publishable Key.';
+        if ($values['EVENT_Collect_Payments'] && $values['EVENT_Enable_Stripe_Processing'] && $stripe_key === '') {
+            $errors[] = 'Stripe needs a Stripe Publishable Key - enter it under Stripe, or turn Stripe off.';
         }
-        if ($values['EVENT_Enable_Child_Discount'] && $values['EVENT_Child_Base_Fee'] === null) {
-            $errors[] = 'Enable Child Pricing requires a Child Fee.';
+
+        foreach (HANDLE_PAYMENT_METHODS as $method => $info) {
+            $name = PAYMENT_METHODS[$method]['name'];
+            $link_on = !isset($info['link_column']) || !empty($values[$info['link_column']]);
+            if ($values['EVENT_Collect_Payments'] && $values[PAYMENT_METHODS[$method]['column']] && $values[$info['handle_column']] === null && $link_on) {
+                $errors[] = $name.' needs a '.$info['handle_label'].' - enter it under '.$name.', or turn '.$name.' off.'
+                           .(isset($info['link_column']) ? ' (It can be left blank with the payment link off, if your instructions say where to send the payment.)' : '');
+            }
         }
     }
 
     if ($errors) {
-        EventSettingsRespond('Fail', $errors);
+        EventAdminRespond('Fail', $errors);
     }
 
     /* Column names come from EventSettingsFields(), never from the request. */
@@ -406,14 +540,29 @@ function SaveEventSettings() {
     }
     $stmt->bindValue(':event_id', (int)$event['EVENT_ID'], PDO::PARAM_INT);
 
+    $enabled_type = null;
     try {
+        $pdo->beginTransaction();
         $stmt->execute();
+        // Collecting payments means registrants must have a registration type to choose
+        if (!empty($values['EVENT_Collect_Payments'])) {
+            $enabled_type = EnsureEnabledRegistrationType($pdo, (int)$event['EVENT_ID']);
+        }
+        $pdo->commit();
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log('SaveEventSettings failed for event '.$event['EVENT_ID'].': '.$e->getMessage());
-        EventSettingsRespond('Fail', ['The settings could not be saved. Please try again.']);
+        EventAdminRespond('Fail', ['The settings could not be saved. Please try again.']);
     }
 
-    EventSettingsRespond('Pass', $tool['saved']);
+    $message = $tool['saved'];
+    if ($enabled_type !== null) {
+        $message .= ' Collect Payments needs an enabled registration type, so "'.$enabled_type.'" was enabled. '
+                  .'Check its cost in Add / Edit / Delete Registration Types.';
+    }
+    EventAdminRespond('Pass', $message);
 }
 
 /* ************************************************************************ */
@@ -427,50 +576,26 @@ function SaveEventSettings() {
 /*              ['Fail', [messages]]                                        */
 /* ************************************************************************ */
 function UploadFrontpageImage() {
-    list($pdo, $event) = EventSettingsLoadEvent();
-
+    list($pdo, $event) = EventAdminLoadEvent();
     if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
-        EventSettingsRespond('Fail', ['This form has expired. Reload the page and try again.']);
-    }
-
-    if (!function_exists('imagecreatetruecolor')) {
-        error_log('UploadFrontpageImage: the GD extension is not available, so images cannot be resized');
-        EventSettingsRespond('Fail', ['Image uploads are not available on this server (the PHP GD extension is missing).']);
-    }
-
-    $upload = CheckFrontpageImageUpload($_FILES['frontpage_image'] ?? null);
-    if ($upload['error'] !== '') {
-        EventSettingsRespond('Fail', [$upload['error']]);
-    }
-
-    $event_dir = EventImagesDirectory($event['EVENT_Directory']);
-    if ($event_dir === '' || !is_dir(__DIR__.'/events/'.$event['EVENT_Directory'])) {
-        EventSettingsRespond('Fail', ['This event\'s folder (events/'.$event['EVENT_Directory'].'/) could not be found, so the image has nowhere to go.']);
-    }
-    $dir = __DIR__.'/'.$event_dir;
-    if (!is_dir($dir) && !mkdir($dir, 0755)) {
-        error_log('UploadFrontpageImage: could not create '.$dir);
-        EventSettingsRespond('Fail', ['The image could not be saved. Please try again.']);
+        EventAdminRespond('Fail', ['This form has expired. Reload the page and try again.']);
     }
 
     // A new name for every upload, so browsers never show a cached older image
-    $basename = 'frontpage_'.date('Ymd_His');
-    $filename = SaveFrontpageImage($upload['tmp'], $upload['type'], $dir, $basename);
-    if ($filename === '') {
-        error_log('UploadFrontpageImage: saving failed for event '.$event['EVENT_ID']);
-        EventSettingsRespond('Fail', ['The image could not be saved. Please try again.']);
-    }
+    $saved = ReceiveEventImageUpload($event, 'frontpage_image', 'frontpage_'.date('Ymd_His'));
+    $filename = $saved['filename'];
 
     $stmt = $pdo->prepare('UPDATE nsx_meetup_events SET EVENT_Frontpage_Image = ? WHERE EVENT_ID = ?');
     if (!$stmt->execute([$filename, $event['EVENT_ID']])) {
         error_log('UploadFrontpageImage: database update failed for event '.$event['EVENT_ID']);
-        EventSettingsRespond('Fail', ['The image was uploaded but could not be set on the event. Please try again.']);
+        EventAdminRespond('Fail', ['The image was uploaded but could not be set on the event. Please try again.']);
     }
     $stmt = null;
     $pdo = null;
 
     // Remove the image this one replaced - only an earlier upload (frontpage_<date>_<time>),
     // never a hand-placed image or one from the shared folder
+    $dir = __DIR__.'/'.$saved['event_dir'];
     $previous = basename((string)$event['EVENT_Frontpage_Image']);
     if ($previous !== $filename && preg_match('/^frontpage_\d{8}_\d{6}\.(jpg|png)$/', $previous) && is_file($dir.'/'.$previous)) {
         if (!unlink($dir.'/'.$previous)) {
@@ -478,109 +603,338 @@ function UploadFrontpageImage() {
         }
     }
 
-    EventSettingsRespond('Pass', ['filename' => $filename, 'url' => $event_dir.'/'.$filename]);
+    EventAdminRespond('Pass', ['filename' => $filename, 'url' => $saved['event_dir'].'/'.$filename]);
 }
 
 /* ************************************************************************ */
-/* Function:    CheckFrontpageImageUpload                                   */
-/* Description: Checks an image upload from $_FILES. The file's contents    */
-/*              decide its type - the browser-supplied name and type are    */
-/*              ignored. (Adapted from ContactBook's check_book_photo_upload)*/
-/* Inputs:      $file - the $_FILES entry, or null.                         */
-/* Returns:     ['error' => string, 'tmp' => string, 'type' => IMAGETYPE_*] */
+/* Function:    PostedQRPaymentMethod                                       */
+/* Description: The posted payment_method, if it's one with a QR code       */
+/*              (HANDLE_PAYMENT_METHODS). Ends the request otherwise.       */
 /* ************************************************************************ */
-function CheckFrontpageImageUpload($file) {
-    $none = ['error' => '', 'tmp' => '', 'type' => 0];
-    $max_mb = FRONTPAGE_IMAGE_MAX_BYTES / 1048576;
-
-    if ($file === null || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-        return ['error' => 'Please choose an image to upload.'] + $none;
+function PostedQRPaymentMethod() {
+    $method = $_POST['payment_method'] ?? '';
+    if (!is_string($method) || !isset(HANDLE_PAYMENT_METHODS[$method])) {
+        EventAdminRespond('Fail', ['Unknown payment method.']);
     }
-    if (is_array($file['error'])) {
-        return ['error' => 'Please choose a single image.'] + $none;
-    }
-    if ($file['error'] === UPLOAD_ERR_INI_SIZE || $file['error'] === UPLOAD_ERR_FORM_SIZE
-        || $file['size'] > FRONTPAGE_IMAGE_MAX_BYTES) {
-        return ['error' => "The image is too large. Please choose one under {$max_mb} MB."] + $none;
-    }
-    if ($file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
-        error_log('CheckFrontpageImageUpload: upload failed with error code '.$file['error']);
-        return ['error' => 'The image could not be uploaded. Please try again.'] + $none;
-    }
-
-    $info = @getimagesize($file['tmp_name']);
-    if ($info === false || !in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)) {
-        return ['error' => 'The image must be a JPEG, PNG or WebP file.'] + $none;
-    }
-    if ($info[0] * $info[1] > FRONTPAGE_IMAGE_MAX_PIXELS) {
-        return ['error' => 'The image\'s dimensions are too large. Please choose a smaller image.'] + $none;
-    }
-
-    return ['error' => '', 'tmp' => $file['tmp_name'], 'type' => $info[2]];
+    return $method;
 }
 
 /* ************************************************************************ */
-/* Function:    SaveFrontpageImage                                          */
-/* Description: Re-encodes an uploaded image into $dir as <$basename>.jpg   */
-/*              (or .png for PNGs, to keep transparency), scaled down to    */
-/*              FRONTPAGE_IMAGE_MAX_HEIGHT with the width kept in           */
-/*              proportion. Smaller images are not enlarged. Re-encoding    */
-/*              also turns phone photos the right way up, strips hidden     */
-/*              data such as GPS location, and drops anything that isn't    */
-/*              image data. (Adapted from ContactBook's save_book_photo)    */
-/* Inputs:      $tmp - uploaded temp file. $type - IMAGETYPE_*.             */
-/*              $dir - the full directory path to save in.                  */
-/*              $basename - the filename without extension.                 */
-/* Returns:     The saved filename, or '' on failure.                       */
+/* Function:    UploadPaymentQRCode                                         */
+/* Description: Saves an uploaded QR code image for the posted payment      */
+/*              method (resized like the front page image) in the event's   */
+/*              images folder and stores its site-relative path in the      */
+/*              method's qr_column, replacing any earlier upload.           */
+/* Returns:     JSON ['Pass', ['path']] or ['Fail', [messages]]             */
 /* ************************************************************************ */
-function SaveFrontpageImage($tmp, $type, $dir, $basename) {
-    switch ($type) {
-        case IMAGETYPE_JPEG: $image = @imagecreatefromjpeg($tmp); break;
-        case IMAGETYPE_PNG:  $image = @imagecreatefrompng($tmp);  break;
-        case IMAGETYPE_WEBP: $image = @imagecreatefromwebp($tmp); break;
-        default:             $image = false;
+function UploadPaymentQRCode() {
+    list($pdo, $event) = EventAdminLoadEvent();
+    if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
+        EventAdminRespond('Fail', ['This form has expired. Reload the page and try again.']);
     }
-    if ($image === false) {
-        return '';
+    $method = PostedQRPaymentMethod();
+    $column = HANDLE_PAYMENT_METHODS[$method]['qr_column'];
+
+    $saved = ReceiveEventImageUpload($event, 'qr_code', $method.'_qr_'.date('Ymd_His'));
+    $path = $saved['event_dir'].'/'.$saved['filename'];
+
+    /* Column names come from HANDLE_PAYMENT_METHODS, never from the request. */
+    $stmt = $pdo->prepare('UPDATE nsx_meetup_events SET `'.$column.'` = ? WHERE EVENT_ID = ?');
+    if (!$stmt->execute([$path, $event['EVENT_ID']])) {
+        error_log('UploadPaymentQRCode: database update failed for '.$method.', event '.$event['EVENT_ID']);
+        EventAdminRespond('Fail', ['The QR code was uploaded but could not be set on the event. Please try again.']);
+    }
+    DeleteReplacedPaymentQRCode($event, $method, $path);
+
+    EventAdminRespond('Pass', ['path' => $path]);
+}
+
+/* ************************************************************************ */
+/* Function:    RemovePaymentQRCode                                         */
+/* Description: Clears the posted payment method's QR code and deletes the  */
+/*              image.                                                      */
+/* Returns:     JSON ['Pass', message] or ['Fail', [messages]]              */
+/* ************************************************************************ */
+function RemovePaymentQRCode() {
+    list($pdo, $event) = EventAdminLoadEvent();
+    if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
+        EventAdminRespond('Fail', ['This form has expired. Reload the page and try again.']);
+    }
+    $method = PostedQRPaymentMethod();
+    $column = HANDLE_PAYMENT_METHODS[$method]['qr_column'];
+
+    $stmt = $pdo->prepare('UPDATE nsx_meetup_events SET `'.$column.'` = NULL WHERE EVENT_ID = ?');
+    if (!$stmt->execute([$event['EVENT_ID']])) {
+        EventAdminRespond('Fail', ['The QR code could not be removed. Please try again.']);
+    }
+    DeleteReplacedPaymentQRCode($event, $method, '');
+
+    EventAdminRespond('Pass', PAYMENT_METHODS[$method]['name'].' QR code removed.');
+}
+
+/* ************************************************************************ */
+/* Function:    DeleteReplacedPaymentQRCode                                 */
+/* Description: Deletes the event's previous QR code image for $method      */
+/*              unless it is $keep - only an earlier upload in the event's  */
+/*              images folder (<method>_qr_<date>_<time>), never another    */
+/*              file.                                                       */
+/* ************************************************************************ */
+function DeleteReplacedPaymentQRCode(array $event, $method, $keep) {
+    $previous = (string)$event[HANDLE_PAYMENT_METHODS[$method]['qr_column']];
+    $event_dir = EventImagesDirectory($event['EVENT_Directory']);
+    if ($previous === '' || $previous === $keep || $event_dir === ''
+        || !preg_match('#^'.preg_quote($event_dir.'/'.$method, '#').'_qr_\d{8}_\d{6}\.(jpg|png)$#', $previous)
+        || !is_file(__DIR__.'/'.$previous)) {
+        return;
+    }
+    if (!unlink(__DIR__.'/'.$previous)) {
+        error_log('DeleteReplacedPaymentQRCode: could not delete '.$previous);
+    }
+}
+
+/* ************************************************************************ */
+/* Function:    ReceiveEventImageUpload                                     */
+/* Description: Checks the uploaded image in $_FILES[$file_field], scales   */
+/*              it to FRONTPAGE_IMAGE_MAX_HEIGHT and saves it in the        */
+/*              event's images folder (events/<dir>/images/) as $basename   */
+/*              .jpg or .png. Ends the request with a 'Fail' response if    */
+/*              anything goes wrong.                                        */
+/* Returns:     ['event_dir' => site-relative folder, 'filename' => name]   */
+/* ************************************************************************ */
+function ReceiveEventImageUpload(array $event, $file_field, $basename) {
+    if (!function_exists('imagecreatetruecolor')) {
+        error_log('ReceiveEventImageUpload: the GD extension is not available, so images cannot be resized');
+        EventAdminRespond('Fail', ['Image uploads are not available on this server (the PHP GD extension is missing).']);
     }
 
-    // Phones save photos sideways and record the rotation in EXIF - apply it.
-    if ($type === IMAGETYPE_JPEG && function_exists('exif_read_data')) {
-        $orientation = (@exif_read_data($tmp))['Orientation'] ?? 1;
-        if (in_array($orientation, [2, 4, 5, 7], true)) {
-            imageflip($image, IMG_FLIP_HORIZONTAL);
-        }
-        $angle = [3 => 180, 4 => 180, 5 => 270, 6 => 270, 7 => 90, 8 => 90][$orientation] ?? 0;
-        if ($angle !== 0) {
-            $rotated = imagerotate($image, $angle, 0);
-            imagedestroy($image);
-            $image = $rotated;
-        }
+    $upload = CheckFrontpageImageUpload($_FILES[$file_field] ?? null);
+    if ($upload['error'] !== '') {
+        EventAdminRespond('Fail', [$upload['error']]);
     }
 
-    $width  = imagesx($image);
-    $height = imagesy($image);
-    if ($height > FRONTPAGE_IMAGE_MAX_HEIGHT) {
-        $new_height = FRONTPAGE_IMAGE_MAX_HEIGHT;
-        $new_width  = max(1, (int) round($width * FRONTPAGE_IMAGE_MAX_HEIGHT / $height));
-        $resized = imagecreatetruecolor($new_width, $new_height);
-        imagealphablending($resized, false);
-        imagesavealpha($resized, true);
-        imagecopyresampled($resized, $image, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
-        imagedestroy($image);
-        $image = $resized;
+    $event_dir = EventImagesDirectory($event['EVENT_Directory']);
+    if ($event_dir === '' || !is_dir(__DIR__.'/events/'.$event['EVENT_Directory'])) {
+        EventAdminRespond('Fail', ['This event\'s folder (events/'.$event['EVENT_Directory'].'/) could not be found, so the image has nowhere to go.']);
+    }
+    $dir = __DIR__.'/'.$event_dir;
+    if (!is_dir($dir) && !mkdir($dir, 0755)) {
+        error_log('ReceiveEventImageUpload: could not create '.$dir);
+        EventAdminRespond('Fail', ['The image could not be saved. Please try again.']);
     }
 
-    if ($type === IMAGETYPE_PNG) {
-        $filename = $basename.'.png';
-        imagesavealpha($image, true);
-        $saved = imagepng($image, $dir.'/'.$filename, 6);
+    $filename = SaveFrontpageImage($upload['tmp'], $upload['type'], $dir, $basename, FRONTPAGE_IMAGE_MAX_HEIGHT);
+    if ($filename === '') {
+        error_log('ReceiveEventImageUpload: saving '.$file_field.' failed for event '.$event['EVENT_ID']);
+        EventAdminRespond('Fail', ['The image could not be saved. Please try again.']);
+    }
+    return ['event_dir' => $event_dir, 'filename' => $filename];
+}
+
+/* ************************************************************************ */
+/* Function:    RenderBannerTool                                            */
+/* Description: The Banner Images section at the bottom of Edit Event       */
+/*              Settings: up to EVENT_BANNER_MAX_IMAGES images in the       */
+/*              event's images/banners/ folder, each switched on or off for */
+/*              the event page's banner and put in order. Changes here are  */
+/*              saved straight away.                                        */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderBannerTool(array $event) {
+    $output_html  = '<div id="event_banner_tool" class="event_banner_tool">';
+    $output_html .= '<h3 style="margin-top:2em;">Banner Images</h3>';
+    $output_html .= '<p>These are the pictures that slide across the top of the event\'s page, each with the event\'s name and dates over it.
+        Upload up to '.EVENT_BANNER_MAX_IMAGES.' (JPEG, PNG or WebP - wide landscape photos work best; they\'re scaled to fit '
+        .EVENT_BANNER_MAX_WIDTH.' x '.EVENT_BANNER_MAX_HEIGHT.'). Tick Show for the ones to include, and use the arrows to set the order they appear in.
+        The other pages of the event show the first one. Tick Front Page on up to '.EVENT_FRONTPAGE_BANNERS.' shown images to also put them in the banner on
+        the NSX Meetup front page until the event is over. Changes here are saved straight away - there\'s no need to press Save above.</p>';
+    $output_html .= '<div id="event_banner_list">'.RenderBannerList($event).'</div>';
+    $output_html .= '<div id="event_banner_status" class="frontpage_upload_status"></div>';
+    $output_html .= '</div>';
+    return $output_html;
+}
+
+/* ************************************************************************ */
+/* Function:    RenderBannerList                                            */
+/* Description: The banner images table (shown ones first, in order, then   */
+/*              the rest) and the upload button, or a note when the folder  */
+/*              is full.                                                    */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderBannerList(array $event) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+    $files = EventBannerFiles($event['EVENT_Directory']);
+    $enabled = EventEnabledBanners($event);
+    $frontpage = EventFrontpageBanners($event);
+    $rows = array_merge($enabled, array_values(array_diff($files, $enabled)));
+
+    $output_html = '';
+    if (!$rows) {
+        $output_html .= '<p>No banner images yet. Until some are shown, the event\'s page uses its banners.php file if it has one, or a plain banner with its name and dates.</p>';
     } else {
-        $filename = $basename.'.jpg';
-        $saved = imagejpeg($image, $dir.'/'.$filename, 85);
+        $output_html .= '<div class="table-wrapper"><table class="regtype_table event_banner_table"><thead><tr>';
+        $output_html .= '<th>Order</th><th>Show</th><th>Front Page</th><th>Image</th><th>File</th><th></th></tr></thead><tbody>';
+        $last = count($enabled) - 1;
+        foreach ($rows as $i => $file) {
+            $shown = $i <= $last;
+            $id = 'event_banner_show_'.$i;
+            $output_html .= '<tr class="event_banner_row" banner_file="'.$h($file).'">';
+            $output_html .= '<td class="question_order_buttons">';
+            if ($shown) {
+                $output_html .= ($i > 0 ? '<a href="#" class="button small event_banner_move_button" direction="up" title="Move up">&uarr;</a>' : '')
+                               .($i < $last ? '<a href="#" class="button small event_banner_move_button" direction="down" title="Move down">&darr;</a>' : '');
+            }
+            $output_html .= '</td>';
+            $output_html .= '<td><input type="checkbox" id="'.$id.'" class="event_banner_show_checkbox"'.($shown ? ' checked' : '').' />';
+            $output_html .= '<label for="'.$id.'" class="regtype_checkbox_label" title="Show this image in the event page\'s banner"></label></td>';
+            // Only a shown image can go on the front page
+            $output_html .= '<td><input type="checkbox" id="'.$id.'_frontpage" class="event_banner_frontpage_checkbox"'
+                           .(in_array($file, $frontpage, true) ? ' checked' : '').($shown ? '' : ' disabled').' />';
+            $output_html .= '<label for="'.$id.'_frontpage" class="regtype_checkbox_label" title="'.($shown ? 'Also show this image in the NSX Meetup front page banner' : 'Tick Show first').'"></label></td>';
+            $output_html .= '<td class="event_banner_thumb"><img src="'.$h(EventBannerURL($event['EVENT_Directory'], $file)).'" alt="" /></td>';
+            $output_html .= '<td>'.$h($file).($shown ? '<br><span class="event_banner_position">Slide '.($i + 1).'</span>' : '').'</td>';
+            $output_html .= '<td class="regtype_actions"><a href="#" class="button small event_banner_delete_button">Delete</a></td>';
+            $output_html .= '</tr>';
+        }
+        $output_html .= '</tbody></table></div>';
     }
-    imagedestroy($image);
 
-    return $saved ? $filename : '';
+    if (count($files) < EVENT_BANNER_MAX_IMAGES) {
+        $output_html .= '<input type="file" id="event_banner_upload" accept="image/jpeg,image/png,image/webp" style="display:none;" />';
+        $output_html .= '<label for="event_banner_upload" id="event_banner_upload_button" class="button small">Upload Banner Image ('
+                       .count($files).' of '.EVENT_BANNER_MAX_IMAGES.' used)</label>';
+    } else {
+        $output_html .= '<p>All '.EVENT_BANNER_MAX_IMAGES.' banner images are in use. Delete one to upload another.</p>';
+    }
+    return $output_html;
 }
 
+/* ************************************************************************ */
+/* Function:    SaveEventBanners                                            */
+/* Description: Stores the event's shown banner images, in order, in        */
+/*              EVENT_Banner_Images, and the shown ones picked for the      */
+/*              site's front page in EVENT_Frontpage_Banners, then responds */
+/*              with the updated list.                                      */
+/* Returns:     JSON ['Pass', ['html', 'message']] or ['Fail', [messages]]  */
+/* ************************************************************************ */
+function SaveEventBanners(PDO $pdo, array $event, array $enabled, array $frontpage, $message) {
+    $enabled = array_values($enabled);
+    $frontpage = array_values(array_intersect($enabled, $frontpage));  // in the shown order, shown ones only
+    $value = $enabled ? json_encode($enabled) : null;
+    $frontpage_value = $frontpage ? json_encode($frontpage) : null;
+    $stmt = $pdo->prepare('UPDATE nsx_meetup_events SET EVENT_Banner_Images = ?, EVENT_Frontpage_Banners = ? WHERE EVENT_ID = ?');
+    if (!$stmt->execute([$value, $frontpage_value, $event['EVENT_ID']])) {
+        error_log('SaveEventBanners: database update failed for event '.$event['EVENT_ID']);
+        EventAdminRespond('Fail', ['The banner images could not be saved. Please try again.']);
+    }
+    $event['EVENT_Banner_Images'] = $value;
+    $event['EVENT_Frontpage_Banners'] = $frontpage_value;
+    EventAdminRespond('Pass', ['html' => RenderBannerList($event), 'message' => $message]);
+}
+
+/* ************************************************************************ */
+/* Function:    UploadBannerImage                                           */
+/* Description: Saves an uploaded banner image in the posted event's        */
+/*              images/banners/ folder as banner_<date>_<time>_<random>,    */
+/*              scaled to fit EVENT_BANNER_MAX_WIDTH x _HEIGHT, and adds it */
+/*              to the end of the shown banners. Refused once the folder    */
+/*              holds EVENT_BANNER_MAX_IMAGES.                              */
+/* Returns:     JSON ['Pass', ['html', 'message']] or ['Fail', [messages]]  */
+/* ************************************************************************ */
+function UploadBannerImage() {
+    list($pdo, $event) = EventAdminLoadEvent();
+    if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
+        EventAdminRespond('Fail', ['This form has expired. Reload the page and try again.']);
+    }
+    if (count(EventBannerFiles($event['EVENT_Directory'])) >= EVENT_BANNER_MAX_IMAGES) {
+        EventAdminRespond('Fail', ['This event already has '.EVENT_BANNER_MAX_IMAGES.' banner images. Delete one to upload another.']);
+    }
+    if (!function_exists('imagecreatetruecolor')) {
+        error_log('UploadBannerImage: the GD extension is not available, so images cannot be resized');
+        EventAdminRespond('Fail', ['Image uploads are not available on this server (the PHP GD extension is missing).']);
+    }
+    $upload = CheckFrontpageImageUpload($_FILES['banner_image'] ?? null);
+    if ($upload['error'] !== '') {
+        EventAdminRespond('Fail', [$upload['error']]);
+    }
+
+    $banner_dir = EventBannerDirectory($event['EVENT_Directory']);
+    if ($banner_dir === '' || !is_dir(__DIR__.'/events/'.$event['EVENT_Directory'])) {
+        EventAdminRespond('Fail', ['This event\'s folder (events/'.$event['EVENT_Directory'].'/) could not be found, so the image has nowhere to go.']);
+    }
+    $dir = __DIR__.'/'.$banner_dir;
+    if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+        error_log('UploadBannerImage: could not create '.$dir);
+        EventAdminRespond('Fail', ['The image could not be saved. Please try again.']);
+    }
+
+    // A new name for every upload (two in the same second still differ), so browsers never show a cached older image
+    $filename = SaveFrontpageImage($upload['tmp'], $upload['type'], $dir, 'banner_'.date('Ymd_His').'_'.bin2hex(random_bytes(2)),
+                                   EVENT_BANNER_MAX_HEIGHT, EVENT_BANNER_MAX_WIDTH);
+    if ($filename === '') {
+        error_log('UploadBannerImage: saving the banner failed for event '.$event['EVENT_ID']);
+        EventAdminRespond('Fail', ['The image could not be saved. Please try again.']);
+    }
+
+    $enabled = EventEnabledBanners($event);
+    $enabled[] = $filename;
+    SaveEventBanners($pdo, $event, $enabled, EventFrontpageBanners($event), 'Banner image uploaded and added to the end of the banner.');
+}
+
+/* ************************************************************************ */
+/* Function:    SaveBannerOrder                                             */
+/* Description: Saves which banner images are shown and their order: the    */
+/*              posted banners is a JSON list of file names in the order    */
+/*              they're shown, and frontpage the ones of those also on the  */
+/*              site's front page (at most EVENT_FRONTPAGE_BANNERS). Every  */
+/*              name must be in the banners folder.                         */
+/* Returns:     JSON ['Pass', ['html', 'message']] or ['Fail', [messages]]  */
+/* ************************************************************************ */
+function SaveBannerOrder() {
+    list($pdo, $event) = EventAdminLoadEvent();
+    if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
+        EventAdminRespond('Fail', ['This form has expired. Reload the page and try again.']);
+    }
+    $posted = json_decode((string)($_POST['banners'] ?? ''), true);
+    $files = EventBannerFiles($event['EVENT_Directory']);
+    if (!is_array($posted)) {
+        EventAdminRespond('Fail', ['The banner images could not be read. Please try again.']);
+    }
+    $frontpage = json_decode((string)($_POST['frontpage'] ?? '[]'), true);
+    if (!is_array($frontpage)) {
+        EventAdminRespond('Fail', ['The banner images could not be read. Please try again.']);
+    }
+    foreach (array_merge($posted, $frontpage) as $file) {
+        if (!is_string($file) || !in_array($file, $files, true)) {
+            EventAdminRespond('Fail', ['A banner image is no longer there. Reload the page and try again.']);
+        }
+    }
+    $frontpage = array_intersect(array_unique($posted), $frontpage);
+    if (count($frontpage) > EVENT_FRONTPAGE_BANNERS) {
+        EventAdminRespond('Fail', ['Only '.EVENT_FRONTPAGE_BANNERS.' images can go on the front page. Untick Front Page on one first.']);
+    }
+    SaveEventBanners($pdo, $event, array_unique($posted), $frontpage, 'Banner saved.');
+}
+
+/* ************************************************************************ */
+/* Function:    DeleteBannerImage                                           */
+/* Description: Deletes the posted file from the event's banners folder and */
+/*              takes it out of the shown banners.                          */
+/* Returns:     JSON ['Pass', ['html', 'message']] or ['Fail', [messages]]  */
+/* ************************************************************************ */
+function DeleteBannerImage() {
+    list($pdo, $event) = EventAdminLoadEvent();
+    if (!app_csrf_valid($_POST['csrf_token'] ?? null)) {
+        EventAdminRespond('Fail', ['This form has expired. Reload the page and try again.']);
+    }
+    $file = $_POST['file'] ?? '';
+    if (!is_string($file) || !in_array($file, EventBannerFiles($event['EVENT_Directory']), true)) {
+        EventAdminRespond('Fail', ['That banner image is no longer there. Reload the page to see the current list.']);
+    }
+    $path = __DIR__.'/'.EventBannerDirectory($event['EVENT_Directory']).'/'.$file;
+    if (!unlink($path)) {
+        error_log('DeleteBannerImage: could not delete '.$path);
+        EventAdminRespond('Fail', ['The banner image could not be deleted. Please try again.']);
+    }
+    $enabled = array_diff(EventEnabledBanners($event), [$file]);
+    SaveEventBanners($pdo, $event, $enabled, EventFrontpageBanners($event), 'Banner image deleted.');
+}

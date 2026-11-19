@@ -1,9 +1,28 @@
 <?php
   require_once __DIR__ . '/databaseFunctions.php';
+  require_once __DIR__ . '/eventAdmin.php';       // EventAdminAuthorize() for the registrant list
+  require_once __DIR__ . '/paymentMethods.php';   // PAYMENT_METHODS names
 
-  if(isset($_POST['method'])) {
-    $_POST['method']();
-  }
+  require_once __DIR__ . '/endpointGuard.php';  // EndpointDispatch() - only the methods below, each for the callers it names
+  const ACCOUNT_MANAGEMENT_METHODS = [
+      'ValidateResetCodeTimeframe'           => 'public',
+      'ResetUserPassword'                    => 'public',
+      'RenderBackButton'                     => 'public',
+      'UpdateUserAttendedEvents'             => 'registrant',
+      'RenderUserAccountInformation'         => 'self',
+      'RenderMyAccountAttending'             => 'self',
+      'RenderMyAccountManage'                => 'self',
+      'RenderManagementToolsSection'         => 'event_admin',
+      'NewRenderFindEditRegistration'        => 'event_admin',
+      'RenderEmailListGeneration'            => 'event_admin',
+      'RenderEditSponsorInformation'         => 'event_admin',
+      'RenderSponsorManagementInterface'     => 'event_admin',
+      'RenderSponsorshipManagementInterface' => 'event_admin',
+      'RenderSwapShopManagement'             => 'event_admin',
+      'RenderMyAccountOverLord'              => 'overlord',
+      'CreateEnterNewEventPage'              => 'overlord',
+  ];
+  EndpointDispatch(__FILE__, ACCOUNT_MANAGEMENT_METHODS, ['UpdateUserAttendedEvents']);
 
 /* ************************************************************************ */
 /* Funciton:    ValidateResetCodeTimeframe                         		*/
@@ -16,8 +35,7 @@ function ValidateResetCodeTimeframe() {
 
     $results = array();
 	$conn = connectDB('kirbypar_nsx_meetup');
-    $query = sprintf('SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Password_Reset_ID` = "%s" ', $UUID); 
-	$result = $conn->query($query);
+    $result = PreparedQuery($conn, 'SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Password_Reset_ID` = ?', [is_string($UUID) ? $UUID : '']);
 	if($result->num_rows > 0) {
         $row = $result->fetch_assoc();      
         $ts1 = strtotime($row['NSX_Password_Reset_Timer']);
@@ -63,10 +81,15 @@ function ResetUserPassword() {
     $UUID = $_POST['UUID'];
     $results = array();
 	$conn = connectDB('kirbypar_nsx_meetup');
-    $query = sprintf('SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Password_Reset_ID` = "%s" ', $UUID); 
-	$result = $conn->query($query);
+    $result = PreparedQuery($conn, 'SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Password_Reset_ID` = ?', [is_string($UUID) ? $UUID : '']);
 	if($result->num_rows > 0) {
         $row = $result->fetch_assoc();
+        // The same one hour limit ValidateResetCodeTimeframe shows the form for
+        if (!is_string($password) || $password === '' || (time() - strtotime($row['NSX_Password_Reset_Timer'])) > 3600) {
+            closeDB($conn);
+            echo json_encode(['fail', 'This password reset link has expired. Request another link and try again.']);
+            return;
+        }
         $new_password = password_hash($password, PASSWORD_BCRYPT, ["cost" => 11]);
         $user_id = $row['NSX_User_ID'];
 
@@ -345,16 +368,64 @@ function  RenderManagementToolsSection () {
     $output_html .= '<div>';
     $output_html .= '    <span class="number"><span class="icon solid fa-credit-card"></span></span>';
     $output_html .= '    <h3>Enable / Edit Event Payment Options</h3>';
-    $output_html .= '    <p>Set the event\'s fees, child pricing, payment instructions, processing fee and Stripe checkout.</p>';
+    $output_html .= '    <p>Set whether the event collects payments, the payment instructions, processing fee and Stripe checkout.</p>';
     $output_html .= '    <a href="#" id="admin_event_handler" action="edit_event_payments" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
+    $output_html .= '</div>';
+
+    /* -- Add / Edit / Delete Registration Types -- */
+    $output_html .= '<div>';
+    $output_html .= '    <span class="number"><span class="icon solid fa-list"></span></span>';
+    $output_html .= '    <h3>Add / Edit / Delete Registration Types</h3>';
+    $output_html .= '    <p>Set up the types of registration (with their cost and description) that registrants choose from.</p>';
+    $output_html .= '    <a href="#" id="admin_event_handler" action="edit_registration_types" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
     $output_html .= '</div>';
 
     /* -- Find / Edit Registrations -- */
     $output_html .= '<div>';
     $output_html .= '    <span class="number"><span class="icon solid fa-user"></span></span>';
-    $output_html .= '    <h3>Find / Edit Registrations</h3>';
-    $output_html .= '    <p>To find and / or edit a particiapnts information, simple click the link below. Use the filter box on the new page to quickly find the participant you need..</p>';
+    $output_html .= '    <h3>Find / Edit / Delete Registrations</h3>';
+    $output_html .= '    <p>Find, view, edit or delete a registration, see how each registrant is paying, and mark payments received. Use the filter box on the new page to quickly find the participant you need.</p>';
     $output_html .= '    <button id="admin_event_handler" action="find_edit_registration" class="button primary small fit" event_id="'.$event_id.'" collect_payment="'.$collect_payments.'">Click Here</button>';
+    $output_html .= '</div>';
+
+    /* -- Add / Edit Agenda Events -- */
+    $output_html .= '<div>';
+    $output_html .= '    <span class="number"><span class="icon solid fa-calendar-alt"></span></span>';
+    $output_html .= '    <h3>Add / Edit Agenda Events</h3>';
+    $output_html .= '    <p>Add, edit, hide or delete the events on the event\'s agenda - golf, dinners, drives - with their times, location, contact details and banner image.</p>';
+    $output_html .= '    <a href="#" id="admin_event_handler" action="edit_weekend_events" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
+    $output_html .= '</div>';
+
+    /* -- Add / Edit Registration Form Questions -- */
+    $output_html .= '<div>';
+    $output_html .= '    <span class="number"><span class="icon solid fa-clipboard-list"></span></span>';
+    $output_html .= '    <h3>Add / Edit Registration Form Questions</h3>';
+    $output_html .= '    <p>Add, edit, reorder, hide or delete the yes/no and drop-down questions on the registration form, including options that add a charge.</p>';
+    $output_html .= '    <a href="#" id="admin_event_handler" action="edit_form_questions" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
+    $output_html .= '</div>';
+
+    /* -- Add / Edit Hotels and Local Attractions -- */
+    $output_html .= '<div>';
+    $output_html .= '<span class="number"><span class="icon solid fa-hotel"></span></span>';
+    $output_html .= '<h3>Add / Edit Hotels and Local Attractions</h3>';
+    $output_html .= '<p>Add, edit or delete the hotels and local attractions listed on the event\'s page.</p>';
+    $output_html .= '<a href="#" id="render_local_attractions" class="button primary small fit" event_id="'.$event_id.'" editable="true">Click Here</a>';
+    $output_html .= '</div>';
+
+    /* -- Add / Edit Sponsorship Levels -- */
+    $output_html .= '<div>';
+    $output_html .= '<span class="number"><span class="icon solid fa-layer-group"></span></span>';
+    $output_html .= '<h3>Add / Edit Sponsorship Levels</h3>';
+    $output_html .= '<p>In this section, you will be able to add a new sponsorship level or edit the properties of an existing level.</p>';
+    $output_html .= '<a href="#" id="admin_event_handler" action="sponsorship_level_management" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
+    $output_html .= '</div>';
+
+    /* -- Add / Edit Sponsor Information -- */
+    $output_html .= '<div>';
+    $output_html .= '<span class="number"><span class="icon solid fa-handshake"></span></span>';
+    $output_html .= '<h3>Add / Edit Sponsor Information</h3>';
+    $output_html .= '<p>In this section, you will be able to add a new sponsor or edit the properties of an existing sponsor.</p>';
+    $output_html .= '<a href="#" id="admin_event_handler" action="sponsor_management" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
     $output_html .= '</div>';
 
     /* -- Attendees -- */
@@ -398,14 +469,6 @@ function  RenderManagementToolsSection () {
     $output_html .= '<a href="#" id="admin_event_handler" action="email_list_generation" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
     $output_html .= '</div>';
 
-    /* -- News Container -- */
-    $output_html .= '<div>';
-    $output_html .= '<span class="number"><span class="icon solid fa-bullhorn"></span></span>';
-    $output_html .= '<h3>Edit / Add / Delete Local Attractions</h3>';
-    $output_html .= '<p>Edit the content of the news section or remove it all together.</p>';
-    $output_html .= '<a href="#" id="render_local_attractions" class="button primary small fit" event_id="'.$event_id.'" editable="true">Click Here</a>';
-    $output_html .= '</div>';
-
     /* -- Swap Shop -- */
     // $output_html .= '<div>';
     // $output_html .= '<span class="number"><span class="icon solid fa-tag"></span></span>';
@@ -421,22 +484,6 @@ function  RenderManagementToolsSection () {
     // $output_html .= '<p>In this section, you will be able to add a new sponsor or edit the properties of an existing sponsor.</p>';
     // $output_html .= '<button id="edit_sponsor_information" class="button primary small fit" event_name="'.$event_name.'" event_id="'.$event_id.'">Click Here</button>';
     // $output_html .= '</div>';  
-
-    /* -- Sponsor Managememt Section -- */
-    $output_html .= '<div>';
-    $output_html .= '<span class="number"><span class="icon solid fa-user"></span></span>';
-    $output_html .= '<h3>Add / Edit Sponsorship Levels</h3>';
-    $output_html .= '<p>In this section, you will be able to add a new sponsorship level or edit the properties of an existing levels.</p>';
-    $output_html .= '<a href="#" id="admin_event_handler" action="sponsorship_level_management" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
-    $output_html .= '</div>';      
-
-    /* -- Sponsor Managememt Section -- */
-    $output_html .= '<div>';
-    $output_html .= '<span class="number"><span class="icon solid fa-user"></span></span>';
-    $output_html .= '<h3>Add / Edit Sponsor Information</h3>';
-    $output_html .= '<p>In this NEW section, you will be able to add a new sponsor or edit the properties of an existing sponsor.</p>';
-    $output_html .= '<a href="#" id="admin_event_handler" action="sponsor_management" class="button primary small fit" event_id="'.$event_id.'">Click Here</a>';
-    $output_html .= '</div>';
 
     /* -- Filler -- */
     // $output_html .= '<div>';
@@ -478,9 +525,7 @@ function RenderEditLocalAttraction() {
 /* ************************************************************************ */
 function RetrieveUserInformation($username) {
 	$conn = connectDB('kirbypar_nsx_meetup');
-    $query = sprintf("SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username`= '%s'", $username);
-    
-    $result = $conn->query($query);
+    $result = PreparedQuery($conn, "SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username` = ?", [(string)$username]);
     if($result->num_rows > 0) {
         $object = $result->fetch_object();
     } else {
@@ -498,7 +543,7 @@ function RetrieveUserInformation($username) {
 function  UpdateUserAttendedEvents() {
 	$driver1 = $_POST['driver1'];
 	$driver2 = $_POST['driver2'];
-    $event_id = $_POST['event_id'];
+    $event_id = (int)$_POST['event_id'];  // added to the account's list of events attended
 	$result = array();
     $status = 'fail';
     $message = '';
@@ -511,8 +556,7 @@ function  UpdateUserAttendedEvents() {
         $row = $result->fetch_assoc();
         $driver_1_email = $row['Participant_Email'];
 
-        $account_query = sprintf("SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username`='%s'", $driver_1_email);
-        $account_results = $conn->query($account_query);
+        $account_results = PreparedQuery($conn, "SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username` = ?", [$driver_1_email]);
         if($account_results->num_rows > 0) {
             try {
                 $account_row = $account_results->fetch_assoc();
@@ -551,8 +595,7 @@ function  UpdateUserAttendedEvents() {
             $row = $result->fetch_assoc();
             $driver_2_email = $row['Participant_Email'];
     
-            $account_query = sprintf("SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username`='%s'", $driver_2_email);
-            $account_results = $conn->query($account_query);
+            $account_results = PreparedQuery($conn, "SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username` = ?", [$driver_2_email]);
             if($account_results->num_rows > 0) {
                 try {
                     $account_row = $account_results->fetch_assoc();
@@ -674,33 +717,9 @@ function RenderCurrentSponsorContent($event_id, $result) {
             $output_html .= '<label for="active_sponsor_'.$row['SPONSOR_ID'].'_on">Yes</label>';
             $output_html .= '<input type="radio" id="active_sponsor_'.$row['SPONSOR_ID'].'_off" name="active_sponsor_radio_button_'.$row['SPONSOR_ID'].'" value="0" event_id='.$event_id.' sponsor_id='.$row['SPONSOR_ID'].' '.($row['SPONSOR_Active']?'':' checked').'>';
             $output_html .= '<label for="active_sponsor_'.$row['SPONSOR_ID'].'_off">No</label></td>';       
-            $output_html .=  '<td>'.$row['SPONSOR_Level'].'</td><td><a href="#" id="edit_sponsor_button" class="button small" sponsor_id='.$row['SPONSOR_ID'].'>Edit</a></td></tr>';
+            $output_html .=  '<td>'.$row['SPONSOR_Level'].'</td><td><a href="#" id="edit_sponsor_button" class="button small" event_id="'.(int)$event_id.'" sponsor_id="'.(int)$row['SPONSOR_ID'].'">Edit</a></td></tr>';
         }
     } 
-
-    $output_html .= '</tbody></table>';
-    $output_html .= '</div>';  
-    return($output_html);
-}
-
-/* ************************************************************************ */
-/* Function:    RenderPreviousSponsorContent                				*/
-/* Description: This function will render the information about ALL the     */
-/*              current le Tour de Femmme sponsor and give the user the     */
-/*              ability to edit them.                                       */
-/* Inputs:      #result = The database sponsor information.                 */
-/* Returns:     html data                                     				*/
-/* ************************************************************************ */  
-function RenderPreviousSponsorContent($event_id, $active_user, $active_user_id) {
-
-    $output_html = '';
-    $output_html .= '<div class="col-12 col-12-small">';
-    $output_html .= '<table id="sponsor_management_table"><head><tr>
-                     <th>Sponsor Name</th>
-                     <th>Active Sponsor</th>
-                     <th>Sponsor Level</th>
-                     <th></th>
-                     </tr></thead><tbody>';
 
     $output_html .= '</tbody></table>';
     $output_html .= '</div>';  
@@ -716,40 +735,34 @@ function RenderPreviousSponsorContent($event_id, $active_user, $active_user_id) 
 /* Returns:     html data                                     				*/
 /* ************************************************************************ */  
 function RenderCurrentSponsorshipLevelContent($event_id, $result) {
+    $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES); };
+    $event_id = (int)$event_id;
     $output_html = '';
     $output_html .= '<div class="col-12 col-12-small">';
-    $output_html .= '<table id="sponsorship_level_management_table"><head><tr>
-                     <th>Level Type</th>
+    $output_html .= '<table id="sponsorship_level_management_table"><thead><tr>
                      <th>Level Name</th>
                      <th>Active Level</th>
                      <th>Level Amount</th>
                      <th>Logo Size</th>
                      <th></th>
                      </tr></thead><tbody>';
-    
-  
-    while ($row = $result->fetch_array()) {
-        // $event_sponsored = explode(',', $row['SPONSOR_Event_IDs']);
-        // if (in_array($event_id, $event_sponsored)) {
-        //     $sponsors_to_display[] = $row;
 
-            $output_html .=  '<tr id="individual_level" active_state='.$row['LEVEL_Active'].'>';
-            $output_html .=  '<td>'.$row['LEVEL_Type'].'</td>';
-            $output_html .=  '<td>'.$row['LEVEL_Name'].'</td>';
+    while ($row = $result->fetch_assoc()) {
+        $id = (int)$row['LEVEL_ID'];
+        $output_html .= '<tr id="individual_level" active_state="'.(int)$row['LEVEL_Active'].'">';
+        $output_html .= '<td>'.$h($row['LEVEL_Name']).'</td>';
 
-            /* Setup Radio Buttons to enable / disable sponsors on the fly */
-            $output_html .= '<td><input type="radio" id="active_sponsorship_level_'.$row['LEVEL_ID'].'_on" name="active_sponsorship_level_radio_button_'.$row['LEVEL_ID'].'" value="1" event_id='.$event_id.' level_id='.$row['LEVEL_ID'].' '.($row['LEVEL_Active']?' checked':'').'>';
-            $output_html .= '<label for="active_sponsorship_level_'.$row['LEVEL_ID'].'_on">Yes</label>';
-            $output_html .= '<input type="radio" id="active_sponsorship_level_'.$row['LEVEL_ID'].'_off" name="active_sponsorship_level_radio_button_'.$row['LEVEL_ID'].'" value="0" event_id='.$event_id.' level_id='.$row['LEVEL_ID'].' '.($row['LEVEL_Active']?'':' checked').'>';
-            $output_html .= '<label for="active_sponsorship_level_'.$row['LEVEL_ID'].'_off">No</label></td>';       
-            
-            $output_html .= '<td>'.$row['LEVEL_Amount'].'</td>';
-            $output_html .= '<td>'.$row['LEVEL_Logosize_Description'].'</td>';
-            $output_html .= '<td><a href="#" id="edit_sponsorship_level_button" class="button small" event_id='.$event_id.' level_id='.$row['LEVEL_ID'].'>Edit</a></td>';
+        /* Radio Buttons to enable / disable levels on the fly */
+        $output_html .= '<td><input type="radio" id="active_sponsorship_level_'.$id.'_on" name="active_sponsorship_level_radio_button_'.$id.'" value="1" event_id="'.$event_id.'" level_id="'.$id.'"'.($row['LEVEL_Active'] ? ' checked' : '').'>';
+        $output_html .= '<label for="active_sponsorship_level_'.$id.'_on">Yes</label>';
+        $output_html .= '<input type="radio" id="active_sponsorship_level_'.$id.'_off" name="active_sponsorship_level_radio_button_'.$id.'" value="0" event_id="'.$event_id.'" level_id="'.$id.'"'.($row['LEVEL_Active'] ? '' : ' checked').'>';
+        $output_html .= '<label for="active_sponsorship_level_'.$id.'_off">No</label></td>';
 
-            $output_html .= '</tr>';
-        // }
-    } 
+        $output_html .= '<td>$'.$h(number_format((float)$row['LEVEL_Amount'])).'</td>';
+        $output_html .= '<td>'.$h($row['LEVEL_Logosize_Description']).'</td>';
+        $output_html .= '<td><a href="#" id="edit_sponsorship_level_button" class="button small" event_id="'.$event_id.'" level_id="'.$id.'">Edit</a></td>';
+        $output_html .= '</tr>';
+    }
 
     $output_html .= '</tbody></table>';
     $output_html .= '</div>';  
@@ -791,15 +804,22 @@ function RenderSwapShopManagement() {
 /* Returns:     HTML                                        				*/
 /* ************************************************************************ */
 function NewRenderFindEditRegistration() {
-    $event_id = $_POST['event_id'];
+    $event_id = (int)($_POST['event_id'] ?? 0);
 
-	$output_html = '<div id="edit_find_user_registration" class="">';
+    // Registrants' details and payments - event admins (or overlords) only
+    app_session_start();
+    EventAdminAuthorize(Create_SQL_PHP_DataObject(DB_NAME), $event_id);
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+
+	$output_html = '<div id="edit_find_user_registration" class="" event_id="'.$event_id.'" csrf_token="'.$h(app_csrf_token()).'">';
     $output_html .= '<h1 class="major">Registrant Search</h1>';
     $output_html .= '<div id="back_navigation_button"></div>';    
 	$output_html .= '	<div id="rider_search_form_container" class="rider_search_form_container" >';
-	$output_html .= '       <p class="small">To search for a participant, simply start typing their name into the box below. The list will be filtered after each entered letter.</p>';
+	$output_html .= '       <p class="small">To search for a participant, simply start typing their name into the box below. The list will be filtered after each entered letter. '
+                   .'Click a name (or <span class="icon solid fa-search"></span>) to see and edit the registration.</p>';
 	$output_html .= '		<input type="text" id="participant_name_search" name="participant_name_search" placeholder="Enter a name to filter the list">';
 	$output_html .= '	</div>';
+	$output_html .= '	<div id="registrant_list_messages"></div>';
 	
 	/***********************/
 	/* Setup DB Connection */
@@ -813,20 +833,44 @@ function NewRenderFindEditRegistration() {
 	$result = $link->query($event_query);
 	if ($result->num_rows > 0) {
         $row =  mysqli_fetch_assoc($result);
-        $participants = $row['EVENT_Participants'];
+        $participant_ids = array_map('intval', array_filter(array_map('trim', explode(',', (string)$row['EVENT_Participants'])), 'strlen'));
         $collect_payments = ($row['EVENT_Collect_Payments'])?'yes':'no';
-        $user_query = sprintf("SELECT * FROM `nsx_meetup_participants` WHERE `Participant_ID` IN (%s) ORDER BY `Participant_Name`", $participants);
-        $user_result = $link->query($user_query);
         $output_html .= '<div class="event_registration_sub_container active">';
-        $output_html .= '<table id="participant_checkin_table" class="alt rider_checkin_table"><thead><tr><th data-sort="string">Participant Name (Click to sort)</th><th>Payment Received</th></tr></thead><tbody>';
-        while ($part_row = mysqli_fetch_assoc($user_result)) {
-            $output_html .= '<tr name="'.$part_row['Participant_Name'].'"><td id="edit_find_participant_link" class="edit_find_column" action="render_participant_information" event_id="'.$event_id.'" collect_payments="'.$collect_payments.'" participant_id="'.$part_row['Participant_ID'].'">'.$part_row['Participant_Name'].' ('.$part_row['Participant_Role'].')</td>';
-            $output_html .= '<td width="5%" style="text-align:center;"><input type="checkbox" event_name="'.$row['EVENT_Name'].'" email_address="'.$part_row['Participant_Email'].'" part_name="'.$part_row['Participant_Name'].'" part_idnum="'.$part_row['Participant_ID'].'" id="participant_paid_checkbox_'.$part_row['Participant_ID'].'" '.($part_row['Participant_Balance_Paid']?" checked":"").' >';
-            $output_html .=  '<label for="participant_paid_checkbox_'.$part_row['Participant_ID'].'"></label></td>';
-            $output_html .= '</tr>';
+        if (!$participant_ids) {
+            $output_html .= '<p>No one has registered for this event yet.</p>';
+        } else {
+            // The event's registration type names, for the Registration Type column
+            $stmt = Create_SQL_PHP_DataObject(DB_NAME)->prepare('SELECT REGTYPE_ID, REGTYPE_Name FROM nsx_meetup_registration_types WHERE REGTYPE_Event_ID = ?');
+            $stmt->execute([$event_id]);
+            $regtype_names = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
+            $user_query = sprintf("SELECT * FROM `nsx_meetup_participants` WHERE `Participant_ID` IN (%s) ORDER BY `Participant_Name`", implode(',', $participant_ids));
+            $user_result = $link->query($user_query);
+            $output_html .= '<div class="table-wrapper">';
+            $output_html .= '<table id="participant_checkin_table" class="alt rider_checkin_table registrant_table"><thead><tr>';
+            $output_html .= '<th data-sort="string">Registrant (click to sort)</th><th data-sort="string">Registration Type</th><th data-sort="string">Paying With</th><th data-sort="string">Payment Status</th><th class="registrant_center">Received</th><th class="registrant_center">Delete</th>';
+            $output_html .= '</tr></thead><tbody>';
+            while ($part_row = mysqli_fetch_assoc($user_result)) {
+                $id = (int)$part_row['Participant_ID'];
+                list($status, $status_class, $status_icon) = RegistrantPaymentStatus($part_row, $collect_payments === 'yes');
+                $method = (string)$part_row['Participant_Payment_Method'];
+                $view_attributes = 'action="render_participant_information" event_id="'.$event_id.'" collect_payments="'.$collect_payments.'" participant_id="'.$id.'"';
+
+                $output_html .= '<tr name="'.$h($part_row['Participant_Name']).'" registrant_id="'.$id.'">';
+                $output_html .= '<td class="registrant_name_cell">';
+                $output_html .= '<a href="#" class="registrant_view_icon" title="View / edit this registration" '.$view_attributes.'><span class="icon solid fa-search"></span></a> ';
+                $output_html .= '<span id="edit_find_participant_link" class="edit_find_column" '.$view_attributes.'>'.$h($part_row['Participant_Name']).' ('.$h($part_row['Participant_Role']).')</span></td>';
+                $regtype = $regtype_names[$part_row['Participant_Registration_Type'] ?? ''] ?? '';
+                $output_html .= '<td>'.($regtype !== '' ? $h($regtype) : '<span class="registrant_none">-</span>').'</td>';
+                $output_html .= '<td>'.(isset(PAYMENT_METHODS[$method]) ? $h(PAYMENT_METHODS[$method]['name']) : '<span class="registrant_none">-</span>').'</td>';
+                $output_html .= '<td class="registrant_status_cell" data-sort-value="'.$h($status).'">'.RenderRegistrantStatus($part_row, $collect_payments === 'yes').'</td>';
+                $output_html .= '<td class="registrant_center"><input type="checkbox" event_name="'.$h($row['EVENT_Name']).'" email_address="'.$h($part_row['Participant_Email']).'" part_name="'.$h($part_row['Participant_Name']).'" part_idnum="'.$id.'" id="participant_paid_checkbox_'.$id.'" '.($part_row['Participant_Balance_Paid']?" checked":"").' >';
+                $output_html .= '<label for="participant_paid_checkbox_'.$id.'" title="Payment received"></label></td>';
+                $output_html .= '<td class="registrant_center"><a href="#" class="registrant_delete_button" participant_id="'.$id.'" participant_name="'.$h($part_row['Participant_Name']).'" title="Delete this registration"><span class="icon solid fa-trash-alt"></span><span class="registrant_delete_confirm">Click again to delete</span></a></td>';
+                $output_html .= '</tr>';
+            }
+            $output_html .= "</tbody></table></div>";
         }
-        $output_html .= "</tbody></table>";
 	}
 	$output_html .= '</div></div>';
 	
@@ -837,6 +881,51 @@ function NewRenderFindEditRegistration() {
 	$results = [$output_html];
 	echo json_encode($results);
 }	
+
+/* ************************************************************************ */
+/* Funciton:    RegistrantPaymentStatus                                	    */
+/* Description: Where a registrant's payment stands, for the registrant     */
+/*              list: wait list, no charge, paid, awaiting payment (chose a */
+/*              pay-later method at checkout) or no method chosen (never    */
+/*              finished checkout).                                         */
+/* Returns:     [label, CSS class, Font Awesome icon]                       */
+/* ************************************************************************ */
+function RegistrantPaymentStatus(array $participant, $collect_payments) {
+    if (!empty($participant['Participant_Wait_Listed'])) {
+        return ['Wait list', 'status_wait_list', 'fa-clock'];
+    }
+    if (!$collect_payments || (int)$participant['Participant_Balance_Due'] <= 0) {
+        return ['No charge', 'status_no_charge', 'fa-minus-circle'];
+    }
+    if (!empty($participant['Participant_Balance_Paid'])) {
+        return ['Paid', 'status_paid', 'fa-check-circle'];
+    }
+    if ((string)$participant['Participant_Payment_Method'] !== '') {
+        return ['Awaiting payment', 'status_awaiting', 'fa-hourglass-half'];
+    }
+    return ['No method chosen', 'status_no_method', 'fa-exclamation-circle'];
+}
+
+/* ************************************************************************ */
+/* Funciton:    RenderRegistrantStatus                                 	    */
+/* Description: The status badge and amount for the registrant list. It     */
+/*              also carries the unpaid status, so ticking / unticking      */
+/*              Received can switch the badge without reloading            */
+/*              (UpdateRegistrantStatus in account.js).                     */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderRegistrantStatus(array $participant, $collect_payments) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+    list($label, $class, $icon) = RegistrantPaymentStatus($participant, $collect_payments);
+    $unpaid = $participant;
+    $unpaid['Participant_Balance_Paid'] = 0;
+    list($unpaid_label, $unpaid_class, $unpaid_icon) = RegistrantPaymentStatus($unpaid, $collect_payments);
+    $amount = ($collect_payments && (int)$participant['Participant_Balance_Due'] > 0 && empty($participant['Participant_Wait_Listed']))
+        ? '<span class="registrant_amount">$'.number_format($participant['Participant_Balance_Due'] / 100, 2).'</span>' : '';
+
+    return '<span class="registrant_status '.$class.'" unpaid_label="'.$h($unpaid_label).'" unpaid_class="'.$unpaid_class.'" unpaid_icon="'.$unpaid_icon.'">'
+          .'<span class="icon solid '.$icon.'"></span> <span class="registrant_status_label">'.$h($label).'</span></span>'.$amount;
+}
 
 /* ************************************************************************ */
 /* Funciton:    RenderEmailListGeneration                         		    */
@@ -893,9 +982,10 @@ function RenderSponsorManagementInterface() {
     $event_id = $_POST['event_id'];
     $active_user = $_POST['active_user'];
     $active_user_id = $_POST['active_id_number'];
-	$output_html = '<div id="sponsor_management_interface" class="">';
+	$output_html = '<div id="sponsor_management_interface" class="" event_id="'.(int)$event_id.'" csrf_token="'.htmlspecialchars(app_csrf_token(), ENT_QUOTES).'">';
     $output_html .= '<h1 class="major">Sponsor Management</h1>';
     $output_html .= '<div id="back_navigation_button" class="back_navigation_button"></div>';    
+    $output_html .= '<p id="sponsor_list_status"></p>';
 	$output_html .= '<p>This is the sponsor management interface. Here, you will be able to edit the properties of all the existing sponsors in the le Tour de Femme
     sponsors database. These properties include everything from the basics, such as name and web link information for a sponsor, to advanced details such as sposnorship level and logos.
     Additionally, you will be able to set the active status of a current or past sponsor. Only active sponsors are displayed on the web site. Finally, you will be able
@@ -915,12 +1005,6 @@ function RenderSponsorManagementInterface() {
 	}
     $output_html .= '</div>';
 
-    $output_html .= '<div id="sponorsors_from_past_events" class="sponorsor_management_container">';
-	if ($result->num_rows > 0) {
-        $output_html .= RenderPreviousSponsorContent($event_id, $active_user, $active_user_id);
-	}
-    $output_html .= '</div>';
-	
 	$output_html .= '</div>';
     $output_html .= '<div class="col-12 col-12-small"><a href="#" id="create_new_sponsor_button" class="button primary" event_id="'.$event_id.'">Add New Sponsor</a></div>';
 
@@ -948,15 +1032,15 @@ function RenderSponsorshipManagementInterface() {
     $event_id = $_POST['event_id'];
     $active_user = $_POST['active_user'];
     $active_user_id = $_POST['active_id_number'];
-	$output_html = '<div id="sponsorship_level_management_interface" class="">';
+    $event_id = (int)$event_id;
+	$output_html = '<div id="sponsorship_level_management_interface" class="" event_id="'.$event_id.'" csrf_token="'.htmlspecialchars(app_csrf_token(), ENT_QUOTES).'">';
     $output_html .= '<h1 class="major">Sponsorship Level Management</h1>';
     $output_html .= '<div id="back_navigation_button" class="back_navigation_button"></div>';    
-	$output_html .= '<p>This is the sponsorship level management interface. Here, you will be able to edit the properties of all the existing sponsorship levels in the event database. These properties include everything from the basics, such as name and web link information for a sponsor, to advanced details such as sposnorship level and logos.
-    Additionally, you will be able to set the active status of a current or past sponsorship level. Only active sponsors are displayed on the web site. 
-    Finally, you will be able to enter details for new sponsorship as they are needed.</p>';
+	$output_html .= '<p>This is the sponsorship level management interface. Here you can add this event\'s sponsorship levels and edit their name, amount and logo size. 
+    Only active levels can be given to sponsors - set a level to inactive to stop it being offered.</p>';
+    $output_html .= '<p id="sponsorship_level_list_status"></p>';
 	
-	$query = sprintf("SELECT * FROM `nsx_meetup_sponsorship_levels` WHERE `EVENT_ID` = %d ORDER BY `LEVEL_Amount` DESC", $event_id);
-	$result = $link->query($query);
+	$result = PreparedQuery($link, "SELECT * FROM `nsx_meetup_sponsorship_levels` WHERE `EVENT_ID` = ? ORDER BY `LEVEL_Amount` DESC", [$event_id]);
 
 	// $output_html .= '<div class="admin_console_buttons">';
 	// // $output_html .= '<a href="#" id="submit_changes_button" table="letourdefemme_event_info" class="button disabled small" disabled>Submit Changes</a>';
@@ -964,8 +1048,10 @@ function RenderSponsorshipManagementInterface() {
 	// $output_html .= '</div>';
 
     $output_html .= '<div id="sponsorship_levels_for_current_event" class="sponorsor_management_container active">';
-	if ($result->num_rows > 0) {
+	if ($result && $result->num_rows > 0) {
         $output_html .= RenderCurrentSponsorshipLevelContent($event_id, $result);
+	} else {
+        $output_html .= '<p>No sponsorship levels have been set up for this event yet.</p>';
 	}
     $output_html .= '</div>';
 
@@ -1114,7 +1200,10 @@ function RenderBackButton() {
             break;            
         case 'backtoeditsponsorshiplevels':
             $output_html = '<a href="#" id="back_button_link" action="'.$action.'" event_id="'.$_POST['event_id'].'"class="button primary">Back to Sponsorship Levels</a>';
-            break;                          
+            break;
+        case 'backtoeditsponsors':
+            $output_html = '<a href="#" id="back_button_link" action="'.$action.'" event_id="'.(int)$_POST['event_id'].'" class="button primary">Back to Sponsor Information</a>';
+            break;
         default:
             $output_html = '<a href="#" id="back_button_link" action="default" class="button primary">Default Back Button</a>';
     }

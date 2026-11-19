@@ -8,8 +8,8 @@ require_once __DIR__ . '/config.php';
 /*  file previously existed as near-identical copies inside    */
 /*  GENERALFunctions.php, REPORTINGFunctions.php,              */
 /*  EVENTCreation.php, GETEventID.php,                         */
-/*  LOCALAttractionFunctions.php, crap.php, GF-Backup.php,      */
-/*  PARTICIPANTManagement.php, ACCOUNTCreation.php, and         */
+/*  LOCALAttractionFunctions.php, PARTICIPANTManagement.php,    */
+/*  ACCOUNTCreation.php, and                                    */
 /*  database_client.php. Every one of those now does:          */
 /*    require_once __DIR__ . '/databaseFunctions.php';         */
 /*  instead of redefining these functions itself.              */
@@ -67,6 +67,44 @@ function selectDB($DB) {
   if (!$db_selected) {
     die('Could not select database: ' . mysql_error());
   }
+}
+
+/* *********************************************************** */
+/* Funciton:    PreparedQuery                                  */
+/* Description: Runs $sql as a prepared statement on a MySQLi  */
+/*              connection, with each ? filled from $params -   */
+/*              values are never pasted into the SQL.           */
+/* Inputs:      $conn - from connectDB(), $sql - with ?         */
+/*              placeholders, $params - their values, in order. */
+/* Returns:     mysqli_result for a SELECT (num_rows,           */
+/*              fetch_assoc() as with $conn->query()), true for */
+/*              other statements, false on failure.             */
+/* *********************************************************** */
+function PreparedQuery($conn, $sql, array $params = []) {
+  $stmt = $conn->prepare($sql);
+  if (!$stmt) {
+    return false;
+  }
+  if ($params) {
+    $params = array_map(function ($value) { return $value === null ? null : (string)$value; }, array_values($params));
+    $stmt->bind_param(str_repeat('s', count($params)), ...$params);
+  }
+  if (!$stmt->execute()) {
+    return false;
+  }
+  $result = $stmt->get_result();
+  return $result !== false ? $result : true;
+}
+
+/* *********************************************************** */
+/* Funciton:    IntegerList                                    */
+/* Description: A comma separated list of ids (e.g.            */
+/*              EVENT_Participants) as whole numbers only, safe */
+/*              for an IN (...) - '0' when there are none.      */
+/* *********************************************************** */
+function IntegerList($list) {
+  $ids = array_filter(array_map('intval', explode(',', (string)$list)), function ($id) { return $id > 0; });
+  return $ids ? implode(',', $ids) : '0';
 }
 
 /* *********************************************************** */

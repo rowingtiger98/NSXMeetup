@@ -1,9 +1,28 @@
 <?php
     require_once __DIR__ . '/databaseFunctions.php';
+    require_once __DIR__ . '/SessionBootstrap.php';
+    require_once __DIR__ . '/paymentMethods.php';
+    require_once __DIR__ . '/eventImages.php';  // ExperienceBannerURL()
 
-    if(isset($_POST['method'])) {
-        $_POST['method']();
-    }
+    require_once __DIR__ . '/endpointGuard.php';  // EndpointDispatch() - only the methods below, each for the callers it names
+    const GENERAL_METHODS = [
+        'GetSectionText'                 => 'public',
+        'RenderAgendaInformation'        => 'public',
+        'RenderAttendingInformation'     => 'public',
+        'RenderEventStatsContent'        => 'public',
+        'EnterDriverInformation'         => 'public',
+        'VerifyUniqueUsername'           => 'public',
+        'MailerFunction'                 => 'public',
+        'SendPasswordRecoveryLink'       => 'public',
+        'CreateConfirmationPage'         => 'registrant',
+        'DownloadParticipantInformation' => 'event_admin',
+        'CreateLanyardLabelsCSVFile'     => 'event_admin',
+        'CreatePhotoNumbersCSVFile'      => 'admin',
+        'RenderEditNewsContainer'        => 'admin',
+        'UpdateSectionTextInDatabase'    => 'admin',
+        'ShowHidePageSection'            => 'admin',
+    ];
+    EndpointDispatch(__FILE__, GENERAL_METHODS, ['UpdateSectionTextInDatabase', 'ShowHidePageSection']);
 
 /* ************************************************************************ */
 /* Funciton:    GetFullURL                                   				*/
@@ -41,10 +60,9 @@ function GetEventWorkingDirectory() {
 function VerifyUniqueUsername() {
 	$username = trim($_POST['username']);
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username`='%s'", $username);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username` = ?", [$username]);
 	if($result->num_rows > 0) {
-		print 'Fail - '.$username.' is already taken. Please enter a different user namee';
+		print 'Fail - '.htmlspecialchars($username, ENT_QUOTES).' is already taken. Please enter a different user namee';
 	} else {
 		print 'PASS';
 	}
@@ -58,8 +76,7 @@ function VerifyUniqueUsername() {
 /* ************************************************************************ */
 function GetEventInformationFromID($event_id) {
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_events` WHERE `EVENT_ID`='%s'", $event_id);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_events` WHERE `EVENT_ID` = ?", [(int)$event_id]);
 	if($result->num_rows > 0) {
 		$row = $result->fetch_assoc();
 	} else {
@@ -79,8 +96,7 @@ function GetEventInformationFromID($event_id) {
 function GetEventInformationFromDirectoryName($basename) {
     $event_id = 0;
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_events` WHERE `EVENT_Directory`='%s'", $basename);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_events` WHERE `EVENT_Directory` = ?", [(string)$basename]);
 	if($result->num_rows > 0) {
 		$row = $result->fetch_assoc();
 	} else {
@@ -168,8 +184,7 @@ function GetSectionText() {
 	$section_name = $_POST['section_name'];
 	$results = array();	
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_web_sections` WHERE `SECTION_Name`= '%s'", $section_name);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_web_sections` WHERE `SECTION_Name` = ?", [(string)$section_name]);
 	if($result->num_rows > 0) {
         $row = $result->fetch_assoc();
 		$results[] = $row['SECTION_Hide'];
@@ -194,8 +209,7 @@ function GetSectionText() {
 	
 	$output_html .= '<div id="driver_confirmation_container_driver1" class="driver_confirmation_container" driver="driver1">';	
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_web_sections` WHERE `SECTION_Name`= '%s'", $section_name);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_web_sections` WHERE `SECTION_Name` = ?", [(string)$section_name]);
 	if($result->num_rows > 0) {
         $row = $result->fetch_assoc();
 	  
@@ -303,66 +317,89 @@ function CreateConfirmationPageAttendColumnnsObject($event_id) {
 /* Funciton:    RenderPaymentInformation                              	    */
 /* Description: This function uses the driver and event information to      */
 /*              render the payment due information should there be any.     */
+/*              When driver one chose a pay-later method at checkout        */
+/*              (Participant_Payment_Method: Venmo, PayPal) it shows that   */
+/*              method's account and instructions. The processing fee       */
+/*              applies to every method. $send_email - also email it to     */
+/*              driver one.                                                 */
 /* Returns:     Nothing                                        				*/
 /* ************************************************************************ */
-function RenderPaymentInformation($driver1, $driver2, $event_id) {
+function RenderPaymentInformation($driver1, $driver2, $event_id, $send_email = true) {
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_events` WHERE `Event_ID`= '%s'", $event_id);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_events` WHERE `Event_ID` = ?", [(int)$event_id]);
     $total_due = 0.00;
 	if($result->num_rows == 1) {
         $row = $result->fetch_assoc();
 
-        if ($row['EVENT_Payment_Instructions'] != '') {
+        $driver1_query = sprintf("SELECT * from `nsx_meetup_participants` WHERE `Participant_ID`=%d", $driver1);
+        $driver1_result = $conn->query($driver1_query);
+        $driver1_row = $driver1_result->fetch_assoc();
+        $driver2_row = null;
+        if ($driver2 != '') {
+            $driver2_query = sprintf("SELECT * from `nsx_meetup_participants` WHERE `Participant_ID`=%d", $driver2);
+            $driver2_result = $conn->query($driver2_query);
+            $driver2_row = $driver2_result->fetch_assoc();
+        }
+
+        // The pay-later method (Venmo, PayPal) driver one agreed to at checkout, if any
+        $pay_later = (string)($driver1_row['Participant_Payment_Method'] ?? '');
+        if (!isset(HANDLE_PAYMENT_METHODS[$pay_later])) {
+            $pay_later = '';
+        }
+
+        /* Charges - worked out first, since the pay-later instructions show the total */
+        $charges_html = '<table><tbody>';
+        $driver1_total = ($driver1_row['Participant_Balance_Due'] / 100);
+        $total_due =  $total_due + $driver1_total;
+   
+        $charges_html .= '<tr>';
+        $charges_html .= '<td>'.$driver1_row['Participant_Name'].'\'s Amount owned based on selected events attending:</td>';
+        $charges_html .= '<td style="text-align:right;">$'.number_format($driver1_total, 2).'</td>';
+        $charges_html .= '</tr>';
+
+        if ($driver2_row) {
+            $driver2_total = ($driver2_row['Participant_Balance_Due'] / 100);
+            $charges_html .= '<tr>';
+            $charges_html .= '<td>'.$driver2_row['Participant_Name'].'\'s Amount owned based on selected events attending:</td>';
+            $charges_html .= '<td style="text-align:right;">$'.number_format($driver2_total, 2).'</td>';
+            $charges_html .= '</tr>';
+            $total_due = $total_due + $driver2_total;            
+        }
+
+        // The processing fee applies to every payment method (same math as the checkout page)
+        $service_fee = ProcessingFeeCents((int)round($total_due * 100), $row['EVENT_Processing_Percentage']) / 100;
+        if ($service_fee > 0) {
+            $charges_html .= '<tr>';
+            $charges_html .= '<td>Processing Fee ('.FormatPercent($row['EVENT_Processing_Percentage']).'):</td>';
+            $charges_html .= '<td style="text-align:right;">$'.number_format($service_fee, 2).'</td>';
+            $charges_html .= '</tr>';
+            $total_due = $total_due + $service_fee;                    
+        }
+
+        $charges_html .= '<tr>';
+        $charges_html .= '<td style="color:#ffcc00;">Total Due for the event</td>';
+        $charges_html .= '<td style="text-align:right;color:#ffcc00;font-weight:700;">$'.number_format($total_due, 2).'</td>';
+        $charges_html .= '</tr>';
+        $charges_html .= '</tbody></table>'; 
+
+        /* Payment instructions */
+        if ($pay_later !== '') {
             $output_html = '<h3>Payment Instructions</h3>';
-            $output_html .= $row['EVENT_Payment_Instructions'];
+            $output_html .= RenderPayLaterInstructions($pay_later, $row, array_filter([$driver1_row, $driver2_row]), (int)round($total_due * 100));
+            $output_html .= '<h3>Charges Information</h3>';
+        } elseif ($row['EVENT_PayPal_Description'] != '') {
+            $output_html = '<h3>Payment Instructions</h3>';
+            $output_html .= $row['EVENT_PayPal_Description'];
             $output_html .= '<br>';
             $output_html .= '<h3>Charges Information</h3>';
         } else {
             $output_html = '<h3>Charges Information</h3>';
         }
-        
-        $output_html .= '<table><tbody>';
-        $driver1_query = sprintf("SELECT * from `nsx_meetup_participants` WHERE `Participant_ID`=%d", $driver1);
-        $driver1_result = $conn->query($driver1_query);
-        $driver1_row = $driver1_result->fetch_assoc();
-        $driver1_total = ($driver1_row['Participant_Balance_Due'] / 100);
-        $total_due =  $total_due + $driver1_total;
-   
-        $output_html .= '<tr>';
-        $output_html .= '<td>'.$driver1_row['Participant_Name'].'\'s Amount owned based on selected events attending:</td>';
-        $output_html .= '<td style="text-align:right;">$'.number_format($driver1_total, 2).'</td>';
-        $output_html .= '</tr>';
-       
+        $output_html .= $charges_html;
 
-        if ($driver2 != '') {
-            $driver2_query = sprintf("SELECT * from `nsx_meetup_participants` WHERE `Participant_ID`=%d", $driver2);
-            $driver2_result = $conn->query($driver2_query);
-            $driver2_row = $driver2_result->fetch_assoc();
-            $driver2_total = ($driver2_row['Participant_Balance_Due'] / 100);
-            $output_html .= '<tr>';
-            $output_html .= '<td>'.$driver2_row['Participant_Name'].'\'s Amount owned based on selected events attending:</td>';
-            $output_html .= '<td style="text-align:right;">$'.number_format($driver2_total, 2).'</td>';
-            $output_html .= '</tr>';
-            $total_due = $total_due + $driver2_total;            
+        if ($send_email) {
+            SendRegistrationPaymentInformation($driver1_row['Participant_Email'], $output_html);
         }
-
-        if ($row['EVENT_Processing_Percentage'] > 0) {
-            $service_fee = round(($total_due * ($row['EVENT_Processing_Percentage']/100)), 2);
-            $output_html .= '<tr>';
-            $output_html .= '<td>Merchant Services for Credit Card Transaction (not a part of NSXMeetup.com):</td>';
-            $output_html .= '<td style="text-align:right;">$'.$service_fee.'</td>';
-            $output_html .= '</tr>';
-            $total_due = $total_due + $service_fee;                    
-        }
-
-        $output_html .= '<tr>';
-        $output_html .= '<td style="color:#ffcc00;">Total Due for the event</td>';
-        $output_html .= '<td style="text-align:right;color:#ffcc00;font-weight:700;">$'.number_format($total_due, 2).'</td>';
-        $output_html .= '</tr>';
-        $output_html .= '</tbody></table>'; 
-
-        SendRegistrationPaymentInformation($driver1_row['Participant_Email'], $output_html);
 
     } else {
         $output_html = 'The event with event ID = '.$event_id.' is either not found or has duplicate database information';
@@ -375,19 +412,87 @@ function RenderPaymentInformation($driver1, $driver2, $event_id) {
 }
 
 /* ************************************************************************ */
+/* Funciton:    RenderPayLaterInstructions                             	    */
+/* Description: How to pay with the method chosen at checkout (Venmo,       */
+/*              PayPal): the amount and account, the suggested payment note,*/
+/*              the admins' instructions and an Open link - beside the QR   */
+/*              code when there is one (4u image / 8u details, each 12u on  */
+/*              small screens). Image and link URLs are absolute so they    */
+/*              also work in the emailed copy.                              */
+/* Inputs:      $method, $event - the event row, $participants - their rows,*/
+/*              $cents - the total due.                                     */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderPayLaterInstructions($method, array $event, array $participants, $cents) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+    $info = HANDLE_PAYMENT_METHODS[$method];
+    $name = PAYMENT_METHODS[$method]['name'];
+    $handle = (string)$event[$info['handle_column']];
+    $account = $info['handle_prefix'].$handle;
+    $to_account = ($handle !== '') ? ' to <b>'.$h($account).'</b>' : '';  // none when the instructions say where to send it
+
+    $names = [];
+    foreach ($participants as $participant) {
+        if (empty($participant['Participant_Balance_Paid'])) {
+            $names[] = $participant['Participant_Name'];
+        }
+    }
+    $note = $event['EVENT_Name'].' - '.implode(', ', $names);
+
+    $instructions = trim((string)$event[$info['description_column']]);
+    if ($instructions === '') {
+        $instructions = nl2br($h($info['default_description']));
+    } elseif (!$info['description_html']) {
+        $instructions = nl2br($h($instructions));
+    }
+
+    $details  = '<p>Send <b>$'.$h(number_format($cents / 100, 2)).'</b>'.$to_account.' on '.$h($name).'.</p>';
+    $details .= '<p class="checkout_handle_note_label">Payment note:</p>';
+    $details .= '<p class="checkout_handle_note">'.$h($note).'</p>';
+    $details .= '<div class="checkout_instructions">'.$instructions;
+    if (ShowHandlePaymentLink($event, $method)) {
+        $details .= '<p class="checkout_handle_link"><a href="'.$h(HandlePaymentLink($method, $handle, $cents, $note)).'" target="_blank" rel="noopener">Open '.$h($name).' to send your payment</a></p>';
+    }
+    $details .= '</div>';
+
+    $qr_code = PaymentQRCodePath($event, $method);
+    if ($qr_code === '') {
+        return '<div class="pay_later_instructions">'.$details.'</div>';
+    }
+    $output_html  = '<div class="row gtr-uniform pay_later_instructions">';
+    $output_html .= '  <div class="col-4 col-12-small checkout_handle_qr"><img src="'.$h(AbsoluteSiteURL($qr_code)).'" alt="'.$h($name).' QR code'.($handle !== '' ? ' for '.$h($account) : '').'" /><p>Scan with your phone\'s camera or '.$h($info['app_name']).'</p></div>';
+    $output_html .= '  <div class="col-8 col-12-small">'.$details.'</div>';
+    $output_html .= '</div>';
+    return $output_html;
+}
+
+/* ************************************************************************ */
 /* Funciton:    CreateConfirmationPage                                 	    */
 /* Description: This function sends the message from the web page.          */
 /* Returns:     Nothing                                        				*/
 /* ************************************************************************ */
 function  CreateConfirmationPage() {
-	$driver1 = $_POST['driver1'];
-	$driver2 = $_POST['driver2'];
-    $event_id = $_POST['event_id'];
-    $collect_payment = $_POST['collect_payment'];
-    $backbutton = $_POST['backbutton'];
-    $sold_out = $_POST['sold_out'];
+	// Only the registration page (backbutton 'no') emails the confirmation - not the admins' participant view
+	echo json_encode(BuildConfirmationPage($_POST['driver1'], $_POST['driver2'], $_POST['event_id'], $_POST['collect_payment'], $_POST['backbutton'], $_POST['sold_out'], ($_POST['backbutton'] ?? '') === 'no'));
+}
 
+/* ************************************************************************ */
+/* Funciton:    BuildConfirmationPage                                  	    */
+/* Description: The registration (or wait list) confirmation for driver one */
+/*              and driver two: payment information, then each person's     */
+/*              details and attendance choices. Used by                     */
+/*              CreateConfirmationPage (registration page) and by the       */
+/*              checkout page after Complete Registration.                  */
+/*              $send_email - a copy is emailed to driver one              */
+/*              (SendRegistrationConfirmationEmail); pass false when        */
+/*              showing the page again. Ends with a button back to the      */
+/*              event's home page (not on the admins' view).                */
+/* Returns:     [header HTML, confirmation HTML]                            */
+/* ************************************************************************ */
+function BuildConfirmationPage($driver1, $driver2, $event_id, $collect_payment, $backbutton, $sold_out, $send_email = true) {
 	$result = array();
+    $payment_html = '';
+    $people = [];  // driver one and two's rows, for the emailed copy
 	
     $page_header = ($sold_out == 'yes') ? '<h2>WAIT LIST CONFIRMATION</h2>' : '<h2>REGISTRATION CONFIRMATION</h2>';
 
@@ -419,7 +524,8 @@ function  CreateConfirmationPage() {
             $output_html .= '      <span class="driver_name">Payment Information</span>';
             $output_html .= '     </div>';
             $output_html .= '     <div class="col-12">';
-            $output_html .=         RenderPaymentInformation($driver1, $driver2, $event_id);
+            $payment_html = RenderPaymentInformation($driver1, $driver2, $event_id, false);
+            $output_html .=         $payment_html;
             $output_html .= '     </div>';        
             $output_html .= '   </div>';
             $output_html .= '</div>';
@@ -440,11 +546,12 @@ function  CreateConfirmationPage() {
     $result = $conn->query($query);
     if($result->num_rows > 0) {
         $row = $result->fetch_assoc();
+        $people[] = $row;
             $output_html .= '<div class="row gtr-uniform">';
             $output_html .= '  <div class="col-12">';
             $output_html .= '   <span class="driver_name">'.$row['Participant_Name'].' - '.$row['Participant_Role'].'';
             $output_html .= '  </div>';
-            $output_html .= '  <div class="col-2 col-12-small"><span class="image fit"><img src="assets/images/nsx_colors/fullsize_'.$row['Participant_Car_Image'].'" alt="" /></span>';
+            $output_html .= '  <div class="col-2 col-12-small"><span class="image fit"><img src="'.app_url('assets/images/nsx_colors/fullsize_'.$row['Participant_Car_Image']).'" alt="" /></span>';
     
             $car_info = json_decode($row['Participant_Car_Info'], true);
             if ($row['Participant_Is_NSX']) {
@@ -519,11 +626,12 @@ function  CreateConfirmationPage() {
 	    $result = $conn->query($query);
 	    if($result->num_rows > 0) {
           $row = $result->fetch_assoc();
+          $people[] = $row;
 	          $output_html .= '<div class="row gtr-uniform">';
 	    	  $output_html .= '  <div class="col-12">';
 	    	  $output_html .= '   <span class="driver_name">'.$row['Participant_Name'].' - '.$row['Participant_Role'].'';
 	    	  $output_html .= '  </div>';
-	    	  $output_html .= '  <div class="col-2 col-12-small"><span class="image fit"><img src="assets/images/nsx_colors/fullsize_'.$row['Participant_Car_Image'].'" alt="" /></span>';
+	    	  $output_html .= '  <div class="col-2 col-12-small"><span class="image fit"><img src="'.app_url('assets/images/nsx_colors/fullsize_'.$row['Participant_Car_Image']).'" alt="" /></span>';
 	  
 			  $car_info = json_decode($row['Participant_Car_Info'], true);
 	    	  if ($row['Participant_Is_NSX']) {
@@ -590,9 +698,109 @@ function  CreateConfirmationPage() {
 	    $output_html .= '</div>';			
 	} 	
 	
-    $results[] = $page_header;
-	$results[] = $output_html;
-	echo json_encode($results);
+	$event = GetEventInformationFromID((int)$event_id);
+	if ($backbutton == 'no' && !empty($event)) {
+	    $output_html .= RenderEventHomeButton($event);
+	}
+	if ($send_email && !empty($event) && $people) {
+	    SendRegistrationConfirmationEmail($event, $people, $attend_columns, $sold_out == 'yes', $collect_payment == 'yes' ? $payment_html : '');
+	}
+
+	return [$page_header, $output_html];
+}
+
+/* ************************************************************************ */
+/* Funciton:    RenderEventHomeButton                                  	    */
+/* Description: The button at the bottom of the confirmation that goes back */
+/*              to the event's home page (events/<directory>/).             */
+/* Returns:     HTML                                                        */
+/* ************************************************************************ */
+function RenderEventHomeButton(array $event) {
+    $directory = (string)$event['EVENT_Directory'];
+    $link = preg_match('/^[A-Za-z0-9_-]+$/', $directory) ? 'events/'.$directory.'/' : 'index.php';
+    return '<div class="confirmation_home_button"><a href="'.htmlspecialchars($link, ENT_QUOTES).'" class="button primary fit">Back to the '
+          .htmlspecialchars((string)$event['EVENT_Name'], ENT_QUOTES).' Home Page</a></div>';
+}
+
+/* ************************************************************************ */
+/* Funciton:    SendRegistrationConfirmationEmail                      	    */
+/* Description: Emails driver one a copy of the registration (or wait list) */
+/*              confirmation from no-reply@nsxmeetup.com: the payment       */
+/*              information, then each person's details and attendance      */
+/*              choices, laid out as plain tables for email programs.       */
+/* Inputs:      $event - event row, $people - driver one (and two) rows,    */
+/*              $attend_columns - question label => confirmation text,      */
+/*              $wait_list, $payment_html - RenderPaymentInformation's HTML */
+/*              ('' when the event doesn't collect payments).               */
+/* ************************************************************************ */
+function SendRegistrationConfirmationEmail(array $event, array $people, array $attend_columns, $wait_list, $payment_html) {
+    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
+    $to = trim((string)$people[0]['Participant_Email']);
+    if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+        error_log('SendRegistrationConfirmationEmail: no valid email address for participant '.$people[0]['Participant_ID']);
+        return;
+    }
+    $title = $event['EVENT_Name'].($wait_list ? ' Wait List Confirmation' : ' Registration Confirmation');
+    $cell = 'style="padding:4px 8px;border-bottom:1px solid #ddd;"';
+
+    $body  = '<html><body style="font-family:Arial,Helvetica,sans-serif;color:#222;max-width:700px;">';
+    $body .= '<h2>'.$h($title).'</h2>';
+
+    $pay_later = (string)($people[0]['Participant_Payment_Method'] ?? '');
+    if (isset(PAYMENT_METHODS[$pay_later])) {
+        $body .= '<p><b>Thank you! Your registration is saved, and you\'ve agreed to pay with '.$h(PAYMENT_METHODS[$pay_later]['name']).'. '
+                .'Your registration will be complete once the event organizers receive and confirm your payment.</b></p>';
+    }
+    if ($wait_list) {
+        $body .= '<h3>Payment Information</h3><p>If a spot opens up in the event, the organizers will reach out to you at this email address to discuss payment. '
+                .'There is no payment required to be on the waiting list.</p>';
+    } elseif ($payment_html !== '') {
+        // The page's yellow (#ffcc00) is hard to read on an email's white background
+        $body .= '<h3>Payment Information</h3>'.str_ireplace('#ffcc00', '#a07800', $payment_html);
+    }
+
+    foreach ($people as $person) {
+        $car = json_decode((string)$person['Participant_Car_Info'], true) ?: [];
+        if (!empty($person['Participant_Is_NSX'])) {
+            $car_text = trim(($car['car_year'] ?? '').' '.ucfirst($car['car_color'] ?? '').' NSX');
+        } else {
+            $car_text = trim(($car['car_year'] ?? '').' '.ucfirst($car['car_make'] ?? '').' '.ucfirst($car['car_model'] ?? ''));
+        }
+        $body .= '<h3 style="margin-top:24px;">'.$h($person['Participant_Name']).' - '.$h($person['Participant_Role']).'</h3>';
+        $body .= '<table style="border-collapse:collapse;">';
+        foreach ([
+            'Displayed Name' => $person['Participant_Display_Name'],
+            'Car'            => $car_text,
+            'Address'        => trim($person['Participant_Address'].', '.$person['Participant_City'].' '.$person['Participant_State'].' '.$person['Participant_Zip'], ', '),
+            'Email'          => $person['Participant_Email'],
+            'Cell'           => $person['Participant_Cell'],
+        ] as $label => $value) {
+            $body .= '<tr><td '.$cell.'><b>'.$h($label).'</b></td><td '.$cell.'>'.$h($value).'</td></tr>';
+        }
+        $body .= '</table>';
+
+        $choices = json_decode((string)$person['Participant_Events_Attending'], true) ?: [];
+        if ($choices) {
+            $body .= '<h4>Attendance Selections</h4><table style="border-collapse:collapse;">';
+            foreach ($choices as $key => $value) {
+                // The confirmation text is admin-written HTML (e.g. a green price span) - sent as plain text
+                $question = isset($attend_columns[$key]) ? html_entity_decode(strip_tags((string)$attend_columns[$key]), ENT_QUOTES, 'UTF-8') : $key;
+                $question = trim(preg_replace('/\s+/u', ' ', $question));
+                $body .= '<tr><td '.$cell.'>'.$h($question !== '' ? $question : $key).'</td><td '.$cell.'>'.$h($value).'</td></tr>';
+            }
+            $body .= '</table>';
+        }
+    }
+
+    $directory = (string)$event['EVENT_Directory'];
+    if (preg_match('/^[A-Za-z0-9_-]+$/', $directory)) {
+        $body .= '<p style="margin-top:24px;"><a href="'.$h(AbsoluteSiteURL('events/'.$directory.'/')).'">Visit the '.$h($event['EVENT_Name']).' home page</a></p>';
+    }
+    $body .= '<p style="font-size:12px;color:#777;margin-top:24px;">This is an automated message from NSXMeetup.com. Please don\'t reply to this email - '
+            .'contact general.information@nsxmeetup.com with any questions.</p>';
+    $body .= '</body></html>';
+
+    SendNoReplyEmail($to, $title, $body);
 }
 
 
@@ -622,6 +830,18 @@ function EnterDriverInformation() {
 	$event_id = $_POST['event_id'];
     $balance = $_POST['balance'];
     $sold_out = $_POST['sold_out'];
+    $regtype = RegistrationTypeForEvent($_POST['registration_type'] ?? '', $event_id);
+    $registration_type = $regtype ? $regtype['id'] : null;
+    if ($regtype) {
+        // The registrant's total as shown on the form (driverX_cost): the registration type's fee plus the
+        // pre-pay options they checked - worked out here from the database rather than taken from the browser
+        $prepay = ChosenPrepayOptions(PrepayOptions(Create_SQL_PHP_DataObject(DB_NAME), $event_id), $driver_choices);
+        $server_balance = $regtype['cost_cents'] + array_sum(array_column($prepay, 'cents'));
+        if ((string)$server_balance !== (string)$balance) {
+            error_log('EnterDriverInformation: the form sent a balance of '.$balance.' but the registration costs '.$server_balance.' (event '.$event_id.')');
+        }
+        $balance = $server_balance;
+    }
 
 	$results = array();
 	
@@ -782,16 +1002,15 @@ function EnterDriverInformation() {
 	// ---------------------------------------------- //
 	$conn = connectDB('kirbypar_nsx_meetup');
 	$safe_name = str_replace("'", "\'", $name);
-	$check_query = sprintf("SELECT * from `nsx_meetup_participants` WHERE `Participant_Name`='%s' AND `Participant_Email`='%s' AND `Event_ID`=%d", $safe_name, $email, $event_id);
-	$check_result = $conn->query($check_query);
+	// Names are saved with ' as \' (below), so the check looks for that form
+	$check_result = PreparedQuery($conn, "SELECT * from `nsx_meetup_participants` WHERE `Participant_Name` = ? AND `Participant_Email` = ? AND `Event_ID` = ?", [$safe_name, $email, (int)$event_id]);
 	if($check_result->num_rows > 0) {
         $results[] =  'duplicate';
-	    $results[] =  'It appears that '.$safe_name.' has already registered for this event using email address '.$email.'. If this is not correct, please contact us at general_information@nsxmeetup.com and we will resolve the issue.';
+	    $results[] =  'It appears that '.htmlspecialchars($name, ENT_QUOTES).' has already registered for this event using email address '.htmlspecialchars($email, ENT_QUOTES).'. If this is not correct, please contact us at general_information@nsxmeetup.com and we will resolve the issue.';
         closeDB($conn);
 	} else {
 
-		$event_query = sprintf("SELECT * from `nsx_meetup_events` WHERE `EVENT_ID`='%s'", $event_id);
-		$event_query_results = $conn->query($event_query);
+		$event_query_results = PreparedQuery($conn, "SELECT * from `nsx_meetup_events` WHERE `EVENT_ID` = ?", [(int)$event_id]);
 		$row = $event_query_results->fetch_assoc();
 		$current_participants = $row['EVENT_Participants'];
 				
@@ -802,7 +1021,7 @@ function EnterDriverInformation() {
 		$safe_name = str_replace("'", "\'", $name);
 		$safe_display_name = str_replace("'", "\'", $display_name);		
 		$dbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
-		$insert_query = "INSERT INTO `nsx_meetup_participants` (`Event_ID`, `Participant_Name`, `Participant_Display_Name`, `Participant_Confirmation_Number`, `Participant_Address`, `Participant_City`, `Participant_State`, `Participant_Zip`, `Participant_Email`, `Participant_Cell`, `Participant_Is_NSX`, `Participant_Role`,`Participant_Events_Attending`, `Participant_Car_Info`, `Participant_Traveling_With`,`Participant_Display_Attending`, `Participant_Car_Image`, `Participant_Shared_Information`, `Participant_Social_Information`, `Participant_Balance_Due`, `Participant_Wait_Listed`) VALUES (:event_id, :safe_name, :safe_display_name, :confirmation_number, :street, :city, :state, :zip, :email, :cell, :is_nsx, :role, :rider_choices, :car_dict, :travel_with, :post_attend, :car_image, :shared_information, :social_information, :balance, :wait_listed)";
+		$insert_query = "INSERT INTO `nsx_meetup_participants` (`Event_ID`, `Participant_Name`, `Participant_Display_Name`, `Participant_Confirmation_Number`, `Participant_Address`, `Participant_City`, `Participant_State`, `Participant_Zip`, `Participant_Email`, `Participant_Cell`, `Participant_Is_NSX`, `Participant_Role`,`Participant_Events_Attending`, `Participant_Car_Info`, `Participant_Traveling_With`,`Participant_Display_Attending`, `Participant_Car_Image`, `Participant_Shared_Information`, `Participant_Social_Information`, `Participant_Balance_Due`, `Participant_Wait_Listed`, `Participant_Registration_Type`) VALUES (:event_id, :safe_name, :safe_display_name, :confirmation_number, :street, :city, :state, :zip, :email, :cell, :is_nsx, :role, :rider_choices, :car_dict, :travel_with, :post_attend, :car_image, :shared_information, :social_information, :balance, :wait_listed, :registration_type)";
 		$sth = $dbh->prepare($insert_query);
         $sth->bindParam(':event_id', $event_id);
 		$sth->bindParam(':safe_name', $safe_name);
@@ -825,6 +1044,7 @@ function EnterDriverInformation() {
 		$sth->bindParam(':social_information', $social_media_choices);
         $sth->bindParam(':balance', $balance);
         $sth->bindParam(':wait_listed', $wait_listed);
+        $sth->bindValue(':registration_type', $registration_type, ($registration_type === null) ? PDO::PARAM_NULL : PDO::PARAM_INT);
 		try {
 			$dbh->beginTransaction();
 			$sth->execute();
@@ -832,6 +1052,7 @@ function EnterDriverInformation() {
 			$results[] = $dbh->lastInsertId();
 			$new_participant_idnnum = $dbh->lastInsertId();
 			$dbh->commit();
+			RememberCheckoutParticipant($event_id, $new_participant_idnnum, ($_POST['new_registration'] ?? '') === 'yes');
 
 			// Now that the person has been entered into system as a participant, the person needs to 
 			// be linked with the event itself.
@@ -861,6 +1082,45 @@ function EnterDriverInformation() {
 	echo json_encode($results);
  }
   
+/* ************************************************************************ */
+/* Funciton:    RegistrationTypeForEvent                               	    */
+/* Description: Checks a posted registration type ID: it must be one of the */
+/*              event's enabled registration types.                         */
+/* Returns:     ['id' => REGTYPE_ID, 'cost_cents' => its cost in cents], or */
+/*              null when none was chosen or it isn't valid (a registration */
+/*              is never refused over it).                                  */
+/* ************************************************************************ */
+function RegistrationTypeForEvent($regtype_id, $event_id) {
+    if (!is_string($regtype_id) || !ctype_digit($regtype_id)) {
+        return null;
+    }
+    $pdo = Create_SQL_PHP_DataObject(DB_NAME);
+    $stmt = $pdo->prepare('SELECT REGTYPE_ID, REGTYPE_Cost FROM nsx_meetup_registration_types WHERE REGTYPE_ID = ? AND REGTYPE_Event_ID = ? AND REGTYPE_Enabled = 1');
+    $stmt->execute([(int)$regtype_id, (int)$event_id]);
+    $found = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$found) {
+        error_log('EnterDriverInformation: registration type '.$regtype_id.' is not an enabled type for event '.$event_id);
+        return null;
+    }
+    return ['id' => (int)$found['REGTYPE_ID'], 'cost_cents' => (int)round($found['REGTYPE_Cost'] * 100)];
+}
+
+/* ************************************************************************ */
+/* Funciton:    RememberCheckoutParticipant                            	    */
+/* Description: Keeps the registrants entered from this browser session,    */
+/*              per event, so the checkout page (event_checkout.php) knows  */
+/*              who to collect payment for - without trusting ids from the  */
+/*              browser. $new_registration (driver one) starts a fresh list.*/
+/* ************************************************************************ */
+function RememberCheckoutParticipant($event_id, $participant_id, $new_registration) {
+    app_session_start();
+    $event_id = (int)$event_id;
+    if ($new_registration || !isset($_SESSION['checkout_participants'][$event_id])) {
+        $_SESSION['checkout_participants'][$event_id] = [];
+    }
+    $_SESSION['checkout_participants'][$event_id][] = (int)$participant_id;
+}
+
 /* ************************************************************************ */
 /* Funciton:    guidv4                                              	    */
 /* Description: This function generates a v4 UUID.                          */
@@ -899,81 +1159,6 @@ function SendRegistrationPaymentInformation($email_address, $message) {
 }
 
 /* ************************************************************************ */
-/* Funciton:    SendRegistrationPaymentConfirmation                   	    */
-/* Description: This function sends a password recovery link to the user.   */
-/* Returns:     Nothing                                        				*/
-/* ************************************************************************ */
-function SendRegistrationPaymentConfirmation() {
-    $event_name = $_POST['event_name'];
-    $email_address = $_POST['email_address'];
-    $participant_name = $_POST['participant_name'];
-    $participant_id = $_POST['participant_id'];
-
-    $message = 'Hello '.$participant_name.',<br><br>This email is to confirm we have received payment, and that you are fully registered, for the 2026 NSX Mideast Meet in Cary, NC from May 28-31, 2026.  
-    We look forward to hosting you for another year of NSX comradery!<br><br>If you have not yet booked your hotel, please do so using the following link. 
-    There are two hotels you can choose from, which are side-by-side.  (The Hilton Garden Inn is traditionally the host hotel where most people stay, and the 
-    Doubletree is the overflow hotel if the Garden Inn has sold out) <a href="https://nsxmeetup.com/events/2026MideastMeetup/hotels.php">Click Here</a> for more hotel
-    information and booking links.<br><br>Regards,<br>Your NSX Mideast Meet Organizing Committee';
-
-    $ip = $_SERVER['REMOTE_ADDR'];
-    $to = $email_address;
-    $subject = sprintf("%s Registration and Payment Confirmation", $event_name);
-    $email_message = $message;
-    $headers = 'MIME-Version: 1.0' . "\r\n" .
-                'From: general.information@nsxmeetup.com' . "\r\n" .
-                'Content-type: text/html; charset=iso-8859-1' . "\r\n" .
-                'Reply-To: general.information@nsxmeetup.com' . "\r\n" .
-                'X-Mailer: PHP/' . phpversion();
-            
-    $status = mail($to, $subject, $email_message, $headers);
-    if ($status) {
-        $results =  "An email with this payment confirmation was successfully send to: ".$email_address."";
-        $eventdbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
-        $update_query = "UPDATE `nsx_meetup_participants` SET `Participant_Balance_Paid`=1 WHERE `Participant_ID`=:id";
-        $eventsth = $eventdbh->prepare($update_query);
-        $eventsth->bindParam(':id', $participant_id);
-        $eventdbh->beginTransaction();
-        $eventsth->execute();
-        $eventdbh->commit();	        
-    } else {
-        $results =  "Could not send the message to ".$email_address.".";       
-    }
-    
-    echo $results;
-}
-
-/* ************************************************************************ */
-/* Funciton:    RemovePaymentConfirmation                         		    */
-/* Description: This function returns the rendered email list generation.   */
-/* Returns:     HTML                                                		*/
-/* ************************************************************************ */ 
-function RemovePaymentConfirmation() {
-    $participant_id = $_POST['participant_id'];
-    $results = array();
-    try {
-        $eventdbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
-        $update_query = "UPDATE `nsx_meetup_participants` SET `Participant_Balance_Paid`=0 WHERE `Participant_ID`=:id";
-        $eventsth = $eventdbh->prepare($update_query);
-        $eventsth->bindParam(':id', $participant_id);
-        $eventdbh->beginTransaction();
-        $eventsth->execute();
-        $eventdbh->commit();
-        
-        $results[] = 'success';
-        $results[] = 'Participant ID = '.$participant_id.' Set back to 0';
-
-    } catch(PDOExecption $e) {
-            
-        $dbh->rollback();
-        $results[] = 'fail';
-        $results[] = $e->getMessage();
-    } 
-    
-    echo json_encode($results);
-
-}
-
-/* ************************************************************************ */
 /* Funciton:    SendPasswordRecoveryLink                              	    */
 /* Description: This function sends a password recovery link to the user.   */
 /* Returns:     Nothing                                        				*/
@@ -985,14 +1170,13 @@ function SendPasswordRecoveryLink() {
     $results = array();
 
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf('SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username` = "%s"', $email);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_Username` = ?", [(string)$email]);
 	if($result->num_rows > 0) {
         $UUID = guidv4(openssl_random_pseudo_bytes(16));
-		$sql_update = sprintf('UPDATE `nsx_meetup_user_accounts` SET `NSX_Password_Reset_ID`="%s",`NSX_Password_Reset_Timer`= now() WHERE `NSX_Username` = "%s"', $UUID, $email);
-        if (!(mysqli_query($conn, $sql_update))) {
+        if (!PreparedQuery($conn, "UPDATE `nsx_meetup_user_accounts` SET `NSX_Password_Reset_ID` = ?, `NSX_Password_Reset_Timer` = now() WHERE `NSX_Username` = ?", [$UUID, (string)$email])) {
+            error_log('SendPasswordRecoveryLink: could not save the reset code for '.$email.': '.$conn->error);
             $results[] =  "failed";
-            $results[] =  "Could not UPDATE the database with query = ".$sql_update."";       
+            $results[] =  "The password reset link could not be created. Please try again.";
         } else {
             $password_reset_link = sprintf("https://www.nsxmeetup.com/account_reset.php?resetid=%s", $UUID);
 
@@ -1089,15 +1273,15 @@ function SendPasswordRecoveryLink() {
 function RenderAttendingInformation() {
 	$event_id = $_POST['event_id'];
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_events` WHERE `EVENT_ID` = %s", $event_id);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_events` WHERE `EVENT_ID` = ?", [(int)$event_id]);
+	$registered_participants = '';
 	if($result->num_rows > 0) {
     	$row = $result->fetch_assoc();
 		$registered_participants = $row['EVENT_Participants'];
 	}	  
 
 	$output_html = '<table style="margin-top: 12rem;"><thead><tr><th>Name</th><th>State</th><th style="text-align:right;">Car</th></tr></thead><tbody>';
-	$parts_query = sprintf("SELECT * from `nsx_meetup_participants` WHERE `Participant_ID` IN  (%s)", $registered_participants);
+	$parts_query = "SELECT * from `nsx_meetup_participants` WHERE `Participant_ID` IN (".IntegerList($registered_participants).")";
 	$parts_result = $conn->query($parts_query);
 	if($parts_result->num_rows > 0) {
       while($parts_row = $parts_result->fetch_assoc()) {
@@ -1147,7 +1331,7 @@ function RenderAttendingInformation() {
 		} else {
 			$more_info_link = '';
 		}
-		$output_html .= '<tr><td style="vertical-align:middle;" width="65%">'.$parts_row["Participant_Display_Name"].' '.$more_info_link.'<div id="part_extra_info_'.$parts_row['Participant_ID'].'" class="part_extra_info">'.$shared_html.'</div></td><td style="vertical-align:middle;" class="table_column">'.$parts_row["Participant_State"].'</td><td style="text-align:right;"   class="table_column"><img src="assets/images/nsx_colors/'.$parts_row['Participant_Car_Image'].'" /></td></tr>';
+		$output_html .= '<tr><td style="vertical-align:middle;" width="65%">'.$parts_row["Participant_Display_Name"].' '.$more_info_link.'<div id="part_extra_info_'.$parts_row['Participant_ID'].'" class="part_extra_info">'.$shared_html.'</div></td><td style="vertical-align:middle;" class="table_column">'.$parts_row["Participant_State"].'</td><td style="text-align:right;"   class="table_column"><img src="'.app_url('assets/images/nsx_colors/'.$parts_row['Participant_Car_Image']).'" /></td></tr>';
 		// $output_html .= '<tr><td style="vertical-align:middle;">'.$parts_row["Participant_Display_Name"].'</div></td><td style="vertical-align:middle;">'.$parts_row["Participant_State"].'</td><td style="text-align:right;"><img src="assets/images/nsx_colors/'.$parts_row['Driver_Car_Image'].'" /></td></tr>';
 
 	  }		
@@ -1166,20 +1350,20 @@ function RenderAttendingInformation() {
 function RenderEventStatsContent() {
 	$event_id = $_POST['event_id'];
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_events` WHERE `EVENT_ID` = %s", $event_id);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_events` WHERE `EVENT_ID` = ?", [(int)$event_id]);
+	$registered_participants = '';
 	if($result->num_rows > 0) {
     	$row = $result->fetch_assoc();
 		$registered_participants = $row['EVENT_Participants'];
 	}	  
 
     $output_html = '<div style="display:inline;">';
-	$parts_query = sprintf("SELECT * from `nsx_meetup_participants` WHERE `Participant_ID` IN  (%s)", $registered_participants);
+	$parts_query = "SELECT * from `nsx_meetup_participants` WHERE `Participant_ID` IN (".IntegerList($registered_participants).")";
 	$parts_result = $conn->query($parts_query);
 	if($parts_result->num_rows > 0) {
       while($parts_row = $parts_result->fetch_assoc()) {
         if ($parts_row["Participant_Role"] == 'driving' && $parts_row["Participant_Is_NSX"] == 1){
-            $output_html .= '<div class="nsx_image_mini"><span class="image fit"><img src="assets/images/nsx_colors/'.$parts_row['Participant_Car_Image'].'" /></span><span class="nsx_image_mini_hovertext">'.$parts_row["Participant_Display_Name"].'</span></div>';
+            $output_html .= '<div class="nsx_image_mini"><span class="image fit"><img src="'.app_url('assets/images/nsx_colors/'.$parts_row['Participant_Car_Image']).'" /></span><span class="nsx_image_mini_hovertext">'.$parts_row["Participant_Display_Name"].'</span></div>';
         }
 	  }		
 	}
@@ -1602,32 +1786,6 @@ function RenderParticipantInformation() {
 	echo json_encode($results);
 }
 
-/* ************************************************************************ */
-/* Function:    UpdateParticipantInformation                            	*/
-/* Description: This function updates the database for a participant.		*/
-/* Returns:     HTML                                        				*/
-/* ************************************************************************ */
-function UpdateParticipantInformation() {
-	$participant_id = $_POST['participant_id'];
-	$update_info = $_POST['update_items'];
-	$results = array();
-
-	$conn = connectDB('kirbypar_nsx_meetup');
-	$output_html = '';
-	$overall_results = 'OK';
-	foreach($update_info as $key => $value) {
-		$output_html .= $key . ' = ' . $value;
-		$sql_query = "UPDATE `nsx_meetup_participants` SET `".$key."` = '".$value."' WHERE Participant_ID = '".$participant_id."'";
-        if (!(mysqli_query($conn, $sql_query))) {
-	       $overall_results = 'FAIL';        
-        }
-	}
-	closeDB($conn);
-	
-	$results = [$overall_results];
-	echo json_encode($results);
-}
-
 /*-------------------------------------------------------------*/
 /*                                                             */
 /*  SWAP SHOP FUNCTIONS                                        */
@@ -1936,8 +2094,7 @@ function ExtractSingleDayOfExperiences($event_id, $experiences_date) {
     // Build the event sections 
     $experiences = array();
 	$conn = connectDB('kirbypar_nsx_meetup');
-	$query = sprintf("SELECT * from `nsx_meetup_experiences` WHERE `EVENT_ID` = %d AND `EXPERIENCE_Date` = '%s' ORDER BY `Experience_Start_Time`", $event_id, $experiences_date);
-	$result = $conn->query($query);
+	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_experiences` WHERE `EVENT_ID` = ? AND `EXPERIENCE_Date` = ? AND `EXPERIENCE_Display` = 1 ORDER BY `Experience_Start_Time`", [(int)$event_id, $experiences_date]);
 	if($result->num_rows > 0) {
         while($row =  $result->fetch_assoc()) {
             $experiences[] = $row;
@@ -1953,7 +2110,10 @@ function ExtractSingleDayOfExperiences($event_id, $experiences_date) {
 /* ************************************************************************ */
 function RenderEachDailyEventSection($section) {
 	$output_html = '<div id="individual_event_child_container_'.$section['EXPERIENCE_Name'].'" class="individual_event_child_container">';
-	$output_html .= '<span class="image fit" style="margin-bottom:0.5em;"><img src="assets/images/'.$section['EXPERIENCE_Banner_Image'].'"></span>';
+	$banner_url = ExperienceBannerURL($section['EXPERIENCE_Banner_Image']);
+	if ($banner_url !== '') {
+		$output_html .= '<span class="image fit" style="margin-bottom:0.5em;"><img src="'.htmlspecialchars($banner_url, ENT_QUOTES).'"></span>';
+	}
 	$output_html .= '<h2 style="color:#ffcc00;">'.$section['EXPERIENCE_Title'].'</h2>';
 	$output_html .= '<p>'.$section['EXPERIENCE_Description'].'</p>';
 	$output_html .= '<table style="color:#FFFFFF;"><tbody>';

@@ -11,6 +11,19 @@
 /*-------------------------------------------------------------*/
 
 const SHARED_FRONTPAGE_IMAGE_DIR = 'assets/images/frontpage';  // relative to the site folder
+const SHARED_SPONSOR_LOGO_DIR    = 'assets/images/sponsors';   // older sponsor logos, stored by file name only
+const DEFAULT_SPONSOR_LOGO       = 'sponsor-coming-soon-front.jpg';  // in SHARED_SPONSOR_LOGO_DIR, for sponsors without a logo
+
+const FRONTPAGE_IMAGE_MAX_BYTES  = 10 * 1048576;  // 10 MB - keep in step with .user.ini and eventsettings.js
+const FRONTPAGE_IMAGE_MAX_PIXELS = 24000000;      // 24 megapixels - larger images need too much memory to resize
+const SPONSOR_LOGO_MAX_SIZE      = 600;           // sponsor logos are scaled to fit a 600 x 600 box
+const EVENT_BANNER_MAX_IMAGES    = 6;             // banner images an event's banners folder may hold
+const EVENT_BANNER_MAX_WIDTH     = 1920;          // banner uploads are scaled down to fit 1920 x 1280
+const EVENT_BANNER_MAX_HEIGHT    = 1280;
+const EVENT_FRONTPAGE_BANNERS    = 3;             // banner images an event may put on the site's front page
+const SITE_BANNER_DIR            = 'images/banners';  // the front page's own "Welcome to NSX Meetup" images (copied to the server by hand)
+const SITE_BANNER_MIN_SLIDES     = 6;             // the front page banner is topped up to this many with SITE_BANNER_DIR images
+const SITE_BANNER_MAX_SLIDES     = 9;
 
 /* ************************************************************************ */
 /* Function:    EventImagesDirectory                                        */
@@ -46,4 +59,387 @@ function EventFrontpageImageURL($directory, $filename) {
         return $event_dir.'/'.$filename;
     }
     return SHARED_FRONTPAGE_IMAGE_DIR.'/'.$filename;
+}
+
+/* ************************************************************************ */
+/* Function:    EventSponsorLogoDirectory                                   */
+/* Description: The site-relative sponsor logo folder for an event, e.g.    */
+/*              events/TestEvent/images/sponsors.                           */
+/* Inputs:      $directory - the event's EVENT_Directory.                   */
+/* Returns:     string, or '' if the directory name isn't usable.           */
+/* ************************************************************************ */
+function EventSponsorLogoDirectory($directory) {
+    $event_dir = EventImagesDirectory($directory);
+    return ($event_dir === '') ? '' : $event_dir.'/sponsors';
+}
+
+/* ************************************************************************ */
+/* Function:    EventExperienceBannerDirectory                              */
+/* Description: The site-relative agenda event banner folder for an event, */
+/*              e.g. events/TestEvent/images/experiences.                   */
+/* Inputs:      $directory - the event's EVENT_Directory.                   */
+/* Returns:     string, or '' if the directory name isn't usable.           */
+/* ************************************************************************ */
+function EventExperienceBannerDirectory($directory) {
+    $event_dir = EventImagesDirectory($directory);
+    return ($event_dir === '') ? '' : $event_dir.'/experiences';
+}
+
+/* ************************************************************************ */
+/* Function:    EventBannerDirectory                                        */
+/* Description: The site-relative banner image folder for an event, e.g.    */
+/*              events/TestEvent/images/banners.                            */
+/* Inputs:      $directory - the event's EVENT_Directory.                   */
+/* Returns:     string, or '' if the directory name isn't usable.           */
+/* ************************************************************************ */
+function EventBannerDirectory($directory) {
+    $event_dir = EventImagesDirectory($directory);
+    return ($event_dir === '') ? '' : $event_dir.'/banners';
+}
+
+/* ************************************************************************ */
+/* Function:    EventBannerFiles                                            */
+/* Description: The image files in an event's banners folder, uploaded or   */
+/*              copied in by hand, in name order.                           */
+/* Inputs:      $directory - the event's EVENT_Directory.                   */
+/* Returns:     array of file names                                         */
+/* ************************************************************************ */
+function EventBannerFiles($directory) {
+    $dir = EventBannerDirectory($directory);
+    if ($dir === '' || !is_dir(__DIR__.'/'.$dir)) {
+        return [];
+    }
+    $files = [];
+    foreach (scandir(__DIR__.'/'.$dir) as $file) {
+        if (preg_match('/^[A-Za-z0-9_.-]+\.(jpe?g|png|webp|gif)$/i', $file) && is_file(__DIR__.'/'.$dir.'/'.$file)) {
+            $files[] = $file;
+        }
+    }
+    natcasesort($files);
+    return array_values($files);
+}
+
+/* ************************************************************************ */
+/* Function:    EventEnabledBanners                                         */
+/* Description: The event's banner images that are switched on, in the      */
+/*              order they're shown (EVENT_Banner_Images, a JSON list of    */
+/*              file names). Names whose file is no longer in the banners   */
+/*              folder are left out.                                        */
+/* Inputs:      $event - the event's nsx_meetup_events row.                 */
+/* Returns:     array of file names                                         */
+/* ************************************************************************ */
+function EventEnabledBanners(array $event) {
+    $enabled = json_decode((string)($event['EVENT_Banner_Images'] ?? ''), true);
+    if (!is_array($enabled)) {
+        return [];
+    }
+    $files = EventBannerFiles($event['EVENT_Directory'] ?? '');
+    return array_values(array_unique(array_filter($enabled, function ($file) use ($files) {
+        return is_string($file) && in_array($file, $files, true);
+    })));
+}
+
+/* ************************************************************************ */
+/* Function:    EventFrontpageBanners                                       */
+/* Description: The event's banner images picked for the site's front page  */
+/*              (EVENT_Frontpage_Banners, a JSON list of file names): only  */
+/*              ones shown on the event page, in that order, at most        */
+/*              EVENT_FRONTPAGE_BANNERS.                                    */
+/* Inputs:      $event - the event's nsx_meetup_events row.                 */
+/* Returns:     array of file names                                         */
+/* ************************************************************************ */
+function EventFrontpageBanners(array $event) {
+    $picked = json_decode((string)($event['EVENT_Frontpage_Banners'] ?? ''), true);
+    if (!is_array($picked)) {
+        return [];
+    }
+    $shown = array_values(array_intersect(EventEnabledBanners($event), $picked));
+    return array_slice($shown, 0, EVENT_FRONTPAGE_BANNERS);
+}
+
+/* ************************************************************************ */
+/* Function:    EventDateRange                                              */
+/* Description: An event's dates for a banner, e.g. "December 6 - 8, 2026"  */
+/*              or "July 31 - August 2, 2026".                              */
+/* Inputs:      $start, $end - EVENT_Start_Date, EVENT_End_Date.            */
+/* Returns:     string, or '' without a start date                          */
+/* ************************************************************************ */
+function EventDateRange($start, $end) {
+    if (empty($start)) {
+        return '';
+    }
+    $start = strtotime($start);
+    $end = !empty($end) ? strtotime($end) : $start;
+    if (date('Y-m-d', $start) === date('Y-m-d', $end)) {
+        return date('F j, Y', $start);
+    } elseif (date('Y-m', $start) === date('Y-m', $end)) {
+        return date('F j', $start).' - '.date('j, Y', $end);
+    } elseif (date('Y', $start) === date('Y', $end)) {
+        return date('F j', $start).' - '.date('F j, Y', $end);
+    }
+    return date('F j, Y', $start).' - '.date('F j, Y', $end);
+}
+
+/* ************************************************************************ */
+/* Function:    SiteBannerSlides                                            */
+/* Description: The slides for the site's front page banner: up to         */
+/*              EVENT_FRONTPAGE_BANNERS front page images from each event   */
+/*              on the front page that hasn't finished (the same test as    */
+/*              its Upcoming Events), soonest first and taking turns -      */
+/*              every event's first image, then their second, ... - at most */
+/*              SITE_BANNER_MAX_SLIDES. Topped up to SITE_BANNER_MIN_SLIDES */
+/*              with the SITE_BANNER_DIR images, in random order.           */
+/* Inputs:      $pdo - PHP Data Object, or null when the database couldn't  */
+/*              be reached (then only the SITE_BANNER_DIR images).          */
+/* Returns:     array of ['image' => URL, 'title', 'dates']                 */
+/* ************************************************************************ */
+function SiteBannerSlides($pdo) {
+    $per_event = [];
+    if ($pdo) {
+        $stmt = $pdo->prepare('SELECT * FROM nsx_meetup_events WHERE EVENT_Display = 1 AND EVENT_End_Date > ? ORDER BY EVENT_Start_Date');
+        $stmt->execute([date('Y-m-d')]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $event) {
+            $slides = [];
+            foreach (EventFrontpageBanners($event) as $file) {
+                $slides[] = ['image' => EventBannerURL($event['EVENT_Directory'], $file), 'title' => $event['EVENT_Name'],
+                             'dates' => EventDateRange($event['EVENT_Start_Date'], $event['EVENT_End_Date'])];
+            }
+            if ($slides) {
+                $per_event[] = $slides;
+            }
+        }
+    }
+
+    $slides = [];
+    for ($round = 0; $round < EVENT_FRONTPAGE_BANNERS; $round++) {
+        foreach ($per_event as $event_slides) {
+            if (isset($event_slides[$round]) && count($slides) < SITE_BANNER_MAX_SLIDES) {
+                $slides[] = $event_slides[$round];
+            }
+        }
+    }
+
+    $defaults = SiteBannerFiles();
+    shuffle($defaults);
+    foreach ($defaults as $file) {
+        if (count($slides) >= SITE_BANNER_MIN_SLIDES) {
+            break;
+        }
+        $path = SITE_BANNER_DIR.'/'.rawurlencode($file);
+        $slides[] = ['image' => function_exists('app_url') ? app_url($path) : $path, 'title' => 'Welcome to NSX Meetup', 'dates' => ''];
+    }
+    return $slides;
+}
+
+/* ************************************************************************ */
+/* Function:    SiteBannerFiles                                             */
+/* Description: The image files in SITE_BANNER_DIR, in name order.          */
+/* Returns:     array of file names                                         */
+/* ************************************************************************ */
+function SiteBannerFiles() {
+    $dir = __DIR__.'/'.SITE_BANNER_DIR;
+    if (!is_dir($dir)) {
+        return [];
+    }
+    $files = [];
+    foreach (scandir($dir) as $file) {
+        if (preg_match('/^[^.].*\.(jpe?g|png|webp|gif)$/i'  /* copied by hand - any name, spaces included */, $file) && is_file($dir.'/'.$file)) {
+            $files[] = $file;
+        }
+    }
+    natcasesort($files);
+    return array_values($files);
+}
+
+/* ************************************************************************ */
+/* Function:    EventBannerURL                                              */
+/* Description: The URL of one of an event's banner images.                 */
+/* Inputs:      $directory - the event's EVENT_Directory. $file - its name. */
+/* Returns:     string                                                      */
+/* ************************************************************************ */
+function EventBannerURL($directory, $file) {
+    $path = EventBannerDirectory($directory).'/'.rawurlencode(basename((string)$file));
+    return function_exists('app_url') ? app_url($path) : $path;
+}
+
+/* ************************************************************************ */
+/* Function:    EventAttractionImageDirectory                               */
+/* Description: The site-relative hotel and attraction picture folder for  */
+/*              an event, e.g. events/TestEvent/images/attractions.         */
+/* Inputs:      $directory - the event's EVENT_Directory.                   */
+/* Returns:     string, or '' if the directory name isn't usable.           */
+/* ************************************************************************ */
+function EventAttractionImageDirectory($directory) {
+    $event_dir = EventImagesDirectory($directory);
+    return ($event_dir === '') ? '' : $event_dir.'/attractions';
+}
+
+/* ************************************************************************ */
+/* Function:    AttractionImageURL                                          */
+/* Description: The URL of a hotel or attraction's picture. Uploaded        */
+/*              pictures are stored with their site-relative path           */
+/*              (events/<dir>/images/attractions/...); older ones are a     */
+/*              file name in assets/images/attractions/<event id>/.         */
+/* Inputs:      $image - Attraction_Image. $event_id - its Event_ID.        */
+/* Returns:     string, or '' when there's no picture                       */
+/* ************************************************************************ */
+function AttractionImageURL($image, $event_id) {
+    $image = trim((string)$image);
+    if ($image === '') {
+        return '';
+    }
+    if (preg_match('#^events/[A-Za-z0-9_-]+/images/attractions/[A-Za-z0-9_.-]+$#', $image)) {
+        $path = $image;
+    } else {
+        $path = 'assets/images/attractions/'.(int)$event_id.'/'.basename($image);
+    }
+    return function_exists('app_url') ? app_url($path) : $path;
+}
+
+/* ************************************************************************ */
+/* Function:    ExperienceBannerURL                                         */
+/* Description: The URL of a agenda event's banner. Uploaded banners are   */
+/*              stored with their site-relative path                        */
+/*              (events/<dir>/images/experiences/...); older ones are a     */
+/*              file name in assets/images/.                                */
+/* Inputs:      $banner - EXPERIENCE_Banner_Image.                          */
+/* Returns:     string, or '' when there's no banner                        */
+/* ************************************************************************ */
+function ExperienceBannerURL($banner) {
+    $banner = trim((string)$banner);
+    if ($banner === '') {
+        return '';
+    }
+    if (preg_match('#^events/[A-Za-z0-9_-]+/images/experiences/[A-Za-z0-9_.-]+$#', $banner)) {
+        $path = $banner;
+    } else {
+        $path = 'assets/images/'.basename($banner);
+    }
+    return function_exists('app_url') ? app_url($path) : $path;
+}
+
+/* ************************************************************************ */
+/* Function:    SponsorLogoURL                                              */
+/* Description: The URL of a sponsor logo. New logos are stored with their  */
+/*              site-relative path (events/<dir>/images/sponsors/...);      */
+/*              older ones are a file name in the shared sponsors folder.   */
+/*              No logo gives DEFAULT_SPONSOR_LOGO.                         */
+/* Inputs:      $logo - SPONSOR_Large_Logo or SPONSOR_Thumbnail_Logo.       */
+/* Returns:     string                                                      */
+/* ************************************************************************ */
+function SponsorLogoURL($logo) {
+    $logo = (string)$logo;
+    if (preg_match('#^events/[A-Za-z0-9_-]+/images/sponsors/[A-Za-z0-9_.-]+$#', $logo)) {
+        $path = $logo;
+    } else {
+        $path = SHARED_SPONSOR_LOGO_DIR.'/'.(trim($logo) !== '' ? basename($logo) : DEFAULT_SPONSOR_LOGO);
+    }
+    return function_exists('app_url') ? app_url($path) : $path;
+}
+
+/* ************************************************************************ */
+/* Function:    CheckFrontpageImageUpload                                   */
+/* Description: Checks an image upload from $_FILES. The file's contents    */
+/*              decide its type - the browser-supplied name and type are    */
+/*              ignored. (Adapted from ContactBook's check_book_photo_upload)*/
+/* Inputs:      $file - the $_FILES entry, or null.                         */
+/* Returns:     ['error' => string, 'tmp' => string, 'type' => IMAGETYPE_*] */
+/* ************************************************************************ */
+function CheckFrontpageImageUpload($file) {
+    $none = ['error' => '', 'tmp' => '', 'type' => 0];
+    $max_mb = FRONTPAGE_IMAGE_MAX_BYTES / 1048576;
+
+    if ($file === null || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return ['error' => 'Please choose an image to upload.'] + $none;
+    }
+    if (is_array($file['error'])) {
+        return ['error' => 'Please choose a single image.'] + $none;
+    }
+    if ($file['error'] === UPLOAD_ERR_INI_SIZE || $file['error'] === UPLOAD_ERR_FORM_SIZE
+        || $file['size'] > FRONTPAGE_IMAGE_MAX_BYTES) {
+        return ['error' => "The image is too large. Please choose one under {$max_mb} MB."] + $none;
+    }
+    if ($file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
+        error_log('CheckFrontpageImageUpload: upload failed with error code '.$file['error']);
+        return ['error' => 'The image could not be uploaded. Please try again.'] + $none;
+    }
+
+    $info = @getimagesize($file['tmp_name']);
+    if ($info === false || !in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)) {
+        return ['error' => 'The image must be a JPEG, PNG or WebP file.'] + $none;
+    }
+    if ($info[0] * $info[1] > FRONTPAGE_IMAGE_MAX_PIXELS) {
+        return ['error' => 'The image\'s dimensions are too large. Please choose a smaller image.'] + $none;
+    }
+
+    return ['error' => '', 'tmp' => $file['tmp_name'], 'type' => $info[2]];
+}
+
+/* ************************************************************************ */
+/* Function:    SaveFrontpageImage                                          */
+/* Description: Re-encodes an uploaded image into $dir as <$basename>.jpg   */
+/*              (or .png for PNGs, to keep transparency), scaled down to    */
+/*              $max_height (and $max_width, when given) with its           */
+/*              proportions kept. Smaller images are not enlarged.          */
+/*              Re-encoding also turns phone photos the right way up,       */
+/*              strips hidden data such as GPS location, and drops anything */
+/*              that isn't image data. (Adapted from ContactBook's          */
+/*              save_book_photo)                                            */
+/* Inputs:      $tmp - uploaded temp file. $type - IMAGETYPE_*.             */
+/*              $dir - the full directory path to save in.                  */
+/*              $basename - the filename without extension.                 */
+/*              $max_height - the tallest it may be. $max_width - the       */
+/*              widest it may be, or 0 for no limit.                        */
+/* Returns:     The saved filename, or '' on failure.                       */
+/* ************************************************************************ */
+function SaveFrontpageImage($tmp, $type, $dir, $basename, $max_height, $max_width = 0) {
+    switch ($type) {
+        case IMAGETYPE_JPEG: $image = @imagecreatefromjpeg($tmp); break;
+        case IMAGETYPE_PNG:  $image = @imagecreatefrompng($tmp);  break;
+        case IMAGETYPE_WEBP: $image = @imagecreatefromwebp($tmp); break;
+        default:             $image = false;
+    }
+    if ($image === false) {
+        return '';
+    }
+
+    // Phones save photos sideways and record the rotation in EXIF - apply it.
+    if ($type === IMAGETYPE_JPEG && function_exists('exif_read_data')) {
+        $orientation = (@exif_read_data($tmp))['Orientation'] ?? 1;
+        if (in_array($orientation, [2, 4, 5, 7], true)) {
+            imageflip($image, IMG_FLIP_HORIZONTAL);
+        }
+        $angle = [3 => 180, 4 => 180, 5 => 270, 6 => 270, 7 => 90, 8 => 90][$orientation] ?? 0;
+        if ($angle !== 0) {
+            $rotated = imagerotate($image, $angle, 0);
+            imagedestroy($image);
+            $image = $rotated;
+        }
+    }
+
+    $width  = imagesx($image);
+    $height = imagesy($image);
+    $scale = min(1, $max_height / $height, $max_width > 0 ? $max_width / $width : 1);
+    if ($scale < 1) {
+        $new_width  = max(1, (int) round($width * $scale));
+        $new_height = max(1, (int) round($height * $scale));
+        $resized = imagecreatetruecolor($new_width, $new_height);
+        imagealphablending($resized, false);
+        imagesavealpha($resized, true);
+        imagecopyresampled($resized, $image, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
+        imagedestroy($image);
+        $image = $resized;
+    }
+
+    if ($type === IMAGETYPE_PNG) {
+        $filename = $basename.'.png';
+        imagesavealpha($image, true);
+        $saved = imagepng($image, $dir.'/'.$filename, 6);
+    } else {
+        $filename = $basename.'.jpg';
+        $saved = imagejpeg($image, $dir.'/'.$filename, 85);
+    }
+    imagedestroy($image);
+
+    return $saved ? $filename : '';
 }

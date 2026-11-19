@@ -7,7 +7,7 @@ app_session_start();
 if(isset($_GET['event_id'])) {
     include_once 'GENERALFunctions.php';
     $event_data = GetEventInformationFromID($_GET['event_id']);
-    // Relative, so it works wherever the site is hosted (e.g. kirbypark.net/luna/)
+    // Relative, so it works wherever the site is hosted (e.g. nsxmeetup.com or a subfolder)
     $directory = (string)($event_data['EVENT_Directory'] ?? '');
     $home_link = preg_match('/^[A-Za-z0-9_-]+$/', $directory) ? 'events/'.$directory.'/' : 'index.php';
     $reg_ready = True;

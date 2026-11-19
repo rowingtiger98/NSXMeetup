@@ -1,0 +1,137 @@
+<?php
+/*-------------------------------------------------------------*/
+/*                                                             */
+/*  EVENT ADMIN                                                */
+/*                                                             */
+/*  Shared by the event admin tool endpoints                   */
+/*  (EVENTSettings.php, REGTYPEManagement.php): the JSON       */
+/*  response, the login / event administrator check, and       */
+/*  loading the posted event. Also the default registration    */
+/*  type every new event starts with (EVENTCreation.php).      */
+/*                                                             */
+/*-------------------------------------------------------------*/
+require_once __DIR__ . '/SessionBootstrap.php';
+require_once __DIR__ . '/databaseFunctions.php';
+
+/* ************************************************************************ */
+/* Function:    EventAdminRespond                                          */
+/* Description: Sends the JSON response and ends the request.              */
+/* ************************************************************************ */
+function EventAdminRespond($status, $payload) {
+    header('Content-Type: application/json');
+    echo json_encode([$status, $payload]);
+    exit();
+}
+
+/* ************************************************************************ */
+/* Function:    EventAdminAuthorize                                        */
+/* Description: Ends the request with a 'Fail' response unless the session  */
+/*              belongs to a logged-in, non-idle overlord, or a user who    */
+/*              administers the event (listed in                            */
+/*              NSX_User_Events_Administered - whatever their role, since   */
+/*              being made an event's admin doesn't change it). Uses only   */
+/*              the session, never browser-sent ids.                        */
+/* Inputs:      $pdo - PHP Data Object, $event_id - the event's id.         */
+/* ************************************************************************ */
+function EventAdminAuthorize(PDO $pdo, $event_id) {
+    if (empty($_SESSION['login_user']) || app_session_idle_expired()) {
+        EventAdminRespond('Fail', ['Your session has expired. Please log in again.']);
+    }
+    $_SESSION['last_activity'] = time();
+
+    $stmt = $pdo->prepare('SELECT NSX_User_Role, NSX_User_Events_Administered FROM nsx_meetup_user_accounts WHERE NSX_Username = ?');
+    $stmt->execute([$_SESSION['login_user']]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    $administered = $user ? array_map('trim', explode(',', (string)$user['NSX_User_Events_Administered'])) : [];
+    $is_overlord = $user && $user['NSX_User_Role'] === 'overlord';
+    $is_event_admin = $user && in_array((string)$event_id, $administered, true);
+    if (!$is_overlord && !$is_event_admin) {
+        EventAdminRespond('Fail', ['You are not an administrator for this event.']);
+    }
+}
+
+/* ************************************************************************ */
+/* Function:    EventAdminLoadEvent                                        */
+/* Description: Validates the posted event id, authorizes the user, and     */
+/*              returns the PDO connection and event row.                   */
+/* Returns:     [PDO, array]                                                */
+/* ************************************************************************ */
+function EventAdminLoadEvent() {
+    $event_id = filter_var($_POST['event_id'] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    if ($event_id === false) {
+        EventAdminRespond('Fail', ['No event was selected.']);
+    }
+
+    $pdo = Create_SQL_PHP_DataObject(DB_NAME);
+    EventAdminAuthorize($pdo, $event_id);
+
+    $stmt = $pdo->prepare('SELECT * FROM nsx_meetup_events WHERE EVENT_ID = ?');
+    $stmt->execute([$event_id]);
+    $event = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$event) {
+        EventAdminRespond('Fail', ['That event could not be found.']);
+    }
+
+    return [$pdo, $event];
+}
+
+const DEFAULT_REGTYPE_NAME = 'Basic Event Registration';
+
+/* ************************************************************************ */
+/* Function:    CreateDefaultRegistrationType                               */
+/* Description: Adds the registration type every new event starts with:    */
+/*              "Basic Event Registration", $0.00, disabled. The event's    */
+/*              admins enable it (and set its cost) when they turn on       */
+/*              Collect Payments.                                           */
+/* Inputs:      $pdo - PHP Data Object, $event_id - the new event's id.     */
+/* ************************************************************************ */
+function CreateDefaultRegistrationType(PDO $pdo, $event_id) {
+    $stmt = $pdo->prepare('INSERT INTO nsx_meetup_registration_types (REGTYPE_Event_ID, REGTYPE_Name, REGTYPE_Cost, REGTYPE_Description, REGTYPE_Enabled) VALUES (?, ?, 0, NULL, 0)');
+    $stmt->execute([$event_id, DEFAULT_REGTYPE_NAME]);
+}
+
+/* ************************************************************************ */
+/* Function:    EnsureEnabledRegistrationType                               */
+/* Description: An event that collects payments needs at least one enabled  */
+/*              registration type. If none is enabled, this enables the     */
+/*              event's oldest type (lowest REGTYPE_ID - normally "Basic    */
+/*              Event Registration"), first adding the default type if the  */
+/*              event has none at all.                                      */
+/* Inputs:      $pdo - PHP Data Object, $event_id - the event's id.         */
+/* Returns:     The name of the type it enabled, or null if one already was */
+/* ************************************************************************ */
+function EnsureEnabledRegistrationType(PDO $pdo, $event_id) {
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM nsx_meetup_registration_types WHERE REGTYPE_Event_ID = ? AND REGTYPE_Enabled = 1');
+    $stmt->execute([$event_id]);
+    if ($stmt->fetchColumn() > 0) {
+        return null;
+    }
+
+    $stmt = $pdo->prepare('SELECT REGTYPE_ID, REGTYPE_Name FROM nsx_meetup_registration_types WHERE REGTYPE_Event_ID = ? ORDER BY REGTYPE_ID LIMIT 1');
+    $stmt->execute([$event_id]);
+    $type = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$type) {
+        CreateDefaultRegistrationType($pdo, $event_id);
+        $type = ['REGTYPE_ID' => $pdo->lastInsertId(), 'REGTYPE_Name' => DEFAULT_REGTYPE_NAME];
+    }
+
+    $stmt = $pdo->prepare('UPDATE nsx_meetup_registration_types SET REGTYPE_Enabled = 1 WHERE REGTYPE_ID = ?');
+    $stmt->execute([$type['REGTYPE_ID']]);
+    return $type['REGTYPE_Name'];
+}
+
+/* ************************************************************************ */
+/* Function:    IsLastEnabledRegistrationType                               */
+/* Description: True if the event collects payments and $regtype_id is its  */
+/*              only enabled registration type - the one that has to stay.  */
+/* ************************************************************************ */
+function IsLastEnabledRegistrationType(PDO $pdo, array $event, $regtype_id) {
+    if (empty($event['EVENT_Collect_Payments'])) {
+        return false;
+    }
+    $stmt = $pdo->prepare('SELECT REGTYPE_ID FROM nsx_meetup_registration_types WHERE REGTYPE_Event_ID = ? AND REGTYPE_Enabled = 1');
+    $stmt->execute([$event['EVENT_ID']]);
+    $enabled = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    return count($enabled) === 1 && (int)$enabled[0] === (int)$regtype_id;
+}

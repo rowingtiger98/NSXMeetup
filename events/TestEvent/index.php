@@ -1,6 +1,11 @@
 <?php
 // include('GETEventID.php'); // Includes Login Script    
 include('../../login.php'); // Includes Login Script
+// Resolve the logged-in user before any HTML is sent: session.php redirects (and stops)
+// when the session has idled out, which only works before output starts.
+if (isset($_SESSION['login_user'])) {
+    include '../../session.php';
+}
 include_once '../../AGENDAFunctions.php';
 include_once '../../ATTENDINGFunctions.php';
 include_once '../../CONTACTFunctions.php';
@@ -48,6 +53,23 @@ if(isset($_GET['event_id'])) {
         $display_sponsor = $event_data['EVENT_Display_Sponsors'];        
     }
 }
+$event_name = htmlspecialchars((string)($event_data['EVENT_Name'] ?? ''), ENT_QUOTES);
+
+// The event's dates for the banner, e.g. "December 6 - 8, 2026" or "July 31 - August 2, 2026"
+$event_dates = '';
+if (!empty($event_data['EVENT_Start_Date'])) {
+    $start = strtotime($event_data['EVENT_Start_Date']);
+    $end = !empty($event_data['EVENT_End_Date']) ? strtotime($event_data['EVENT_End_Date']) : $start;
+    if (date('Y-m-d', $start) === date('Y-m-d', $end)) {
+        $event_dates = date('F j, Y', $start);
+    } elseif (date('Y-m', $start) === date('Y-m', $end)) {
+        $event_dates = date('F j', $start).' - '.date('j, Y', $end);
+    } elseif (date('Y', $start) === date('Y', $end)) {
+        $event_dates = date('F j', $start).' - '.date('F j, Y', $end);
+    } else {
+        $event_dates = date('F j, Y', $start).' - '.date('F j, Y', $end);
+    }
+}
 
 ?>
 
@@ -73,7 +95,6 @@ if(isset($_GET['event_id'])) {
         // ---------------------------------------------------------------------------------- //
 
         if(isset($_SESSION['login_user'])){
-            include '../../session.php';
             $logged_in = 'yes';
             $header_path = '../../header_user.php';
             $active_page = parse_url($current_page_url, PHP_URL_QUERY);
@@ -116,14 +137,44 @@ if(isset($_GET['event_id'])) {
 			  <?php include '../../login_modal.php'; ?>
 			</section>
 			
-		<!-- Banner -->
-            <?php 
-                if($active_page == '') {
-                    include 'banners.php';
-                } else {
-                    include 'still_banner.php';
+		<!-- Banner: the images shown in Edit Event Settings > Banner Images (a slideshow on
+		     the main page, the first one on the others), each with the event's name and
+		     dates. Without any, the event's own banners.php / still_banner.php if it has
+		     them, otherwise just its name and dates. -->
+            <?php
+                $banner_images = empty($event_data) ? [] : EventEnabledBanners($event_data);
+                if ($active_page != '' && $banner_images) {
+                    $banner_images = array_slice($banner_images, 0, 1);
                 }
+                if ($banner_images) {
             ?>
+            <div id="banner" class="<?php echo ($active_page == '') ? 'active' : 'still'; ?>">
+                <?php foreach ($banner_images as $banner_image) { ?>
+                <article data-position="center">
+                    <div class="inner">
+                        <img src="<?php echo htmlspecialchars(EventBannerURL($event_data['EVENT_Directory'], $banner_image), ENT_QUOTES); ?>" alt="" />
+                        <h1><?php echo $event_name; ?></h1>
+                        <p><?php echo htmlspecialchars($event_dates, ENT_QUOTES); ?></p>
+                    </div>
+                </article>
+                <?php } ?>
+            </div>
+            <?php
+                } elseif ($active_page == '' && is_file(__DIR__.'/banners.php')) {
+                    include 'banners.php';
+                } elseif (is_file(__DIR__.'/still_banner.php')) {
+                    include 'still_banner.php';
+                } else {
+            ?>
+            <div id="banner" class="event_banner_plain <?php echo ($active_page == '') ? 'active' : 'still'; ?>">
+                <article data-position="center">
+                    <div class="inner">
+                        <h1><?php echo $event_name; ?></h1>
+                        <p><?php echo htmlspecialchars($event_dates, ENT_QUOTES); ?></p>
+                    </div>
+                </article>
+            </div>
+            <?php } ?>
 
         <?php if($display_error_message) { ?>
             <!-- Event Stats -->            
@@ -163,7 +214,7 @@ if(isset($_GET['event_id'])) {
                                         <span class="number"><span class="icon solid fa-hotel"></span></span>
                                         <h3>Hotel Information</h3>
                                         <p>The event does not have an official hotel or venue, but folks have enjoyed staying at the properties lilsted on our hotels page. Click below to learn more.</p>
-                                        <a href="hotels.php" class="button primary small fit">Book Your Room</a>
+                                        <a href="?attractions=hotels" id="render_local_attractions" event_id="<?php echo (int)$event_id; ?>" editable="false" category="hotels" class="button primary small fit">Book Your Room</a>
                                         <!-- <a href="#" class="button  small fit">Coming Soon</a> -->
 
                                     </div>
@@ -235,7 +286,7 @@ if(isset($_GET['event_id'])) {
 				<div id="welcome_letter" class="inner">
                     <div class="row gtr-uniform">
                     	<div class="col-12 col-12-small">
-							<span class="image fit"><img src="../../images/NSXCA-Logo-white.png"></span>
+							<span class="image fit"><img src="../../assets/images/NSXCA-Logo-white.png"></span>
 						</div>
 						<div class="col-12 col-12-small">
 							<a href="https://nsxca.org/product/nsxca-membership/" target="_blank" class="button fit" style="margin-bottom:1em;">JOIN THE NSX Club of America Today</a>
@@ -298,6 +349,22 @@ if(isset($_GET['event_id'])) {
 					elms[i].onclick = CloseSponsorModal;
 				}
                 
+                $("#render_local_attractions").on('click', function(event) {
+                    event.preventDefault();
+                    RenderLocalAttractionsPage.call(this, event);
+                });
+
+                // index.php?attractions opens the Hotels & Local Attractions page straight away, and
+                // index.php?attractions=<category> opens it on that category, so it can be linked to
+                var url_params = new URLSearchParams(window.location.search);
+                if (url_params.has('attractions') && $("#render_local_attractions").length) {
+                    var attractions_link = $("#render_local_attractions");
+                    if (url_params.get('attractions') !== '') {
+                        attractions_link.attr('category', url_params.get('attractions'));
+                    }
+                    RenderLocalAttractionsPage.call(attractions_link[0]);
+                }
+
                 if (active_page == 'events') {
                     var elms = document.querySelectorAll('tr[id^="event_info_row"]');
                     for (i = 0; i < elms.length; i++) {

@@ -104,11 +104,12 @@ function app_login_return_url(): string
 
 /**
  * URL of a file in the site's top folder (where this file lives), e.g.
- * app_url('MyAccountInfo.php') gives "/luna/MyAccountInfo.php" when the site is
- * hosted at kirbypark.net/luna/. Use it for links in shared headers, which are
- * included from pages in subfolders (events/<dir>/) as well as the top folder.
- * The site's URL path is worked out from the running script, so it follows the
- * site wherever it's hosted. Falls back to the plain relative path if it can't be.
+ * app_url('MyAccountInfo.php') gives "/MyAccountInfo.php" when the site is
+ * hosted at nsxmeetup.com (or "/sub/MyAccountInfo.php" in a subfolder). Use it
+ * for links in shared headers, which are included from pages in subfolders
+ * (events/<dir>/) as well as the top folder. The site's URL path is worked out
+ * from the running script, so it follows the site wherever it's hosted. Falls
+ * back to the plain relative path if it can't be.
  */
 function app_url(string $path): string
 {
@@ -128,6 +129,21 @@ function app_url(string $path): string
         }
     }
     return ($base === false) ? $path : $base . '/' . ltrim($path, '/');
+}
+
+/**
+ * A full URL (https://host/site/...) for a site-relative path, for links and
+ * images that have to work in an email too. Falls back to app_url()'s
+ * site-relative URL when there's no host (e.g. run from the command line).
+ */
+function AbsoluteSiteURL(string $path): string
+{
+    $url = app_url($path);
+    if (empty($_SERVER['HTTP_HOST'])) {
+        return $url;
+    }
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    return $scheme . '://' . $_SERVER['HTTP_HOST'] . '/' . ltrim($url, '/');
 }
 
 /**

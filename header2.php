@@ -1,7 +1,7 @@
 <?php require_once __DIR__ . '/SessionBootstrap.php'; // for app_url() ?>
 				<nav>
 					<ul class="nav">
-						<li><a href=".">Home</a></li>
+						<li><a href="<?php echo htmlspecialchars(app_url('index.php')); ?>">Home</a></li>  <!-- the main site, also from an event's pages -->
 					</ul>
 				</nav>
 				<div id="logo">

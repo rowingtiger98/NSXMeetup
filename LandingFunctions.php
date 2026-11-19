@@ -1,9 +1,8 @@
 <?php
 require_once __DIR__ . '/eventImages.php';
 
-if(isset($_POST['method'])) {
-    $_POST['method']();
-}
+require_once __DIR__ . '/endpointGuard.php';
+EndpointDispatch(__FILE__, []);  // nothing here is called by a page - every posted method is refused
 
 /* ************************************************************************ */
 /* Funciton:    RenderLandingPageCurrentEvents                     	        */

@@ -1,9 +1,11 @@
 <?php
   require_once __DIR__ . '/databaseFunctions.php';
 
-  if(isset($_POST['method'])) {
-    $_POST['method']();
-  }
+  require_once __DIR__ . '/endpointGuard.php';  // EndpointDispatch() - only the methods below, each for the callers it names
+  const REPORTING_METHODS = [
+      'RenderEventReportMainBody' => 'event_admin',
+  ];
+  EndpointDispatch(__FILE__, REPORTING_METHODS);
 
 /* ************************************************************************ */
 /* Funciton:    ValidateResetCodeTimeframe                         		    */

@@ -188,6 +188,32 @@
 	// Slider.
 		$banner._slider(settings.banner);
 
+	// Reveal the banner as soon as its first slide's image is in, rather than once the whole
+	// page has loaded (until then nsxmeetup.css shows the logo over it). The image is
+	// decoded and painted first, so the logo fades into the picture rather than into an
+	// empty panel that the picture then pops into.
+		var $first_banner_img = $banner.find('article img').first();
+		if ($first_banner_img.length) {
+			var first_banner_image = new Image(),
+				reveal_banner = function() {
+					window.requestAnimationFrame(function() {
+						window.requestAnimationFrame(function() {
+							$banner.addClass('banner_ready');
+						});
+					});
+				};
+			first_banner_image.onload = function() {
+				if (first_banner_image.decode)
+					first_banner_image.decode().then(reveal_banner, reveal_banner);
+				else
+					reveal_banner();
+			};
+			first_banner_image.onerror = reveal_banner;
+			first_banner_image.src = $first_banner_img.attr('src');
+		} else {
+			$banner.addClass('banner_ready');
+		}
+
 	// Dropdowns.
 		$('.nav')
 			.dropotron({
