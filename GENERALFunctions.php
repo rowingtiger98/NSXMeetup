@@ -74,6 +74,18 @@ function VerifyUniqueUsername() {
 /* 				base for the event passed in.                               */
 /* Returns:     Nothing                                        				*/
 /* ************************************************************************ */
+/* ************************************************************************ */
+/* Function:    EventRegistrationOpen                                       */
+/* Description: Whether the event is taking registrations - its own        */
+/*              EVENT_Registration_Open setting (Edit Event Settings).      */
+/*              Treated as open until the column has been added.            */
+/* Inputs:      $event_data - the event's nsx_meetup_events row             */
+/* Returns:     bool                                                        */
+/* ************************************************************************ */
+function EventRegistrationOpen($event_data) {
+    return !empty($event_data) && (bool)($event_data['EVENT_Registration_Open'] ?? 1);
+}
+
 function GetEventInformationFromID($event_id) {
 	$conn = connectDB('kirbypar_nsx_meetup');
 	$result = PreparedQuery($conn, "SELECT * from `nsx_meetup_events` WHERE `EVENT_ID` = ?", [(int)$event_id]);
@@ -811,6 +823,14 @@ function SendRegistrationConfirmationEmail(array $event, array $people, array $a
 /* Returns:     Nothing                                        				*/
 /* ************************************************************************ */
 function EnterDriverInformation() {
+	// Only the posted event's own Registration Open setting matters (Edit Event Settings) - closing
+	// one event's registration doesn't affect any other event
+	$event_check = GetEventInformationFromID((int)($_POST['event_id'] ?? 0));
+	if (!$event_check || !EventRegistrationOpen($event_check)) {
+		echo json_encode(['closed', 'Registration for this event is not currently available.']);
+		return;
+	}
+
 	$name = $_POST['name'];
 	$email = $_POST['email'];
 	$cell = $_POST['cell'];

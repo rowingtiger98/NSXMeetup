@@ -232,7 +232,11 @@ if ($event_id) {
                                     </div>
                                 </div>
                                 <ul class="actions special">
+                                    <?php if (EventRegistrationOpen($event_data)) { // Edit Event Settings > Registration Open ?>
                                     <a href="../../register_all.php?event_id=<?php echo (int)$event_id; ?>" event_id="<?php echo (int)$event_id; ?>" class="button large primary fit">Register Today</a>
+                                    <?php } else { ?>
+                                    <a href="#" class="button large primary fit disabled" aria-disabled="true" onclick="return false;">Registration Is Not Currently Available</a>
+                                    <?php } ?>
                                 </ul>
                             </div>
                         </section>

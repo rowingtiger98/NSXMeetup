@@ -75,6 +75,7 @@ async function RegisterForTheEvent(event) {
 	var ready = CheckForMissingFields();
 	var new_user_ids = {'driver1':'', 'driver2':''};
 	var entered = false;
+	var closed_message = ''; // set when the event's registration was turned off after this page loaded
 
 	if (ready) {
 		if (create_account == 'yes') {
@@ -110,6 +111,8 @@ async function RegisterForTheEvent(event) {
 				} else if (driver1_results[0] === "duplicate") {
 				    alert(driver1_results[1]);
 				    console.log(driver1_results[1]);
+				} else if (driver1_results[0] === "closed") {
+				    closed_message = driver1_results[1];
 				} else {
 					console.log('driver1 failure');
 				}
@@ -119,7 +122,7 @@ async function RegisterForTheEvent(event) {
 			})
 		
 		var additional_guest = document.getElementById('info_field_driver1_additional_guest').checked;
-		if (additional_guest) {
+		if (additional_guest && !closed_message) {
 			console.log('checking on driver 2');
 			var role = $("#driver_two_role_selection_container").attr('role');
 		        await EnterUserToParticipantDatabase('driver2', role, event_id)
@@ -163,6 +166,10 @@ async function RegisterForTheEvent(event) {
             UpdateUserAttendedEvents(event_id, new_user_ids);
 				
 		} 
+		else if (closed_message) {
+			$("#event_registration_results_text").html('<p>' + $('<div>').text(closed_message).html() + '</p>');
+			alert(closed_message);
+		}
 		else {
 			alert('database entry failed');
 		}

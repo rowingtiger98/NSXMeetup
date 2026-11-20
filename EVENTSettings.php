@@ -38,6 +38,7 @@ if (isset($_POST['method']) && in_array($_POST['method'], EVENT_SETTINGS_METHODS
 /*              on the form. Drives both rendering and saving.              */
 /*              type: text | textarea | html | date | money | percent |     */
 /*                    checkbox | emails | image                             */
+/*              switch: draw a checkbox as an on/off slider                 */
 /*              null_ok: store NULL when left blank (column allows NULL)    */
 /*              widths: [label, input] column widths (default [6, 6])       */
 /*              Each admin tool card edits its own set of fields:           */
@@ -60,7 +61,10 @@ function EventSettingsFields($tool) {
         'Visibility & Registration' => [
             'EVENT_Display'                 => ['label' => 'Show on Front Page', 'type' => 'checkbox',
                                                 'help' => 'List this event on the NSX Meetup front page.'],
-            'EVENT_Sold_Out'                => ['label' => 'Sold Out', 'type' => 'checkbox',
+            'EVENT_Registration_Open'       => ['label' => 'Registration Open', 'type' => 'checkbox', 'switch' => true,
+                                                'help' => 'Turn on the Register button on the event page (it opens the registration page). '
+                                                        .'When off, the button is disabled and says registration is not currently available.'],
+            'EVENT_Sold_Out'              => ['label' => 'Sold Out', 'type' => 'checkbox',
                                                 'help' => 'Mark the event as sold out on the registration page.'],
             'EVENT_Enable_Account_Creation' => ['label' => 'Offer Account Creation', 'type' => 'checkbox',
                                                 'help' => 'Let people who register without logging in create an NSX Meetup account.'],
@@ -350,7 +354,11 @@ function RenderEditEventSettings() {
             switch ($field['type']) {
                 case 'checkbox':
                     $output_html .= '<input type="checkbox" id="'.$id.'" db_key="'.$column.'"'.($value ? ' checked' : '').'>';
-                    $output_html .= '<label for="'.$id.'">Yes</label>';
+                    if (!empty($field['switch'])) { // on/off slider (nsxmeetup.css) instead of a Yes box
+                        $output_html .= '<label for="'.$id.'" class="payment_method_switch" title="Turn '.$h($field['label']).' on or off"><span class="payment_method_off">Off</span><span class="payment_method_on">On</span></label>';
+                    } else {
+                        $output_html .= '<label for="'.$id.'">Yes</label>';
+                    }
                     break;
                 case 'html':
                 case 'textarea':

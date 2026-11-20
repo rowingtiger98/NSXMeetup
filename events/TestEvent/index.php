@@ -253,7 +253,11 @@ if (!empty($event_data['EVENT_Start_Date'])) {
                                     </div> -->
                                 </div>
                                 <ul class="actions special">
+                                    <?php if (EventRegistrationOpen($event_data)) { // Edit Event Settings > Registration Open ?>
                                     <a href="../../register_all.php?event_id=<?php echo $event_id; ?>" event_id="<?php echo $event_id; ?>" class="button large primary fit">Register ALL Today</a>
+                                    <?php } else { ?>
+                                    <a href="#" class="button large primary fit disabled" aria-disabled="true" onclick="return false;">Registration Is Not Currently Available</a>
+                                    <?php } ?>
                                     <!-- <a href="#" class="button  small fit">Registration Opening Soon</a> -->
                                 </ul>
                             </div>

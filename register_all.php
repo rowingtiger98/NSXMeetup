@@ -12,10 +12,12 @@ if(isset($_GET['event_id'])) {
     $directory = (string)($event_data['EVENT_Directory'] ?? '');
     $home_link = preg_match('/^[A-Za-z0-9_-]+$/', $directory) ? 'events/'.$directory.'/' : 'index.php';
     $reg_ready = True;
+    $reg_open = EventRegistrationOpen($event_data);  // this event's own Edit Event Settings > Registration Open
 	// echo "Ron is working on a bug, if you see this  (04/14/25)";   
 } else {
     $home_link = 'index.php';
     $reg_ready = False;
+    $reg_open = False;
     $event_data = [
         "EVENT_ID" => 0,
         "EVENT_Name" => 'Unknown Event'
@@ -71,12 +73,19 @@ if(isset($_SESSION['login_user'])){
 		<!-- Main -->
 			<div id="main" class="wrapper" logged_in="<?php echo $logged_in; ?>" reg_ready="<?php echo ($reg_ready)?"yes":"no"; ?>" sold_out="<?php echo ($event_data['EVENT_Sold_Out'])?"yes":"no"; ?>">
 				<div class="inner">
-                    <?php if ($event_data['EVENT_Sold_Out']) { ?>
+                    <?php if ($reg_open && $event_data['EVENT_Sold_Out']) { ?>
                         <h1 class="major">SOLD OUT<br><?php echo $event_data['EVENT_Name']; ?> Waiting list</h1>
                     <?php } else { ?>
                         <h1 class="major"><?php echo $event_data['EVENT_Name']; ?> Registration</h1>
                     <?php } ?>
-            <?php if($reg_ready) { ?>
+            <?php if($reg_ready && !$reg_open) { ?>
+                    <div id="event_registration_closed_text" style="text-align:center;">
+                        <p>Registration for the <?php echo htmlspecialchars((string)$event_data['EVENT_Name'], ENT_QUOTES); ?> is not currently available. Please check back later, or use the contact information below if you have questions.</p>
+                        <a href="<?php echo htmlspecialchars($home_link); ?>" class="button primary">Back to the Event Page</a>
+                    </div>
+				</div>
+			</div>
+            <?php } elseif($reg_ready) { ?>
                 <?php if ($event_data['EVENT_Sold_Out']) { ?>
                     <div id="event_registration_results_text" style="text-align:center;"><p>The <?php echo $event_data['EVENT_Name']; ?> has reached capacity and is currently SOLD OUT. If you would like to be 
                     placed on the waiting list in the event that others cancel or the event's capacity is expanded, please complete the registration below. Waiting list
@@ -149,6 +158,17 @@ if(isset($_SESSION['login_user'])){
 			
 			<script>
 			  $( document ).ready(function() {
+				// Message Click Handler (the contact section in the footer)
+				var elms = document.querySelectorAll('[id^="button_action_"]');
+				for (i = 0; i < elms.length; i++) {
+					elms[i].onclick = HandleButtonActionClick;
+				}
+
+				// The rest sets up the registration form - not on the page when registration is closed
+				if (!document.getElementById('event_registration_container')) {
+					return;
+				}
+
                 var logged_in = $("#main").attr('logged_in');
                 var create_account = $("#driver_one_contact_container").attr('create_account')
                 console.log('Logged_in = ' + logged_in);
@@ -224,12 +244,6 @@ if(isset($_SESSION['login_user'])){
 				console.log(elms.length);
 				for (i = 0; i < elms.length; i++) {
 					elms[i].onclick = ReactToSharedInformationChoice;
-				}
-
-				// Message Click Handler
-				var elms = document.querySelectorAll('[id^="button_action_"]');
-				for (i = 0; i < elms.length; i++) {
-					elms[i].onclick = HandleButtonActionClick;
 				}
 
 				// Back from the checkout page's Change Registration - fill the form in again (after all the handlers above are set)
