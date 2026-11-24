@@ -173,10 +173,28 @@
         </div>  
 
         <!-- Driver One Car Information -->
-        <?php if(isset($_SESSION['login_user']) && $account_user_car_information != '') { 
-        
-            $car_information_object = json_decode($account_user_car_information);
-            if(isset($car_information_object->car_make)) {
+        <?php
+        // An account can list several cars (UserAccountCars in ACCOUNTManagement.php) - the form is filled in with the first
+        $account_user_cars = isset($_SESSION['login_user']) ? UserAccountCars($account_user_car_information) : [];
+        if (count($account_user_cars) > 1) {
+            // Several saved cars - pick one to fill in the car boxes below (ReactToSavedCarSelection in register.js)
+        ?>
+                <div class="col-12 col-12-xsmall">
+                    <select id="saved_car_selection_driver1" aria-label="Your saved cars" style="color:rgba(255, 255, 255, 0.7)";>
+                    <?php foreach ($account_user_cars as $n => $saved_car) {
+                        $saved_car_name = isset($saved_car['car_make'])
+                            ? trim(($saved_car['car_year'] ?? '').' '.($saved_car['car_make'] ?? '').' '.($saved_car['car_model'] ?? ''))
+                            : trim(($saved_car['car_year'] ?? '').' '.ucfirst((string)($saved_car['car_color'] ?? '')).' NSX');
+                    ?>
+                        <option value="<?php echo (int)$n; ?>" car="<?php echo htmlspecialchars(json_encode($saved_car), ENT_QUOTES); ?>"<?php echo $n === 0 ? ' selected' : ''; ?>>Select your car: <?php echo htmlspecialchars($saved_car_name, ENT_QUOTES); ?></option>
+                    <?php } ?>
+                    </select>
+                </div>
+        <?php
+        }
+        if ($account_user_cars) {
+            $car_information_object = (object)($account_user_cars[0] + ['car_year' => '', 'car_color' => '', 'car_make' => '', 'car_model' => '']);
+            if (isset($account_user_cars[0]['car_make'])) {
         ?>
                 <div id="nsx_gen_response_container_driver1_select_gen" class="col-4 col-12-xsmall">
                     <select id="nsx_gen_response_gen_selection_driver1" name="generation_selection_driver1" driver="driver1" current_choice="none" style="color:rgba(255, 255, 255, 0.7)";>

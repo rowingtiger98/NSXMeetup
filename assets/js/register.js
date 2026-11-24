@@ -775,6 +775,36 @@ function ReactToDriverTwoRoleSelection() {
 }
 
 /* -------------------------------------------------------------------------------------------------------- */
+/* Function:	ReactToSavedCarSelection																	*/
+/* Description:	A logged-in registrant with more than one car saved on their account picks one from the		*/
+/*              "Your car" list (driver1_container.php). This fills in the car boxes below it the same way	*/
+/*              as choosing them by hand - they can still be changed.										*/
+/* -------------------------------------------------------------------------------------------------------- */
+$(document).on('change', '#saved_car_selection_driver1', ReactToSavedCarSelection);
+
+function ReactToSavedCarSelection() {
+	var car = {};
+	try {
+		car = JSON.parse($(this).find('option:selected').attr('car') || '{}');
+	} catch (e) {
+		return;
+	}
+	var generation_select = $("#nsx_gen_response_gen_selection_driver1");
+	if (car.car_make !== undefined) {
+		generation_select.val('Other');
+		ReactToGenerationSelection.call(generation_select[0]);
+		$("#nsx_gen_response_driver1_other_make").val(car.car_make || '');
+		$("#nsx_gen_response_driver1_other_model").val(car.car_model || '');
+		$("#nsx_gen_response_driver1_other_year").val(car.car_year || '');
+	} else {
+		generation_select.val(parseInt(car.car_year, 10) <= 2016 ? 'First_Generation' : 'Second_Generation');
+		ReactToGenerationSelection.call(generation_select[0]); // fills the Year list for that generation
+		$("#nsx_gen_select_driver1_nsx_year").val(String(car.car_year || ''));
+		$("#nsx_gen_select_driver1_nsx_color").val(car.car_color || '');
+	}
+}
+
+/* -------------------------------------------------------------------------------------------------------- */
 /* Function:	ReactToGenerationSelection																	*/
 /* Description:	This function reacts to the selection of role for the second person being registered.		*/
 /* -------------------------------------------------------------------------------------------------------- */

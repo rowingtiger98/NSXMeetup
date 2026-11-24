@@ -103,27 +103,229 @@ function HandleAccountManagementActionClick(event) {
 
 // -------------------------------------------------------------------------------------
 // Function: 	RenderMyAccountInformation
-// Description: This function renders the user information for a signed in user.
+// Description: This function renders the signed in user's Account Information page -
+//              their editable profile and the Change Password form (RenderUserAccount-
+//              Information in ACCOUNTManagement.php) - and wires up its buttons. The
+//              server only ever shows and saves the logged-in user's own account.
 // -------------------------------------------------------------------------------------
 function RenderMyAccountInformation() {
-    var user_id = $("#session_information").attr('info_one');
-    var email = $("#session_information").attr('info_two');    
-    console.log('Entered RenderMyAccountInformation() with user_id = '+user_id+' and email = '+email+'');
-
 	$.ajax({
 	    url: 'ACCOUNTManagement.php',
 	    type: 'POST',
-	    data: {method: 'RenderUserAccountInformation', user_id:user_id, email:email},
+	    data: {method: 'RenderUserAccountInformation'},
 	    success: function(data) {
-	  	  console.log('Call to RenderMyAccountInformation');
-	  	  results = eval(data);
+	  	  var results = MyAccountResults(data);
           if (results[0] == 'Pass') {
             $("#main_content_container").html(results[1]);
+            $("#my_account_cars").on('change', '.my_account_car_generation', ReactToMyAccountCarChoice)
+                                 .on('click', '.my_account_remove_car', RemoveMyAccountCar);
+            $("#my_account_add_car").on('click', AddMyAccountCar);
+            NumberMyAccountCars();
+            $("#save_my_account_button").on('click', SaveMyAccountInformation);
+            $("#change_my_password_button").on('click', ChangeMyPassword);
           } else {
-            console.log('fail');
+            $("#main_content_container").html('<p>' + EscapeMyAccountText((results[1] || []).join(' ') || 'Your account information could not be loaded.') + '</p>');
           }
-	    },	
-	  });		
+	    },
+	    error: function() {
+	      $("#main_content_container").html('<p>Your account information could not be loaded. Please reload the page.</p>');
+	    }
+	  });
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	SaveMyAccountInformation
+// Description: This function sends the Account Information form (profile fields, car
+//              and shared information choices) to SaveMyAccountInformation and shows
+//              the result above the Save button.
+// -------------------------------------------------------------------------------------
+function SaveMyAccountInformation(event) {
+    event.preventDefault();
+    var button = $(this);
+    if (button.hasClass('disabled')) {
+        return;
+    }
+    var data = {method: 'SaveMyAccountInformation'};
+    $("#my_account_form [db_key]").each(function() {
+        data['settings[' + $(this).attr('db_key') + ']'] = $(this).val() || '';
+    });
+    $("#my_account_cars .my_account_car").each(function(i) {
+        var car = $(this);
+        data['cars[' + i + '][generation]'] = car.find('.my_account_car_generation').val() || '';
+        data['cars[' + i + '][year]'] = car.find('.my_account_car_year').val() || '';
+        data['cars[' + i + '][color]'] = car.find('.my_account_car_color').val() || '';
+        data['cars[' + i + '][make]'] = car.find('.my_account_car_other_make').val() || '';
+        data['cars[' + i + '][model]'] = car.find('.my_account_car_other_model').val() || '';
+        data['cars[' + i + '][other_year]'] = car.find('.my_account_car_other_year').val() || '';
+    });
+    $("#my_account_form .my_account_shared").each(function() {
+        data['shared[' + $(this).attr('key') + ']'] = this.checked ? 'yes' : 'no';
+    });
+
+    button.addClass('disabled').text('Saving...');
+    $.ajax({
+        url: 'ACCOUNTManagement.php',
+        type: 'POST',
+        data: data,
+        success: function(response) {
+            var results = MyAccountResults(response);
+            if (results[0] == 'Pass') {
+                ShowMyAccountMessages("#my_account_messages", [results[1]], false);
+            } else {
+                ShowMyAccountMessages("#my_account_messages", results[1] || ['Your account information could not be saved.'], true);
+            }
+        },
+        error: function() {
+            ShowMyAccountMessages("#my_account_messages", ['Your account information could not be saved. Please try again.'], true);
+        },
+        complete: function() {
+            button.removeClass('disabled').text('Save Account Information');
+        }
+    });
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	ChangeMyPassword
+// Description: This function sends the Change Password form to ChangeMyPassword. The
+//              password boxes are cleared once it's changed.
+// -------------------------------------------------------------------------------------
+function ChangeMyPassword(event) {
+    event.preventDefault();
+    var button = $(this);
+    if (button.hasClass('disabled')) {
+        return;
+    }
+    var current_password = $("#my_account_password_current").val();
+    var new_password = $("#my_account_password_new").val();
+    var confirm_password = $("#my_account_password_confirm").val();
+    if (new_password !== confirm_password) {
+        ShowMyAccountMessages("#my_account_password_messages", ["The new password and its confirmation don't match."], true);
+        return;
+    }
+
+    button.addClass('disabled').text('Changing...');
+    $.ajax({
+        url: 'ACCOUNTManagement.php',
+        type: 'POST',
+        data: {method: 'ChangeMyPassword', current_password: current_password, new_password: new_password, confirm_password: confirm_password},
+        success: function(response) {
+            var results = MyAccountResults(response);
+            if (results[0] == 'Pass') {
+                $("#my_account_password_form input[type=password]").val('');
+                ShowMyAccountMessages("#my_account_password_messages", [results[1]], false);
+            } else {
+                ShowMyAccountMessages("#my_account_password_messages", results[1] || ['Your password could not be changed.'], true);
+            }
+        },
+        error: function() {
+            ShowMyAccountMessages("#my_account_password_messages", ['Your password could not be changed. Please try again.'], true);
+        },
+        complete: function() {
+            button.removeClass('disabled').text('Change Password');
+        }
+    });
+}
+
+var MY_ACCOUNT_MAX_CARS = 10; // keep in step with ACCOUNTManagement.php
+
+// -------------------------------------------------------------------------------------
+// Function: 	AddMyAccountCar
+// Description: This function adds an empty car to the Your Cars list, from the
+//              template the page came with. Each car gets its own number in its ids
+//              (never reused on this page) so register.js can work on it alone.
+// -------------------------------------------------------------------------------------
+function AddMyAccountCar(event) {
+    event.preventDefault();
+    if ($("#my_account_cars .my_account_car").length >= MY_ACCOUNT_MAX_CARS) {
+        return;
+    }
+    var n = parseInt($(this).attr('next_car'), 10) || 0;
+    $(this).attr('next_car', n + 1);
+    var html = $("#my_account_car_template").html().split('__N__').join(String(n));
+    $("#my_account_cars").append(html);
+    NumberMyAccountCars();
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	RemoveMyAccountCar
+// Description: This function takes a car off the list (saved when the form is saved).
+// -------------------------------------------------------------------------------------
+function RemoveMyAccountCar(event) {
+    event.preventDefault();
+    $(this).closest('.my_account_car').remove();
+    NumberMyAccountCars();
+}
+
+var MY_ACCOUNT_NSX_YEARS = {First_Generation: [1991, 2005], Second_Generation: [2017, 2022]}; // keep in step with ACCOUNTManagement.php
+
+// -------------------------------------------------------------------------------------
+// Function: 	ReactToMyAccountCarChoice
+// Description: This function reacts to a car's choice on the Account Information page.
+//              An NSX generation fills that car's Year list and shows Year and Color;
+//              Not an NSX shows Make, Model and Year. Its own function, rather than
+//              ReactToGenerationSelection, because register.js and this file each
+//              define one of those and this file's only works on driver1.
+// -------------------------------------------------------------------------------------
+function ReactToMyAccountCarChoice() {
+    var car = $(this).closest('.my_account_car');
+    var generation = $(this).val();
+    var years = MY_ACCOUNT_NSX_YEARS[generation];
+
+    car.find('.generation_choice').removeClass('active');
+    if (years) {
+        var year_select = car.find('.my_account_car_year');
+        var current = year_select.val();
+        year_select.empty().append('<option value="" disabled hidden>Year</option>');
+        for (var year = years[0]; year <= years[1]; year++) {
+            year_select.append($('<option>').val(String(year)).text(year));
+        }
+        year_select.val(current && year_select.find('option[value="' + current + '"]').length ? current : '');
+        car.find('.my_account_car_year, .my_account_car_color').closest('.generation_choice').addClass('active');
+        $(this).attr('current_choice', 'nsx');
+    } else if (generation === 'Other') {
+        car.find('[class*="my_account_car_other_"]').closest('.generation_choice').addClass('active');
+        $(this).attr('current_choice', 'other');
+    }
+}
+
+// Titles each car (Car 1 is the one registration fills in) and shows / hides the
+// "No cars listed" note and the Add a Car button
+function NumberMyAccountCars() {
+    var cars = $("#my_account_cars .my_account_car");
+    cars.each(function(i) {
+        $(this).find('.my_account_car_title').text('Car ' + (i + 1) + (i === 0 ? ' (used when you register)' : ''));
+    });
+    $("#my_account_no_cars").toggle(cars.length === 0);
+    $("#my_account_add_car").toggle(cars.length < MY_ACCOUNT_MAX_CARS);
+}
+
+// The endpoint's JSON reply ([status, payload]) - jQuery may or may not have parsed it already
+function MyAccountResults(data) {
+    if (typeof data !== 'string') {
+        return data || [];
+    }
+    try {
+        return JSON.parse(data);
+    } catch (e) {
+        return ['Fail', ['Something went wrong. Please try again.']];
+    }
+}
+
+// Shows a list of messages (errors or a success note) in the given box - styled like Edit Event Settings
+function ShowMyAccountMessages(selector, messages, is_error) {
+    if (!Array.isArray(messages)) {
+        messages = [messages];
+    }
+    var html = '<ul class="' + (is_error ? 'event_settings_error' : 'event_settings_success') + '">';
+    for (var i = 0; i < messages.length; i++) {
+        html += '<li>' + EscapeMyAccountText(messages[i]) + '</li>';
+    }
+    html += '</ul>';
+    $(selector).html(html);
+}
+
+function EscapeMyAccountText(text) {
+    return $('<div>').text(text).html();
 }
 
 // -------------------------------------------------------------------------------------
