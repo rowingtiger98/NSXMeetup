@@ -194,6 +194,10 @@ function EnterAccountInformation() {
     $results[] = 'success';
     $results[] = $dbh->lastInsertId();
     $dbh->commit();
+    // The registration this account was created with is saved next (EnterDriverInformation) -
+    // it's linked to the new account (Participant_User_ID) so it shows on their My Account page
+    app_session_start();
+    $_SESSION['registration_account'] = ['id' => (int)$results[1], 'at' => time()];
   } catch(PDOExecption $e) {
 
     $dbh->rollback();

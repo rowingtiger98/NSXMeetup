@@ -28,7 +28,6 @@
       'RenderUserAccountInformation'         => 'self',
       'SaveMyAccountInformation'             => 'self',
       'ChangeMyPassword'                     => 'self',
-      'RenderMyAccountAttending'             => 'self',
       'RenderMyAccountManage'                => 'self',
       'RenderManagementToolsSection'         => 'event_admin',
       'NewRenderFindEditRegistration'        => 'event_admin',
@@ -243,10 +242,12 @@ function MyAccountCarGeneration(array $car) {
 /*              (ReactToMyAccountCarChoice) shows the right boxes for the   */
 /*              choice; the ids end in the car's number to keep them unique.*/
 /* Inputs:      $car - the car (empty for a new one), $n - its number, or   */
-/*              '__N__' for the template account.js copies for Add a Car.   */
+/*              '__N__' for the template account.js copies for Add a Car,   */
+/*              $removable - false for the one car on a registration edit   */
+/*              (MyRegistrations.php), which has no Remove button.          */
 /* Returns:     HTML                                                        */
 /* ************************************************************************ */
-function RenderMyAccountCar(array $car, $n) {
+function RenderMyAccountCar(array $car, $n, $removable = true) {
     $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
     $driver = 'profile'.$n;
     $generation = MyAccountCarGeneration($car);
@@ -254,7 +255,7 @@ function RenderMyAccountCar(array $car, $n) {
 
     $output_html  = '<div class="my_account_car payment_method" driver="'.$driver.'">';
     $output_html .= '<div class="payment_method_header"><span class="payment_method_name my_account_car_title">Car</span>';
-    $output_html .= '<a href="#" class="button small my_account_remove_car">Remove</a></div>';
+    $output_html .= ($removable ? '<a href="#" class="button small my_account_remove_car">Remove</a>' : '').'</div>';
     $output_html .= '<div class="payment_method_drawer"><div class="row gtr-25 gtr-uniform">';
     $output_html .= '<div id="nsx_gen_response_container_'.$driver.'_select_gen" class="col-4 col-12-xsmall">';
     $output_html .= '<select id="nsx_gen_response_gen_selection_'.$driver.'" class="my_account_car_generation" driver="'.$driver.'" current_choice="'.($is_nsx ? 'nsx' : ($generation === 'Other' ? 'other' : 'none')).'">';
@@ -558,41 +559,6 @@ function ChangeMyPassword() {
     }
     session_regenerate_id(true);
     EventAdminRespond('Pass', 'Your password has been changed.');
-}
-
-/* ************************************************************************ */
-/* Funciton:    RenderMyAccountAttending                         				    */
-/* Description: This function returns the rendered User's Registered Events.*/
-/* Returns:     HTML                                                				*/
-/* ************************************************************************ */  
-function RenderMyAccountAttending() {
-	$user_id = $_POST['user_id'];
-    $user_email = $_POST['email'];
-    $output_html = '';
-
-	$results = array();	
-	$conn = connectDB('kirbypar_nsx_meetup');
-    $query = sprintf("SELECT * from `nsx_meetup_user_accounts` WHERE `NSX_User_ID` = %d AND `NSX_Email_Address` = '%s'", $user_id, $user_email);
-	$result = $conn->query($query);
-	if($result->num_rows > 0) {
-    $row = $result->fetch_assoc();
-    // foreach($row as $key => $value) {
-    //   $output_html .= $key . ' = ' . $value;
-    // }
-
-    $output_html .= "Hello ".$row['NSX_Full_Name'].",<br>This will be the Events You've Registered Information page where you will soon be able to see all the events you have attended
-    or will be attending in the future. You will also be able to make changes to events that have not completed. Changes to a registration for an event you've registered
-    for will also be communicated to the event organizers so they can adjust things on their end as well! ";
-
-		$results[] = 'Pass';
-		$results[] = $output_html;
-	} else {
-		$results[] = $query;
-		$results[] = $result->num_rows;
-	}
-
-    closeDB($conn);
-	echo json_encode($results);		  	
 }
 
 /* ************************************************************************ */

@@ -75,6 +75,41 @@ function VerifyUniqueUsername() {
 /* Returns:     Nothing                                        				*/
 /* ************************************************************************ */
 /* ************************************************************************ */
+/* Function:    RegistrationAccountID                                       */
+/* Description: The account a registration being saved belongs to, for     */
+/*              nsx_meetup_participants.Participant_User_ID: the logged-in  */
+/*              user, or the account created with this registration         */
+/*              (EnterAccountInformation remembers it in the session). Both */
+/*              people on a registration get it - the account holder        */
+/*              manages the registration from My Account. Null if neither,  */
+/*              or until the Participant_User_ID column has been added.     */
+/* Returns:     int|null                                                    */
+/* ************************************************************************ */
+function RegistrationAccountID(PDO $pdo) {
+    static $has_column = null;
+    if ($has_column === null) {
+        try {
+            $has_column = (bool)$pdo->query("SHOW COLUMNS FROM `nsx_meetup_participants` LIKE 'Participant_User_ID'")->fetch();
+        } catch (PDOException $e) {
+            $has_column = false;
+        }
+    }
+    if (!$has_column) {
+        return null;
+    }
+    app_session_start();
+    if (!empty($_SESSION['login_user'])) {
+        $stmt = $pdo->prepare('SELECT NSX_User_ID FROM nsx_meetup_user_accounts WHERE NSX_Username = ?');
+        $stmt->execute([$_SESSION['login_user']]);
+        $id = $stmt->fetchColumn();
+        return $id !== false ? (int)$id : null;
+    }
+    // Only just after creating it - not for a later registration made from the same browser
+    $created = $_SESSION['registration_account'] ?? null;
+    return (is_array($created) && !empty($created['id']) && time() - (int)($created['at'] ?? 0) < 900) ? (int)$created['id'] : null;
+}
+
+/* ************************************************************************ */
 /* Function:    EventRegistrationOpen                                       */
 /* Description: Whether the event is taking registrations - its own        */
 /*              EVENT_Registration_Open setting (Edit Event Settings).      */
@@ -497,11 +532,13 @@ function  CreateConfirmationPage() {
 /*              checkout page after Complete Registration.                  */
 /*              $send_email - a copy is emailed to driver one              */
 /*              (SendRegistrationConfirmationEmail); pass false when        */
-/*              showing the page again. Ends with a button back to the      */
+/*              showing the page again. $updated - the email says it's an   */
+/*              updated confirmation (after a registrant's edit).           */
+/*              Ends with a button back to the                              */
 /*              event's home page (not on the admins' view).                */
 /* Returns:     [header HTML, confirmation HTML]                            */
 /* ************************************************************************ */
-function BuildConfirmationPage($driver1, $driver2, $event_id, $collect_payment, $backbutton, $sold_out, $send_email = true) {
+function BuildConfirmationPage($driver1, $driver2, $event_id, $collect_payment, $backbutton, $sold_out, $send_email = true, $updated = false) {
 	$result = array();
     $payment_html = '';
     $people = [];  // driver one and two's rows, for the emailed copy
@@ -715,7 +752,7 @@ function BuildConfirmationPage($driver1, $driver2, $event_id, $collect_payment, 
 	    $output_html .= RenderEventHomeButton($event);
 	}
 	if ($send_email && !empty($event) && $people) {
-	    SendRegistrationConfirmationEmail($event, $people, $attend_columns, $sold_out == 'yes', $collect_payment == 'yes' ? $payment_html : '');
+	    SendRegistrationConfirmationEmail($event, $people, $attend_columns, $sold_out == 'yes', $collect_payment == 'yes' ? $payment_html : '', $updated);
 	}
 
 	return [$page_header, $output_html];
@@ -745,18 +782,21 @@ function RenderEventHomeButton(array $event) {
 /*              $wait_list, $payment_html - RenderPaymentInformation's HTML */
 /*              ('' when the event doesn't collect payments).               */
 /* ************************************************************************ */
-function SendRegistrationConfirmationEmail(array $event, array $people, array $attend_columns, $wait_list, $payment_html) {
+function SendRegistrationConfirmationEmail(array $event, array $people, array $attend_columns, $wait_list, $payment_html, $updated = false) {
     $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
     $to = trim((string)$people[0]['Participant_Email']);
     if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
         error_log('SendRegistrationConfirmationEmail: no valid email address for participant '.$people[0]['Participant_ID']);
         return;
     }
-    $title = $event['EVENT_Name'].($wait_list ? ' Wait List Confirmation' : ' Registration Confirmation');
+    $title = $event['EVENT_Name'].($updated ? ' Updated' : '').($wait_list ? ' Wait List Confirmation' : ' Registration Confirmation');
     $cell = 'style="padding:4px 8px;border-bottom:1px solid #ddd;"';
 
     $body  = '<html><body style="font-family:Arial,Helvetica,sans-serif;color:#222;max-width:700px;">';
     $body .= '<h2>'.$h($title).'</h2>';
+    if ($updated) {
+        $body .= '<p>Your registration has been updated. Here are your details as they are now.</p>';
+    }
 
     $pay_later = (string)($people[0]['Participant_Payment_Method'] ?? '');
     if (isset(PAYMENT_METHODS[$pay_later])) {
@@ -1041,7 +1081,8 @@ function EnterDriverInformation() {
 		$safe_name = str_replace("'", "\'", $name);
 		$safe_display_name = str_replace("'", "\'", $display_name);		
 		$dbh = Create_SQL_PHP_DataObject('kirbypar_nsx_meetup');
-		$insert_query = "INSERT INTO `nsx_meetup_participants` (`Event_ID`, `Participant_Name`, `Participant_Display_Name`, `Participant_Confirmation_Number`, `Participant_Address`, `Participant_City`, `Participant_State`, `Participant_Zip`, `Participant_Email`, `Participant_Cell`, `Participant_Is_NSX`, `Participant_Role`,`Participant_Events_Attending`, `Participant_Car_Info`, `Participant_Traveling_With`,`Participant_Display_Attending`, `Participant_Car_Image`, `Participant_Shared_Information`, `Participant_Social_Information`, `Participant_Balance_Due`, `Participant_Wait_Listed`, `Participant_Registration_Type`) VALUES (:event_id, :safe_name, :safe_display_name, :confirmation_number, :street, :city, :state, :zip, :email, :cell, :is_nsx, :role, :rider_choices, :car_dict, :travel_with, :post_attend, :car_image, :shared_information, :social_information, :balance, :wait_listed, :registration_type)";
+		$account_id = RegistrationAccountID($dbh);  // the account managing this registration (My Account > Events You've Registered For)
+		$insert_query = "INSERT INTO `nsx_meetup_participants` (`Event_ID`, `Participant_Name`, `Participant_Display_Name`, `Participant_Confirmation_Number`, `Participant_Address`, `Participant_City`, `Participant_State`, `Participant_Zip`, `Participant_Email`, `Participant_Cell`, `Participant_Is_NSX`, `Participant_Role`,`Participant_Events_Attending`, `Participant_Car_Info`, `Participant_Traveling_With`,`Participant_Display_Attending`, `Participant_Car_Image`, `Participant_Shared_Information`, `Participant_Social_Information`, `Participant_Balance_Due`, `Participant_Wait_Listed`, `Participant_Registration_Type`".($account_id ? ", `Participant_User_ID`" : "").") VALUES (:event_id, :safe_name, :safe_display_name, :confirmation_number, :street, :city, :state, :zip, :email, :cell, :is_nsx, :role, :rider_choices, :car_dict, :travel_with, :post_attend, :car_image, :shared_information, :social_information, :balance, :wait_listed, :registration_type".($account_id ? ", :user_id" : "").")";
 		$sth = $dbh->prepare($insert_query);
         $sth->bindParam(':event_id', $event_id);
 		$sth->bindParam(':safe_name', $safe_name);
@@ -1065,6 +1106,9 @@ function EnterDriverInformation() {
         $sth->bindParam(':balance', $balance);
         $sth->bindParam(':wait_listed', $wait_listed);
         $sth->bindValue(':registration_type', $registration_type, ($registration_type === null) ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        if ($account_id) {
+            $sth->bindValue(':user_id', $account_id, PDO::PARAM_INT);
+        }
 		try {
 			$dbh->beginTransaction();
 			$sth->execute();

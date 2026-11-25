@@ -13,13 +13,12 @@
 require_once __DIR__ . '/eventAdmin.php';
 require_once __DIR__ . '/paymentMethods.php';  // PrepayOptions() / ChosenPrepayOptions() for the balance
 require_once __DIR__ . '/registrantHistory.php';  // AppendRegistrantHistory() - Participant_Reg_History
+require_once __DIR__ . '/registrantEdit.php';     // RegistrantApplyEdit() / RegistrantStoreEdit(), US_STATES
 
 app_session_start();
 
 const REGISTRANT_METHODS = ['DeleteRegistrant', 'SaveRegistrant', 'SetRegistrantPaid'];
 
-const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','DC','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
-const NSX_COLORS = ['red','white','black','blue','orange','gray','silver','yellow','green','purple','other'];
 
 if (isset($_POST['method']) && in_array($_POST['method'], REGISTRANT_METHODS, true)) {
     $_POST['method']();
@@ -122,135 +121,16 @@ function SaveRegistrant() {
         EventAdminRespond('Fail', ['That registration could not be found. Reload the page and try again.']);
     }
 
-    $text = function ($key) { return trim(is_string($_POST[$key] ?? null) ? $_POST[$key] : ''); };
-    $errors = [];
-    $values = [
-        'Participant_Name'    => $text('name'),
-        'Participant_Email'   => $text('email'),
-        'Participant_Cell'    => $text('cell'),
-        'Participant_Address' => $text('street'),
-        'Participant_City'    => $text('city'),
-        'Participant_State'   => strtoupper($text('state')),
-        'Participant_Zip'     => $text('zip'),
-    ];
-    if ($values['Participant_Name'] === '' || mb_strlen($values['Participant_Name']) > 128) {
-        $errors[] = 'A name of up to 128 characters is required.';
+    $edit = RegistrantApplyEdit($pdo, $event, $current, $_POST, true);
+    if ($edit['errors']) {
+        EventAdminRespond('Fail', $edit['errors']);
     }
-    if (!filter_var($values['Participant_Email'], FILTER_VALIDATE_EMAIL)) {
-        $errors[] = 'Enter a valid email address.';
-    }
-    if ($values['Participant_State'] !== '' && !in_array($values['Participant_State'], US_STATES, true)) {
-        $errors[] = 'Choose a state from the list.';
-    }
-    foreach (['Participant_Cell' => 32, 'Participant_Address' => 128, 'Participant_City' => 64, 'Participant_Zip' => 16] as $column => $max) {
-        if (mb_strlen($values[$column]) > $max) {
-            $errors[] = str_replace('Participant_', '', $column).' must be '.$max.' characters or fewer.';
-        }
-    }
-
-    /* Car - built as at registration (EnterDriverInformation in GENERALFunctions.php).
-       Riders and children have no car questions, so their stored car is left alone. */
-    $is_passenger = in_array($current['Participant_Role'], ['riding', 'child'], true);
-    $generation = $text('car_generation');
-    $year = $text('car_year');
-    if ($is_passenger) {
-        $car = null;
-    } elseif ($generation === 'Other') {
-        $car = ['car_make' => $text('car_make'), 'car_model' => $text('car_model'), 'car_year' => $year];
-        $values['Participant_Is_NSX'] = 0;
-        $values['Participant_Car_Image'] = 'Other_car.png';
-        if ($car['car_make'] === '' || $car['car_model'] === '') {
-            $errors[] = 'Enter the car\'s make and model.';
-        }
-    } elseif ($generation === 'First_Generation' || $generation === 'Second_Generation') {
-        $color = strtolower($text('car_color'));
-        $car = ['car_color' => $color, 'car_year' => $year];
-        $values['Participant_Is_NSX'] = 1;
-        if (!ctype_digit($year) || !in_array($color, NSX_COLORS, true)) {
-            $errors[] = 'Choose the NSX\'s year and color.';
-        }
-        $version = ((int)$year <= 2001) ? 'popup' : (((int)$year < 2017) ? 'nonpopup' : 'new');
-        $values['Participant_Car_Image'] = strtolower($generation).'_'.$version.'_'.$color.'.png';
-    } else {
-        $errors[] = 'Choose the car\'s generation.';
-        $car = [];
-    }
-    if ($car !== null) {
-        $values['Participant_Car_Info'] = json_encode($car);
-    }
-
-    /* Answers to the event's questions, merged into what's stored (answers to removed questions are kept) */
-    $answers = json_decode((string)$current['Participant_Events_Attending'], true);
-    $answers = is_array($answers) ? $answers : [];
-    $posted_answers = (isset($_POST['answers']) && is_array($_POST['answers'])) ? $_POST['answers'] : [];
-    $stmt = $pdo->prepare('SELECT QUESTION_Label, QUESTION_Description, QUESTION_Type, QUESTION_Select_Choices FROM nsx_meetup_event_questions WHERE EVENT_ID = ?');
-    $stmt->execute([$event['EVENT_ID']]);
-    $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    foreach ($questions as $question) {
-        $label = $question['QUESTION_Label'];
-        if (!array_key_exists($label, $posted_answers) || !is_string($posted_answers[$label])) {
-            continue;
-        }
-        $answer = $posted_answers[$label];
-        if ($question['QUESTION_Type'] === 'BOOLEAN') {
-            $answers[$label] = ($answer === 'yes') ? 'yes' : 'no';
-        } elseif ($question['QUESTION_Type'] === 'SELECT') {
-            $choices = json_decode((string)$question['QUESTION_Select_Choices'], true);
-            if ($answer === '' || (is_array($choices) && array_key_exists($answer, $choices))) {
-                $answers[$label] = $answer;
-            }
-        }
-    }
-    $values['Participant_Events_Attending'] = json_encode($answers);
-
-    /* Registration type - any of the event's types (an admin may use a disabled one) */
-    $regtype_cost = null;
-    $posted_type = $text('registration_type');
-    if ($posted_type === '') {
-        $values['Participant_Registration_Type'] = null;
-    } else {
-        $stmt = $pdo->prepare('SELECT REGTYPE_ID, REGTYPE_Cost FROM nsx_meetup_registration_types WHERE REGTYPE_ID = ? AND REGTYPE_Event_ID = ?');
-        $stmt->execute([(int)$posted_type, $event['EVENT_ID']]);
-        $type = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($type) {
-            $values['Participant_Registration_Type'] = (int)$type['REGTYPE_ID'];
-            $regtype_cost = (int)round($type['REGTYPE_Cost'] * 100);
-        } else {
-            $errors[] = 'Choose one of this event\'s registration types.';
-        }
-    }
-
-    if ($errors) {
-        EventAdminRespond('Fail', $errors);
-    }
-
-    /* Balance: type cost plus checked pre-pay options, when there's a type and the event collects payments */
-    $old_balance = (int)$current['Participant_Balance_Due'];
-    $new_balance = $old_balance;
-    if (!empty($event['EVENT_Collect_Payments']) && $regtype_cost !== null) {
-        $prepay = ChosenPrepayOptions(PrepayOptions($pdo, $event['EVENT_ID']), $answers);
-        $new_balance = $regtype_cost + array_sum(array_column($prepay, 'cents'));
-        $values['Participant_Balance_Due'] = $new_balance;
-    }
-
-    /* Column names come from this function, never from the request. */
-    $assignments = implode(', ', array_map(function ($column) { return '`'.$column.'` = :'.$column; }, array_keys($values)));
-    $stmt = $pdo->prepare('UPDATE nsx_meetup_participants SET '.$assignments.' WHERE Participant_ID = :participant_id');
-    foreach ($values as $column => $value) {
-        $stmt->bindValue(':'.$column, $value, $value === null ? PDO::PARAM_NULL : (is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR));
-    }
-    $stmt->bindValue(':participant_id', $participant_id, PDO::PARAM_INT);
-    try {
-        $stmt->execute();
-    } catch (PDOException $e) {
-        error_log('SaveRegistrant failed for participant '.$participant_id.': '.$e->getMessage());
+    if (RegistrantStoreEdit($pdo, $participant_id, $current, $edit, 'Edited') === false) {
         EventAdminRespond('Fail', ['The registration could not be saved. Please try again.']);
     }
-
-    $changes = RegistrantEditChanges($pdo, $current, $values, $questions);
-    if ($changes) {
-        AppendRegistrantHistory($pdo, $participant_id, 'Edited', $changes);
-    }
+    $values = $edit['values'];
+    $old_balance = $edit['old_balance'];
+    $new_balance = $edit['new_balance'];
 
     $messages = [$values['Participant_Name'].'\'s registration has been saved.'];
     if ($new_balance !== $old_balance) {
@@ -263,72 +143,6 @@ function SaveRegistrant() {
         $messages[] = $change;
     }
     EventAdminRespond('Pass', $messages);
-}
-
-/* ************************************************************************ */
-/* Function:    RegistrantEditChanges                                       */
-/* Description: What an Edit Information save changed, in words, for the   */
-/*              registrant's history: contact details, car, registration    */
-/*              type, balance and answers to the event's questions.         */
-/* Inputs:      $current - the row before the save, $values - the columns   */
-/*              saved, $questions - the event's questions.                  */
-/* Returns:     array - changes for AppendRegistrantHistory                 */
-/* ************************************************************************ */
-function RegistrantEditChanges(PDO $pdo, array $current, array $values, array $questions) {
-    $changes = [];
-    $labels = ['Participant_Name' => 'Name', 'Participant_Email' => 'Email', 'Participant_Cell' => 'Cell', 'Participant_Address' => 'Street Address',
-               'Participant_City' => 'City', 'Participant_State' => 'State', 'Participant_Zip' => 'Zip'];
-    foreach ($labels as $column => $label) {
-        $changes[] = RegistrantHistoryChange($label, $current[$column] ?? '', $values[$column]);
-    }
-
-    $car = function ($json) {
-        $info = json_decode((string)$json, true);
-        $info = is_array($info) ? $info : [];
-        $parts = !empty($info['car_make'])
-            ? [$info['car_year'] ?? '', $info['car_make'], $info['car_model'] ?? '']
-            : [$info['car_year'] ?? '', ucfirst((string)($info['car_color'] ?? '')), !empty($info['car_color']) ? 'NSX' : ''];
-        return trim(implode(' ', array_filter(array_map('strval', $parts), 'strlen')));
-    };
-    $changes[] = RegistrantHistoryChange('Car', $car($current['Participant_Car_Info'] ?? ''), $car($values['Participant_Car_Info'] ?? $current['Participant_Car_Info'] ?? ''));
-
-    $type_name = function ($id) use ($pdo) {
-        if (empty($id)) {
-            return '';
-        }
-        $stmt = $pdo->prepare('SELECT REGTYPE_Name FROM nsx_meetup_registration_types WHERE REGTYPE_ID = ?');
-        $stmt->execute([(int)$id]);
-        $name = $stmt->fetchColumn();
-        return $name !== false ? (string)$name : '#'.(int)$id;
-    };
-    if ((string)($current['Participant_Registration_Type'] ?? '') !== (string)$values['Participant_Registration_Type']) {
-        $changes[] = RegistrantHistoryChange('Registration Type', $type_name($current['Participant_Registration_Type'] ?? null), $type_name($values['Participant_Registration_Type']));
-    }
-
-    if (array_key_exists('Participant_Balance_Due', $values)) {
-        $money = function ($cents) { return '$'.number_format((int)$cents / 100, 2); };
-        $changes[] = RegistrantHistoryChange('Balance', $money($current['Participant_Balance_Due'] ?? 0), $money($values['Participant_Balance_Due']));
-    }
-
-    $old_answers = json_decode((string)($current['Participant_Events_Attending'] ?? ''), true);
-    $old_answers = is_array($old_answers) ? $old_answers : [];
-    $new_answers = json_decode($values['Participant_Events_Attending'], true);
-    foreach ($questions as $question) {
-        $label = $question['QUESTION_Label'];
-        $choices = ($question['QUESTION_Type'] === 'SELECT') ? json_decode((string)$question['QUESTION_Select_Choices'], true) : null;
-        $boolean = ($question['QUESTION_Type'] === 'BOOLEAN');
-        $answer = function ($value) use ($choices, $boolean) {
-            $value = (string)$value;
-            if ($boolean) {
-                return ($value === 'yes') ? 'yes' : 'no'; // unanswered counts as no
-            }
-            return (is_array($choices) && isset($choices[$value]) && is_string($choices[$value])) ? $choices[$value] : $value;
-        };
-        $field = ($question['QUESTION_Description'] ?? '') !== '' ? mb_strimwidth($question['QUESTION_Description'], 0, 60, '...') : $label;
-        $changes[] = RegistrantHistoryChange($field, $answer($old_answers[$label] ?? ''), $answer($new_answers[$label] ?? ''));
-    }
-
-    return array_values(array_filter($changes));
 }
 
 /* ************************************************************************ */

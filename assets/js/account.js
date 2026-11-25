@@ -330,27 +330,173 @@ function EscapeMyAccountText(text) {
 
 // -------------------------------------------------------------------------------------
 // Function: 	RenderMyAccountAttending
-// Description: This function renders the user information for a signed in user.
+// Description: This function renders the Events You've Registered For tab - the
+//              signed in user's upcoming and past registrations (RenderMyRegistrations
+//              in MyRegistrations.php), with View Confirmation and Edit buttons.
 // -------------------------------------------------------------------------------------
 function RenderMyAccountAttending() {
-    var user_id = $("#session_information").attr('info_one');
-    var email = $("#session_information").attr('info_two');    
-    console.log('Entered RenderMyAccountAttending() with user_id = '+user_id+' and email = '+email+'');
+    MyRegistrationsRequest({method: 'RenderMyRegistrations'}, function(html) {
+        $("#main_content_container").html(html);
+        $("#main_content_container .my_registration_view").on('click', function(event) {
+            event.preventDefault();
+            RenderMyRegistrationConfirmation($(this).attr('event_id'));
+        });
+        $("#main_content_container .my_registration_edit").on('click', function(event) {
+            event.preventDefault();
+            RenderMyRegistrationEdit($(this).attr('participant_id'));
+        });
+    });
+}
 
-	$.ajax({
-	    url: 'ACCOUNTManagement.php',
-	    type: 'POST',
-	    data: {method: 'RenderMyAccountAttending', user_id:user_id, email:email},
-	    success: function(data) {
-	  	  console.log(data);
-	  	  results = eval(data);
-          if (results[0] == 'Pass') {
-            $("#main_content_container").html(results[1]);
-          } else {
-            console.log('fail');
-          }
-	    },	
-	  });		
+// A copy of the confirmation for the user's registration(s) for an event
+function RenderMyRegistrationConfirmation(event_id) {
+    MyRegistrationsRequest({method: 'RenderMyRegistrationConfirmation', event_id: event_id}, function(html) {
+        $("#main_content_container").html(html);
+        BindMyRegistrationsBack();
+        window.scrollTo(0, 0);
+    });
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	RenderMyRegistrationEdit
+// Description: This function shows the edit form for one person on the user's
+//              registration and wires it up: the car choice, the "fill in from a saved
+//              car" list, the total preview (UpdateEditBalancePreview, shared with the
+//              admins' Edit Information) and Save Changes.
+// -------------------------------------------------------------------------------------
+function RenderMyRegistrationEdit(participant_id) {
+    MyRegistrationsRequest({method: 'RenderMyRegistrationEdit', participant_id: participant_id}, function(html) {
+        $("#main_content_container").html(html);
+        BindMyRegistrationsBack();
+        $("#my_reg_car").on('change', '.my_account_car_generation', ReactToMyAccountCarChoice);
+        $("#my_reg_saved_car").on('change', FillMyRegistrationCar);
+        $("#edit_registration_type").on('change', UpdateEditBalancePreview);
+        $('[id^="info_checkbox_field_driver1_"], [id^="info_question_select_field_driver1_"]').on('change', UpdateEditBalancePreview);
+        UpdateEditBalancePreview();
+        $("#save_my_registration_button").on('click', SaveMyRegistration);
+        window.scrollTo(0, 0);
+    });
+}
+
+// Fills the car boxes from the saved car picked in "Fill in from one of your saved cars"
+function FillMyRegistrationCar() {
+    var car = {};
+    try {
+        car = JSON.parse($(this).find('option:selected').attr('car') || '{}');
+    } catch (e) {
+        return;
+    }
+    var box = $("#my_reg_car .my_account_car");
+    var generation = box.find('.my_account_car_generation');
+    if (car.car_make !== undefined) {
+        generation.val('Other');
+        ReactToMyAccountCarChoice.call(generation[0]);
+        box.find('.my_account_car_other_make').val(car.car_make || '');
+        box.find('.my_account_car_other_model').val(car.car_model || '');
+        box.find('.my_account_car_other_year').val(car.car_year || '');
+    } else if (car.car_year) {
+        generation.val(parseInt(car.car_year, 10) <= 2016 ? 'First_Generation' : 'Second_Generation');
+        ReactToMyAccountCarChoice.call(generation[0]);
+        box.find('.my_account_car_year').val(String(car.car_year));
+        box.find('.my_account_car_color').val(car.car_color || '');
+    }
+}
+
+// -------------------------------------------------------------------------------------
+// Function: 	SaveMyRegistration
+// Description: This function sends the edit form to SaveMyRegistration. On success
+//              it shows the result and the updated confirmation (which is also
+//              emailed); problems are listed above the Save button.
+// -------------------------------------------------------------------------------------
+function SaveMyRegistration(event) {
+    event.preventDefault();
+    var button = $(this);
+    if (button.hasClass('disabled')) {
+        return;
+    }
+    var form = $("#my_registration_form");
+    var data = {method: 'SaveMyRegistration', participant_id: form.attr('participant_id')};
+    form.find('.my_reg_field').each(function() {
+        data[$(this).attr('key')] = $(this).val() || '';
+    });
+    var car = form.find('#my_reg_car .my_account_car');
+    if (car.length) {  // riders and children have no car on the form
+        data.car_generation = car.find('.my_account_car_generation').val() || '';
+        if (data.car_generation === 'Other') {
+            data.car_make = car.find('.my_account_car_other_make').val() || '';
+            data.car_model = car.find('.my_account_car_other_model').val() || '';
+            data.car_year = car.find('.my_account_car_other_year').val() || '';
+        } else {
+            data.car_year = car.find('.my_account_car_year').val() || '';
+            data.car_color = car.find('.my_account_car_color').val() || '';
+        }
+    }
+    if ($("#edit_registration_type").length) {
+        data.registration_type = $("#edit_registration_type").val() || '';
+    }
+    $('[id^="info_checkbox_field_driver1_"]').each(function() {
+        data['answers[' + $(this).attr('key') + ']'] = this.checked ? 'yes' : 'no';
+    });
+    $('[id^="info_question_select_field_driver1_"]').each(function() {
+        data['answers[' + $(this).attr('key') + ']'] = $(this).val() || '';
+    });
+
+    button.addClass('disabled').text('Saving...');
+    $.ajax({
+        url: 'MyRegistrations.php',
+        type: 'POST',
+        data: data,
+        success: function(response) {
+            var results = MyAccountResults(response);
+            if (results[0] == 'Pass' && results[1].html) {
+                $("#main_content_container").html('<a href="#" class="button my_registrations_back" style="margin-bottom:1em;">Back to Your Events</a>'
+                    + '<div id="my_registration_messages" class="event_settings_messages"></div>' + results[1].html);
+                ShowMyAccountMessages("#my_registration_messages", [results[1].message], false);
+                BindMyRegistrationsBack();
+                window.scrollTo(0, 0);
+            } else if (results[0] == 'Pass') {
+                ShowMyAccountMessages("#my_registration_messages", [results[1].message], false);
+            } else {
+                ShowMyAccountMessages("#my_registration_messages", results[1] || ['Your changes could not be saved.'], true);
+            }
+        },
+        error: function() {
+            ShowMyAccountMessages("#my_registration_messages", ['Your changes could not be saved. Please try again.'], true);
+        },
+        complete: function() {
+            button.removeClass('disabled').text('Save Changes');
+        }
+    });
+}
+
+// Back to Your Events buttons on the confirmation and edit views
+function BindMyRegistrationsBack() {
+    $("#main_content_container .my_registrations_back").on('click', function(event) {
+        event.preventDefault();
+        RenderMyAccountAttending();
+    });
+}
+
+// Posts to MyRegistrations.php and hands the HTML of a 'Pass' to done; shows a 'Fail'
+function MyRegistrationsRequest(data, done) {
+    $.ajax({
+        url: 'MyRegistrations.php',
+        type: 'POST',
+        data: data,
+        success: function(response) {
+            var results = MyAccountResults(response);
+            if (results[0] == 'Pass') {
+                done(results[1]);
+            } else {
+                $("#main_content_container").html('<p>' + EscapeMyAccountText([].concat(results[1] || ['Something went wrong.']).join(' ')) + '</p>'
+                    + '<a href="#" class="button my_registrations_back">Back to Your Events</a>');
+                BindMyRegistrationsBack();
+            }
+        },
+        error: function() {
+            $("#main_content_container").html('<p>This could not be loaded. Please reload the page and try again.</p>');
+        }
+    });
 }
 
 // -------------------------------------------------------------------------------------

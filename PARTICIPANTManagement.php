@@ -2,6 +2,7 @@
   require_once __DIR__ . '/databaseFunctions.php';
   require_once __DIR__ . '/eventAdmin.php';  // EventAdminAuthorize() - event admins only
   require_once __DIR__ . '/registrantHistory.php';  // RenderRegistrantHistory()
+  require_once __DIR__ . '/registrantEdit.php';     // RenderEditRegistrationType(), RenderParticipantQuestionsAndAnswers()
 
   require_once __DIR__ . '/endpointGuard.php';  // EndpointDispatch() - only the methods below, each for the callers it names
   const PARTICIPANT_METHODS = [
@@ -116,6 +117,9 @@ function RenderParticipantInformation() {
         $output_html .= '            	<option value="WV"'.($row['Participant_State']=="WV"?" selected":"").'>WV</option>';
         $output_html .= '            	<option value="WI"'.($row['Participant_State']=="WI"?" selected":"").'>WI</option>';
         $output_html .= '            	<option value="WY"'.($row['Participant_State']=="WY"?" selected":"").'>WY</option>';
+        foreach (CA_PROVINCES as $province) {  // offered on the registration form too
+            $output_html .= '            	<option value="'.$province.'"'.($row['Participant_State'] == $province ? ' selected' : '').'>'.$province.'</option>';
+        }
         $output_html .= '            </select>								';
         $output_html .= '    	</div>';
 		$output_html .= '		<div class="col-2 col-12-xsmall">';
@@ -331,148 +335,6 @@ function RenderParticipantInformation() {
 	
 	$results = [$output_html];
 	echo json_encode($results);
-}
-
-/* ************************************************************************ */
-/* Funciton:    RenderEditRegistrationType                                  */
-/* Description: The registrant's registration type (any of the event's      */
-/*              types) and their balance, with a preview of the new balance */
-/*              as the type and pre-pay options change (UpdateEditBalance-  */
-/*              Preview in account.js) - type cost plus checked pre-pay     */
-/*              options, as at registration. Only when the event collects   */
-/*              payments.                                                   */
-/* Returns:     HTML                                                        */
-/* ************************************************************************ */
-function RenderEditRegistrationType($event_id, array $participant) {
-    $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES); };
-    $pdo = Create_SQL_PHP_DataObject(DB_NAME);
-    $stmt = $pdo->prepare('SELECT EVENT_Collect_Payments FROM nsx_meetup_events WHERE EVENT_ID = ?');
-    $stmt->execute([(int)$event_id]);
-    if (!$stmt->fetchColumn()) {
-        return '';
-    }
-    $stmt = $pdo->prepare('SELECT REGTYPE_ID, REGTYPE_Name, REGTYPE_Cost, REGTYPE_Enabled FROM nsx_meetup_registration_types WHERE REGTYPE_Event_ID = ? ORDER BY REGTYPE_Name');
-    $stmt->execute([(int)$event_id]);
-    $types = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    $current_type = (string)($participant['Participant_Registration_Type'] ?? '');
-    $balance = (int)$participant['Participant_Balance_Due'];
-
-    $output_html  = '<div id="edit_registration_type_container" class="event_registration_sub_container active" current_balance="'.$balance.'">';
-    $output_html .= '  <div class="row gtr-25 gtr-uniform">';
-    $output_html .= '    <div class="col-6 col-12-small">';
-    $output_html .= '      <label for="edit_registration_type">Registration Type</label>';
-    $output_html .= '      <select id="edit_registration_type">';
-    $output_html .= '        <option value="" cost="">- No registration type -</option>';
-    foreach ($types as $type) {
-        $id = (string)(int)$type['REGTYPE_ID'];
-        $output_html .= '<option value="'.$id.'" cost="'.(int)round($type['REGTYPE_Cost'] * 100).'"'.($id === $current_type ? ' selected' : '').'>'
-                       .$h($type['REGTYPE_Name']).' - $'.number_format((float)$type['REGTYPE_Cost'], 2).(empty($type['REGTYPE_Enabled']) ? ' (disabled)' : '').'</option>';
-    }
-    $output_html .= '      </select>';
-    $output_html .= '    </div>';
-    $output_html .= '    <div class="col-6 col-12-small">';
-    $output_html .= '      <label>Balance</label>';
-    $output_html .= '      <p id="edit_balance_preview" class="edit_balance_preview">$'.number_format($balance / 100, 2).'</p>';
-    $output_html .= '    </div>';
-    $output_html .= '  </div>';
-    $output_html .= '  <p id="edit_balance_note" class="edit_balance_note">The balance is the registration type\'s cost plus the checked pre-pay options below. '
-                   .($current_type === '' ? 'This registration has no registration type, so its balance won\'t be recalculated unless you choose one.' : '')
-                   .(!empty($participant['Participant_Balance_Paid']) ? ' This registrant is marked paid.' : '').'</p>';
-    $output_html .= '</div>';
-    return $output_html;
-}
-
-/* ************************************************************************ */
-/* Funciton:    RenderParticipantQuestionsAndAnswers                       	*/
-/* Description: This function renders the event's questions with the        */
-/*              participants current answers. This is for editing.          */
-/* Inputs:      event_id: The event in question.                            */
-/*              current_selctions:  The participants current answers to the */
-/*                                  events questions.                       */
-/* Returns:     HTML                                        				*/
-/* ************************************************************************ */
-function RenderParticipantQuestionsAndAnswers ($event_id, $current_selections) {
-    $output_html  = '    <div class="table-wrapper">';
-    $output_html .= '        <table style="margin-top:1.5em;">';
-    $output_html .= '            <thead>';
-    $output_html .= '                <tr>';
-    $output_html .= '                    <th width="60%"></th>';
-    $output_html .= '                    <th id="column_driver1" class="table_driver active" width="15%">Driver</th>';
-    $output_html .= '                </tr>';
-    $output_html .= '            </thead>';
-    $output_html .= '            <tbody>';
-
-	/***********************/
-	/* Setup DB Connection */
-	/***********************/
-	$link = connectDB('kirbypar_nsx_meetup');
-			
-	/************************************************/
-	/* Search each registered "User" one at a time. */
-	/************************************************/
-
-	$question_query = sprintf("SELECT * FROM `nsx_meetup_event_questions` WHERE `EVENT_ID`='%s' ORDER BY `QUESTION_Order_Number`", $event_id);
-	$result = $link->query($question_query);
-	if ($result->num_rows > 0) {
-        while($row = $result->fetch_assoc()) {
-            if (!$row['QUESTION_Active']) {
-                continue; // as on the registration form (answers to retired questions are kept when saving)
-            }
-            $answer = (string)($current_selections[$row['QUESTION_Label']] ?? '');
-            switch($row['QUESTION_Type']) {
-                case('BOOLEAN'):
-                    $is_checked = ($answer == "yes") ? " checked" : "";
-                    $output_html .= '<tr>';
-                    $output_html .= '    <td>'.$row['QUESTION_Instruction_Text'].'</td>';
-                    $output_html .= '    <td id="column_driver1" class="table_driver active">';
-                    $output_html .= '        <input type="checkbox" accounting="'.($row['QUESTION_Add_To_Basket']?"yes":"no").'" cost="'.$row['QUESTION_Amount'].'" id="info_checkbox_field_driver1_'.$row['QUESTION_Label'].'" driver="driver1" key="'.$row['QUESTION_Label'].'" start_value="'.htmlspecialchars($answer, ENT_QUOTES).'" name="driver1_'.$row['QUESTION_Label'].'" desc="'.htmlspecialchars((string)$row['QUESTION_Description'], ENT_QUOTES).'"'.$is_checked.'>';
-                    $output_html .= '        <label for="info_checkbox_field_driver1_'.$row['QUESTION_Label'].'"></label>';
-                    $output_html .= '    </td>';
-                    $output_html .= '</tr>    ';
-                    break;
-
-                case('SELECT'):
-                    $output_html .= RenderEditSelectQuestion($row, $current_selections); 
-                    break;
-
-                default:
-                    break;
-            }            
-        }
-    }
-    $output_html .= '           </tbody>';
-    $output_html .= '       </table>';
-    $output_html .= '   </div>';    
-    return ($output_html);
-}
-
-/* ************************************************************************ */
-/* Funciton:    RenderEditSelectQuestion                                   	*/
-/* Description: This function renders the columns and options for a SELECT  */
-/*              type question.                                              */
-/* Returns:     HTML                                        				*/
-/* ************************************************************************ */
-function RenderEditSelectQuestion($data, $current_selections) {
-
-    $choices = json_decode((string)$data['QUESTION_Select_Choices'], true) ?: [];
-    $output_html  = '<tr>';
-    $output_html .= '    <td>'.$data['QUESTION_Instruction_Text'].'</td>';
-
-    /* Driver One */
-    $output_html .= '    <td id="question_driver1" class="table_driver active">';
-    $output_html .= '        <select id="info_question_select_field_driver1_'.$data['QUESTION_Label'].'" accounting="'.($data['QUESTION_Add_To_Basket']?"yes":"no").'" cost="'.(float)$data['QUESTION_Amount'].'" driver="driver1" key="'.$data['QUESTION_Label'].'" name="driver1_'.$data['QUESTION_Label'].'" start_value="'.htmlspecialchars((string)($current_selections[$data['QUESTION_Label']] ?? ''), ENT_QUOTES).'" desc="'.htmlspecialchars((string)$data['QUESTION_Description'], ENT_QUOTES).'">';
-    $output_html .= '            <option value="" disabled >'.htmlspecialchars((string)$data['QUESTION_Select_Default_Text'], ENT_QUOTES).'</option>';
-    foreach($choices as $key => $value) {
-        $current = (string)($current_selections[$data['QUESTION_Label']] ?? '');
-        $selected_text = ((string)$key === $current || $value === $current) ? " selected" : "";  // stored as the key (older ones as the text)
-        $output_html .= '<option value="'.htmlspecialchars((string)$key, ENT_QUOTES).'"'.$selected_text.'>'.htmlspecialchars((string)$value, ENT_QUOTES).'</option>';
-    }
-    $output_html .= '        </select>';
-    $output_html .= '    </td>';
-    $output_html .= '</tr>';
-
-    return $output_html;
 }
 
 // DATABASE FUNCTIONS moved to databaseFunctions.php (required at the top of this file).
